@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>梦幻词栈 · 英语生词拾取器</title>
+  <link rel="stylesheet" href="../../assets/css/theme.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- ===== 顶部导航 ===== -->
+    <header class="app-header">
+      <a href="../../index.html" class="header-back" aria-label="返回工具汇总站">&larr; 工具箱</a>
+      <a href="words.html" class="header-nav-btn" aria-label="打开生词本">📖 生词本</a>
+    </header>
+
+    <!-- ===== 双栏工作区 ===== -->
+    <div class="workspace">
+      <!-- 左栏：输入面板 -->
+      <div class="workspace-left">
+        <section class="hero">
+          <div class="hero-illustration">
+            <img src="../../assets/images/book-sun.svg" alt="打开的书和太阳插画" width="120" height="90">
+          </div>
+          <h1 class="hero-title">梦幻词栈</h1>
+          <p class="hero-subtitle">粘贴一段英文，智能识别你需要掌握的 TOP 生词</p>
+        </section>
+
+        <section class="daily-progress">
+          <div class="progress-label">
+            <span>今日进度</span>
+            <span id="progress-text">0 / 10</span>
+          </div>
+          <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0">
+            <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+          </div>
+        </section>
+
+        <section class="input-area">
+          <div class="input-header">
+            <h2>粘贴英文文本</h2>
+            <div class="input-actions">
+              <button class="btn btn-secondary btn-sm" id="btn-example" aria-label="填入示例文本">示例文本</button>
+              <button class="btn-icon" id="btn-settings" aria-label="打开设置">⚙</button>
+            </div>
+          </div>
+          <textarea id="text-input" class="text-input" placeholder="在这里粘贴一段英文文章、新闻、或任何英文文本..." rows="8"></textarea>
+          <button class="btn btn-primary btn-recognize" id="btn-recognize" aria-label="识别生词">✨ 识别 TOP 生词</button>
+        </section>
+      </div>
+
+      <!-- 右栏：结果区 -->
+      <div class="workspace-right" id="results-area">
+        <div class="empty-state" id="empty-state">
+          <img src="../../assets/images/book-sun.svg" alt="书和太阳插画" width="160" height="120">
+          <p>识别后结果将出现在这里</p>
+          <p class="hint-text">粘贴英文文本，点击「识别 TOP 生词」试试吧</p>
+        </div>
+        <h2 class="results-title" id="results-title" tabindex="-1">本次拾取 · <span id="results-count">0</span> 个词</h2>
+        <div class="results-grid" id="results-grid"></div>
+        <div class="results-expand" id="results-expand"></div>
+        <p class="back-to-input"><a href="#text-input" class="back-to-input-link">&uarr; 回到输入</a></p>
+      </div>
+    </div>
+
+    <!-- ===== 页脚 ===== -->
+    <footer class="app-footer">
+      <p class="footer-quote" id="footer-quote"></p>
+      <p class="footer-link"><a href="../../index.html">&larr; 返回工具汇总站</a></p>
+    </footer>
+  </div>
+
+  <!-- ===== 设置弹窗 ===== -->
+  <div class="overlay" id="settings-overlay">
+    <div class="dialog" role="dialog" aria-labelledby="settings-title">
+      <h3 id="settings-title">⚙ 设置</h3>
+      <div class="setting-row">
+        <label for="setting-topn">TOP 数量</label>
+        <select id="setting-topn">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="15">15</option>
+          <option value="20">20</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label for="setting-level">我的水平</label>
+        <select id="setting-level">
+          <option value="cet4">四级（CET-4）</option>
+          <option value="cet6" selected>六级（CET-6）</option>
+          <option value="postgrad">考研</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label for="setting-daily">每日目标</label>
+        <select id="setting-daily">
+          <option value="5">5 词</option>
+          <option value="10" selected>10 词</option>
+          <option value="20">20 词</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label for="setting-method">识别方式</label>
+        <select id="setting-method">
+          <option value="dict" selected>离线词典</option>
+        </select>
+        <p class="hint-text" style="margin-top:4px;">
+          离线词典：基于本地 CET4/CET6 词库智能筛选<br>
+          <span class="disabled-option">AI 智能识别：二期 · 需后端接入</span>
+        </p>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" id="btn-settings-close">取消</button>
+        <button class="btn btn-primary" id="btn-settings-save">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Toast 通知 ===== -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- ===== 示例文本弹窗 ===== -->
+  <div class="overlay" id="example-overlay">
+    <div class="dialog" role="dialog" aria-labelledby="example-title">
+      <h3 id="example-title">选择示例文本</h3>
+      <button class="btn btn-secondary example-btn" data-idx="0">
+        示例 1 · 科技新闻（含六级词）
+      </button>
+      <button class="btn btn-secondary example-btn" data-idx="1" style="margin-top:8px;">
+        示例 2 · 文学片段（含六级词）
+      </button>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" id="btn-example-close">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 脚本 ===== -->
+  <script src="data/dict.js"></script>
+  <script src="../../assets/js/common.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

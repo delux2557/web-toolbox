@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" fill="none">
+  <!-- 夜空背景 -->
+  <rect x="0" y="0" width="320" height="240" fill="#eaf4ff" rx="24"/>
+  <!-- 月亮 -->
+  <circle cx="240" cy="55" r="30" fill="#fff3d4" stroke="#e8c860" stroke-width="2.5"/>
+  <circle cx="253" cy="45" r="26" fill="#eaf4ff"/>
+  <!-- 星星群 -->
+  <!-- 大星 -->
+  <polygon points="80,25 84,37 96,37 86,44 90,56 80,49 70,56 74,44 64,37 76,37" fill="#f0c060" opacity="0.9"/>
+  <polygon points="170,15 173,23 181,23 174,28 177,36 170,32 163,36 166,28 159,23 167,23" fill="#f0c060" opacity="0.7"/>
+  <polygon points="50,80 53,88 61,88 54,93 57,101 50,97 43,101 46,93 39,88 47,88" fill="#f0c060" opacity="0.5"/>
+  <!-- 小星点 -->
+  <circle cx="280" cy="100" r="2.5" fill="#e8c860" opacity="0.6"/>
+  <circle cx="65" cy="110" r="2" fill="#e8c860" opacity="0.5"/>
+  <circle cx="200" cy="80" r="2" fill="#e8c860" opacity="0.4"/>
+  <circle cx="295" cy="30" r="1.5" fill="#e8c860" opacity="0.5"/>
+  <circle cx="130" cy="60" r="1.5" fill="#e8c860" opacity="0.4"/>
+  <!-- 打开的书 -->
+  <path d="M50 160 L50 210 Q50 222 62 222 L158 222 L158 170 Z" fill="#fdf3ec" stroke="#6f94d8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M270 160 L270 210 Q270 222 258 222 L162 222 L162 170 Z" fill="#fdf3ec" stroke="#6f94d8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="160" y1="170" x2="160" y2="222" stroke="#6f94d8" stroke-width="2.5"/>
+  <!-- 书页文字线 -->
+  <line x1="70" y1="185" x2="150" y2="185" stroke="#c4d7f2" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="70" y1="196" x2="145" y2="196" stroke="#c4d7f2" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="70" y1="207" x2="148" y2="207" stroke="#c4d7f2" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="170" y1="185" x2="250" y2="185" stroke="#c4d7f2" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="170" y1="196" x2="245" y2="196" stroke="#c4d7f2" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="170" y1="207" x2="248" y2="207" stroke="#c4d7f2" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- ZZZ 标记 -->
+  <text x="95" y="52" font-family="sans-serif" font-size="14" fill="#6f94d8" font-weight="700">z</text>
+  <text x="112" y="45" font-family="sans-serif" font-size="18" fill="#6f94d8" font-weight="700">z</text>
+  <text x="132" y="36" font-family="sans-serif" font-size="22" fill="#6f94d8" font-weight="700">z</text>
+</svg>

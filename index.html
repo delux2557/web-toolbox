@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Toolbox · 实用工具集</title>
+  <link rel="stylesheet" href="assets/css/theme.css">
+  <style>
+    .hub-container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: var(--space-xl) var(--space-lg);
+    }
+    .hub-hero {
+      text-align: center;
+      padding: var(--space-2xl) 0 var(--space-xl);
+    }
+    .hub-hero h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: var(--space-sm);
+    }
+    .hub-hero p {
+      font-size: 1.05rem;
+      color: var(--text-secondary);
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: var(--space-lg);
+      padding: var(--space-lg) 0;
+    }
+    .tool-card {
+      background: var(--card-bg);
+      border-radius: var(--card-radius);
+      box-shadow: var(--card-shadow);
+      padding: var(--space-xl) var(--space-lg);
+      text-decoration: none;
+      color: var(--text-primary);
+      transition: all var(--transition);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+    }
+    .tool-card:hover {
+      transform: translateY(-6px);
+      box-shadow: var(--card-shadow-hover);
+    }
+    .tool-card:focus-visible {
+      outline: 2.5px solid var(--color-accent);
+      outline-offset: 2px;
+    }
+    .tool-icon {
+      font-size: 2.2rem;
+      line-height: 1;
+    }
+    .tool-name {
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+    .tool-desc {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .tool-card.disabled {
+      opacity: 0.55;
+      cursor: default;
+      pointer-events: none;
+    }
+    .tool-card.disabled:hover {
+      transform: none;
+      box-shadow: var(--card-shadow);
+    }
+    .tool-status {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: var(--color-accent-light);
+      color: var(--color-accent);
+      align-self: flex-start;
+    }
+    .tool-card.disabled .tool-status {
+      background: #e8e8e8;
+      color: var(--text-muted);
+    }
+    .hub-footer {
+      text-align: center;
+      padding: var(--space-2xl) 0;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="hub-container">
+    <section class="hub-hero">
+      <h1>🧰 Web Toolbox</h1>
+      <p>实用纯静态小工具集合站。零依赖、零后端，双击就能用。</p>
+    </section>
+
+    <div class="tools-grid">
+      <!-- 工具 1：拾词 -->
+      <a href="tools/en-words/index.html" class="tool-card">
+        <div class="tool-icon">📖</div>
+        <div class="tool-name">梦幻词栈 · 英语生词拾取器</div>
+        <div class="tool-desc">粘贴一段英文，智能识别你需要掌握的 TOP 生词，支持生词本复习</div>
+        <span class="tool-status">可用</span>
+      </a>
+
+      <!-- 占位卡片 -->
+      <div class="tool-card disabled">
+        <div class="tool-icon">⏱</div>
+        <div class="tool-name">番茄时钟</div>
+        <div class="tool-desc">简洁番茄工作法计时器，自定义专注与休息时长</div>
+        <span class="tool-status">敬请期待</span>
+      </div>
+
+      <div class="tool-card disabled">
+        <div class="tool-icon">{ }</div>
+        <div class="tool-name">JSON 格式化</div>
+        <div class="tool-desc">JSON 格式化、校验、树形浏览，本地运行不传数据</div>
+        <span class="tool-status">敬请期待</span>
+      </div>
+
+      <div class="tool-card disabled">
+        <div class="tool-icon">🎨</div>
+        <div class="tool-name">调色板工具</div>
+        <div class="tool-desc">颜色拾取、渐变生成、调色板导出，前端开发小帮手</div>
+        <span class="tool-status">敬请期待</span>
+      </div>
+    </div>
+
+    <footer class="hub-footer">
+      <p>纯静态 · 零依赖 · 双击可用 &mdash; Web Toolbox</p>
+    </footer>
+  </div>
+</body>
+</html>

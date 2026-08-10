@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" fill="none">
+  <!-- 大雪花中心 -->
+  <!-- 六条主干 -->
+  <line x1="160" y1="60" x2="160" y2="130" stroke="#6f94d8" stroke-width="3" stroke-linecap="round"/>
+  <line x1="110" y1="95" x2="210" y2="95" stroke="#6f94d8" stroke-width="3" stroke-linecap="round"/>
+  <line x1="125" y1="72" x2="195" y2="118" stroke="#6f94d8" stroke-width="3" stroke-linecap="round"/>
+  <line x1="195" y1="72" x2="125" y2="118" stroke="#6f94d8" stroke-width="3" stroke-linecap="round"/>
+  <!-- 雪花分支小臂 -->
+  <line x1="160" y1="70" x2="148" y2="78" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="160" y1="70" x2="172" y2="78" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="148" y1="102" x2="160" y2="102" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="160" y1="102" x2="172" y2="102" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="120" y1="84" x2="128" y2="92" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="120" y1="84" x2="128" y2="76" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="192" y1="106" x2="200" y2="98" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="192" y1="106" x2="200" y2="114" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="136" y1="80" x2="128" y2="86" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="144" y1="72" x2="136" y2="74" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="184" y1="110" x2="192" y2="104" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="176" y1="118" x2="184" y2="116" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="184" y1="80" x2="192" y2="74" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="176" y1="72" x2="184" y2="72" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="136" y1="110" x2="128" y2="116" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="144" y1="118" x2="136" y2="118" stroke="#6f94d8" stroke-width="2" stroke-linecap="round"/>
+  <!-- 雪花中心圆 -->
+  <circle cx="160" cy="95" r="6" fill="#fdf3ec" stroke="#6f94d8" stroke-width="2.5"/>
+  <!-- 小雪花 1 -->
+  <line x1="260" y1="170" x2="260" y2="190" stroke="#a0c4e8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="248" y1="180" x2="272" y2="180" stroke="#a0c4e8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="252" y1="173" x2="268" y2="187" stroke="#a0c4e8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="268" y1="173" x2="252" y2="187" stroke="#a0c4e8" stroke-width="2" stroke-linecap="round"/>
+  <!-- 小雪花 2 -->
+  <line x1="70" y1="185" x2="70" y2="200" stroke="#a0c4e8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="62" y1="192" x2="78" y2="192" stroke="#a0c4e8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="65" y1="187" x2="75" y2="197" stroke="#a0c4e8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="75" y1="187" x2="65" y2="197" stroke="#a0c4e8" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- 小雪花 3 -->
+  <line x1="290" y1="55" x2="290" y2="68" stroke="#a0c4e8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="283" y1="61" x2="297" y2="61" stroke="#a0c4e8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="285" y1="57" x2="295" y2="65" stroke="#a0c4e8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="295" y1="57" x2="285" y2="65" stroke="#a0c4e8" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- 勾选大圆圈 -->
+  <circle cx="160" cy="178" r="22" fill="#d1f0e8" stroke="#6f94d8" stroke-width="2.5"/>
+  <!-- 勾选对勾 -->
+  <path d="M148 178 L156 188 L175 165" stroke="#6f94d8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- 点缀小星 -->
+  <circle cx="100" cy="55" r="2" fill="#e8c860" opacity="0.6"/>
+  <circle cx="235" cy="45" r="2" fill="#e8c860" opacity="0.5"/>
+  <circle cx="210" cy="140" r="1.5" fill="#e8c860" opacity="0.4"/>
+</svg>
