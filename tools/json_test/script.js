@@ -3,7 +3,8 @@
  * 工程文件已锁定，后续仅需修改 data.json 即可更新内容。
  *
  * 职责：
- *   1. fetch('data.json') 获取数据
+ *   1. fetch('data.json') 获取数据 
+ *      每次刷新都会拉取最新 JSON -->  fetch('data.json?t=' + Date.now())
  *   2. 将 JSON 驱动的数据渲染为 DOM
  *   3. 绑定交互事件
  *   4. 处理加载 / 错误状态
@@ -113,7 +114,7 @@
   }
 
   /* ---- 入口：fetch 数据 ---- */
-  fetch('data.json')
+  fetch('data.json?t=' + Date.now())
     .then(function (response) {
       if (!response.ok) {
         throw new Error('HTTP ' + response.status);
