@@ -1,0 +1,292 @@
+/* ============================================================
+   工程文件已锁定，后续仅需修改 data.json 即可更新内容。
+   ============================================================ */
+
+/* --- 字体引入 --- */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Noto+Sans+SC:wght@300;400;500&display=swap');
+
+/* --- CSS Custom Properties --- */
+:root {
+  --color-paper: #faf8f5;
+  --color-ink: #2c2416;
+  --color-ink-muted: #6b5e4a;
+  --color-accent: #c0392b;
+  --color-accent-dim: rgba(192, 57, 43, 0.08);
+  --color-divider: #e5ded4;
+  --color-card-bg: #ffffff;
+  --color-card-shadow: rgba(44, 36, 22, 0.06);
+  --color-tag-tech: #1e5f74;
+  --color-tag-tech-bg: #e8f4f8;
+  --color-tag-finance: #7d5a29;
+  --color-tag-finance-bg: #fdf1dd;
+  --color-tag-health: #2d7d46;
+  --color-tag-health-bg: #eaf7ee;
+  --color-tag-edu: #5b3e8c;
+  --color-tag-edu-bg: #f3edfa;
+
+  --font-display: 'Noto Serif SC', 'SimSun', 'STSong', serif;
+  --font-body: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  --space-xs: clamp(4px, 0.5vw, 6px);
+  --space-sm: clamp(8px, 1vw, 12px);
+  --space-md: clamp(16px, 2vw, 24px);
+  --space-lg: clamp(24px, 3vw, 40px);
+  --space-xl: clamp(32px, 5vw, 64px);
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+
+  --max-width: 1200px;
+}
+
+/* --- Reset --- */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Header --- */
+.header {
+  border-bottom: 1px solid var(--color-divider);
+  padding: var(--space-lg) var(--space-md) var(--space-md);
+}
+
+.header__inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  text-align: center;
+}
+
+.header__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: var(--color-ink);
+  line-height: 1.2;
+}
+
+.header__subtitle {
+  font-size: 0.8rem;
+  font-weight: 300;
+  color: var(--color-ink-muted);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-top: var(--space-xs);
+}
+
+/* --- Main Grid --- */
+.main {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: var(--space-lg) var(--space-md);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-md);
+  flex: 1;
+}
+
+/* --- Loading & Error --- */
+.loading,
+.error {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: var(--space-xl) var(--space-md);
+  color: var(--color-ink-muted);
+  font-size: 0.95rem;
+}
+
+.error {
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+/* --- Article Card --- */
+.card {
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition:
+    transform 200ms cubic-bezier(0.33, 1, 0.68, 1),
+    box-shadow 200ms cubic-bezier(0.33, 1, 0.68, 1);
+  box-shadow: 0 1px 3px var(--color-card-shadow);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px var(--color-card-shadow);
+}
+
+.card:active {
+  transform: translateY(0);
+}
+
+.card__image {
+  height: 160px;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.card__body {
+  padding: var(--space-md);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.card__category {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 3px;
+  line-height: 1.5;
+}
+
+.card__category--科技 {
+  color: var(--color-tag-tech);
+  background: var(--color-tag-tech-bg);
+}
+
+.card__category--财经 {
+  color: var(--color-tag-finance);
+  background: var(--color-tag-finance-bg);
+}
+
+.card__category--健康 {
+  color: var(--color-tag-health);
+  background: var(--color-tag-health-bg);
+}
+
+.card__category--教育 {
+  color: var(--color-tag-edu);
+  background: var(--color-tag-edu-bg);
+}
+
+.card__title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--color-ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card__summary {
+  font-size: 0.85rem;
+  color: var(--color-ink-muted);
+  line-height: 1.6;
+  flex: 1;
+}
+
+.card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--color-divider);
+}
+
+.card__source {
+  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+  font-weight: 500;
+}
+
+.card__arrow {
+  font-size: 0.85rem;
+  color: var(--color-accent);
+  display: inline-block;
+  transition: transform 150ms ease;
+}
+
+.card:hover .card__arrow {
+  transform: translateX(3px);
+}
+
+/* --- Footer --- */
+.footer {
+  border-top: 1px solid var(--color-divider);
+  padding: var(--space-md);
+  text-align: center;
+}
+
+.footer__text {
+  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+}
+
+/* --- Responsive --- */
+
+/* 中等屏幕：两列展示 */
+@media (min-width: 600px) and (max-width: 899px) {
+  .main {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 小屏幕：全宽卡片 */
+@media (max-width: 599px) {
+  .main {
+    grid-template-columns: 1fr;
+    padding: var(--space-md);
+    gap: var(--space-sm);
+  }
+
+  .header {
+    padding: var(--space-md) var(--space-md) var(--space-sm);
+  }
+
+  .card__image {
+    height: 180px;
+  }
+}
+
+/* 宽屏：最多四列 */
+@media (min-width: 1100px) {
+  .main {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* --- 打印样式 --- */
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .card {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+}

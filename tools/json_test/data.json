@@ -1,0 +1,59 @@
+{
+  "siteTitle": "AI 每日速递",
+  "articles": [
+    {
+      "id": 1,
+      "title": "OpenAI 发布 GPT-5：推理能力再破纪录",
+      "summary": "多项基准测试超越人类专家水平",
+      "source": "机器之心",
+      "category": "科技",
+      "url": "https://example.com/gpt5",
+      "imagePlaceholder": "#0d1117"
+    },
+    {
+      "id": 2,
+      "title": "AI 制药第一股上市首日大涨 40%",
+      "summary": "AI 赋能新药研发获资本市场认可",
+      "source": "财新网",
+      "category": "财经",
+      "url": "https://example.com/ai-pharma-ipo",
+      "imagePlaceholder": "#1b2838"
+    },
+    {
+      "id": 3,
+      "title": "教育部：AI 通识课将列为大学必修",
+      "summary": "2026 年秋季学期全面推行",
+      "source": "中国教育报",
+      "category": "教育",
+      "url": "https://example.com/ai-course",
+      "imagePlaceholder": "#2c3e50"
+    },
+    {
+      "id": 4,
+      "title": "AI 辅助诊断系统获三类医疗器械认证",
+      "summary": "肺结节检出准确率达 97%",
+      "source": "健康界",
+      "category": "健康",
+      "url": "https://example.com/ai-medical",
+      "imagePlaceholder": "#0d1117"
+    },
+    {
+      "id": 5,
+      "title": "英特尔发布 AI PC 芯片，本地算力翻倍",
+      "summary": "无需联网即可运行大语言模型",
+      "source": "36氪",
+      "category": "科技",
+      "url": "https://example.com/intel-ai-pc",
+      "imagePlaceholder": "#1b2838"
+    },
+    {
+      "id": 6,
+      "title": "AI 选股基金年内收益率突破 35%",
+      "summary": "机器学习策略跑赢沪深300",
+      "source": "证券时报",
+      "category": "财经",
+      "url": "https://example.com/ai-fund",
+      "imagePlaceholder": "#2c3e50"
+    }
+  ]
+}
