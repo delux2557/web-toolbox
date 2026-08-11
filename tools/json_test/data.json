@@ -1,59 +1,77 @@
 {
-  "siteTitle": "AI 每日速递",
+  "siteTitle": "今日要闻",
   "articles": [
     {
       "id": 1,
-      "title": "OpenAI 发布 GPT-5：推理能力再破纪录",
-      "summary": "多项基准测试超越人类专家水平",
-      "source": "机器之心",
+      "title": "国产大模型突破千亿参数，推理能力大幅提升",
+      "summary": "多家厂商发布新一代大模型，性能接近国际顶尖水平",
+      "source": "科技日报",
       "category": "科技",
-      "url": "https://example.com/gpt5",
-      "imagePlaceholder": "#0d1117"
+      "url": "https://example.com/ai-model",
+      "imagePlaceholder": "#1a1a2e"
     },
     {
       "id": 2,
-      "title": "AI 制药第一股上市首日大涨 40%",
-      "summary": "AI 赋能新药研发获资本市场认可",
-      "source": "财新网",
+      "title": "央行宣布降准0.5个百分点，释放长期流动性",
+      "summary": "此次降准预计释放约1.2万亿元长期资金",
+      "source": "经济观察报",
       "category": "财经",
-      "url": "https://example.com/ai-pharma-ipo",
-      "imagePlaceholder": "#1b2838"
+      "url": "https://example.com/rrr-cut",
+      "imagePlaceholder": "#16213e"
     },
     {
       "id": 3,
-      "title": "教育部：AI 通识课将列为大学必修",
-      "summary": "2026 年秋季学期全面推行",
-      "source": "中国教育报",
-      "category": "教育",
-      "url": "https://example.com/ai-course",
-      "imagePlaceholder": "#2c3e50"
+      "title": "新型疫苗获批：应对秋冬呼吸道疾病高峰",
+      "summary": "国家药监局批准多款新型疫苗上市使用",
+      "source": "健康时报",
+      "category": "健康",
+      "url": "https://example.com/vaccine",
+      "imagePlaceholder": "#0f3460"
     },
     {
       "id": 4,
-      "title": "AI 辅助诊断系统获三类医疗器械认证",
-      "summary": "肺结节检出准确率达 97%",
-      "source": "健康界",
-      "category": "健康",
-      "url": "https://example.com/ai-medical",
-      "imagePlaceholder": "#0d1117"
+      "title": "教育部发布新课标：编程正式纳入中小学课程",
+      "summary": "信息科技课程将覆盖小学三年级至高中阶段",
+      "source": "中国教育报",
+      "category": "教育",
+      "url": "https://example.com/edu-standard",
+      "imagePlaceholder": "#1a1a2e"
     },
     {
       "id": 5,
-      "title": "英特尔发布 AI PC 芯片，本地算力翻倍",
-      "summary": "无需联网即可运行大语言模型",
-      "source": "36氪",
+      "title": "全球芯片供应链加速重构，国产替代迎机遇",
+      "summary": "半导体产业链本地化趋势推动国内企业加速布局",
+      "source": "半导体行业观察",
       "category": "科技",
-      "url": "https://example.com/intel-ai-pc",
-      "imagePlaceholder": "#1b2838"
+      "url": "https://example.com/chip-supply",
+      "imagePlaceholder": "#16213e"
     },
     {
       "id": 6,
-      "title": "AI 选股基金年内收益率突破 35%",
-      "summary": "机器学习策略跑赢沪深300",
+      "title": "A股三大指数全线收涨，北向资金净流入超百亿",
+      "summary": "两市成交额突破万亿，市场情绪明显回暖",
       "source": "证券时报",
       "category": "财经",
-      "url": "https://example.com/ai-fund",
-      "imagePlaceholder": "#2c3e50"
+      "url": "https://example.com/stock-rally",
+      "imagePlaceholder": "#0f3460"
+    },
+    {
+      "id": 7,
+      "title": "研究发现：每天步行8000步可显著降低心血管风险",
+      "summary": "大规模队列研究为日常运动提供新证据",
+      "source": "健康时报",
+      "category": "健康",
+      "url": "https://example.com/walking-study",
+      "imagePlaceholder": "#1a1a2e"
+    },
+    {
+      "id": 8,
+      "title": "多地推行教师轮岗制度，促进教育资源均衡",
+      "summary": "北京、上海等城市率先试点跨区域教师交流",
+      "source": "光明日报",
+      "category": "教育",
+      "url": "https://example.com/teacher-rotation",
+      "imagePlaceholder": "#16213e"
     }
   ]
 }
