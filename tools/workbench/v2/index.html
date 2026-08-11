@@ -1,0 +1,46 @@
+<div id="app-root">
+  <!-- 左侧固定导航栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-dot"></span>
+      <span class="brand-text">工作台</span>
+    </div>
+
+    <div class="sidebar-user" id="sidebar-user">
+      <div class="avatar" id="avatar">?</div>
+      <span class="user-name" id="sidebar-username">用户</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <span class="nav-label">导航</span>
+      <a class="nav-item active" href="#" data-category="all">全部书签</a>
+      <a class="nav-item" href="#" data-category="favorites">收藏夹</a>
+      <a class="nav-item" href="#" data-category="tools">工具</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <span class="version-tag">V2</span>
+    </div>
+  </aside>
+
+  <!-- 右侧主内容区 -->
+  <main class="main-content">
+    <header class="content-header">
+      <h2 class="content-title" id="content-title">全部书签</h2>
+      <span class="content-count" id="bookmark-count"></span>
+    </header>
+
+    <div class="bookmark-list" id="bookmark-list">
+      <!-- 书签列表由 script.js 动态渲染 -->
+    </div>
+
+    <section class="plugin-section" id="plugin-section">
+      <div class="plugin-card-v2" id="plugin-todo">
+        <!-- todo 插件挂载点 -->
+      </div>
+    </section>
+  </main>
+</div>
+
+<link rel="stylesheet" href="v2/style.css" />
+<script src="v2/script.js"></script>

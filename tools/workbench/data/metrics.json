@@ -1,0 +1,17 @@
+{
+  "lastFetch": "2026-08-12 15:30:00",
+  "kpis": [
+    { "label": "今日请求量", "value": 28473, "change": "+12.5%" },
+    { "label": "平均耗时 (ms)", "value": 132, "change": "-8.2%" },
+    { "label": "成功率", "value": 99.82, "change": "+0.3%" },
+    { "label": "活跃用户", "value": 842, "change": "+5.1%" }
+  ],
+  "trend": [320, 450, 280, 580, 720, 490, 610],
+  "logs": [
+    { "time": "15:28:12", "user": "zhangsan", "action": "导出报表", "status": "成功" },
+    { "time": "15:25:03", "user": "lisi", "action": "登录系统", "status": "失败" },
+    { "time": "15:20:47", "user": "wangwu", "action": "创建项目", "status": "成功" },
+    { "time": "15:18:21", "user": "zhangsan", "action": "修改配置", "status": "成功" },
+    { "time": "15:12:05", "user": "lisi", "action": "删除记录", "status": "成功" }
+  ]
+}

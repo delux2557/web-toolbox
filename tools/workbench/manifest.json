@@ -1,0 +1,7 @@
+{
+  "activeVersion": "v5",
+  "plugins": [
+    { "id": "todo", "src": "plugins/todo.js", "enabled": true },
+    { "id": "weather", "src": "plugins/weather.js", "enabled": true }
+  ]
+}

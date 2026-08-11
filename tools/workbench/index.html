@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>极简工作台</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: oklch(97% 0.005 80);
+      color: oklch(25% 0.01 70);
+      -webkit-font-smoothing: antialiased;
+      transition: background 300ms ease, color 300ms ease;
+    }
+
+    /* 主题感知骨架屏 */
+    html[data-theme="dark"],
+    html[data-theme="dark"] body {
+      background: oklch(15% 0.01 70);
+      color: oklch(90% 0.005 80);
+    }
+
+    #app {
+      min-height: 100%;
+    }
+
+    /* 加载骨架屏 — 极简脉冲指示器 */
+    .loader-shell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .loader-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: oklch(65% 0.12 65);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50%      { opacity: 1;   transform: scale(1.6); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="loader-shell">
+      <div class="loader-indicator"></div>
+    </div>
+  </div>
+  <script src="core/theme.js"></script>
+  <script src="core/loader.js"></script>
+</body>
+</html>

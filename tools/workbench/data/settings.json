@@ -1,0 +1,30 @@
+{
+  "userName": "张工",
+  "lastUpdated": "2026-08-11 18:34:23",
+  "bookmarks": [
+    {
+      "id": "b1",
+      "name": "GitHub",
+      "url": "https://github.com",
+      "icon": "🚀",
+      "favorite": true,
+      "category": "general"
+    },
+    {
+      "id": "b3",
+      "name": "数据看板",
+      "url": "https://dashboard.local",
+      "icon": "📊",
+      "favorite": true,
+      "category": "tool"
+    },
+    {
+      "id": "b2",
+      "name": "Jira",
+      "url": "https://jira.example.com",
+      "icon": "📋",
+      "favorite": false,
+      "category": "general"
+    }
+  ]
+}

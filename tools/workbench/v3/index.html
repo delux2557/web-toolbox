@@ -1,0 +1,76 @@
+<div id="app-root">
+  <!-- 左侧固定导航栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-dot"></span>
+      <span class="brand-text">工作台</span>
+    </div>
+
+    <div class="sidebar-user" id="sidebar-user">
+      <div class="avatar" id="avatar">?</div>
+      <span class="user-name" id="sidebar-username">用户</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <span class="nav-label">导航</span>
+      <a class="nav-item active" href="#" data-menu="all">全部书签</a>
+      <a class="nav-item" href="#" data-menu="favorites">收藏夹</a>
+      <a class="nav-item" href="#" data-menu="tools">工具</a>
+      <a class="nav-item" href="#" data-menu="dashboard">📊 数据驾驶舱</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <span class="version-tag">V3</span>
+    </div>
+  </aside>
+
+  <!-- 右侧主内容区（动态切换） -->
+  <main class="main-content">
+    <!-- 书签视图容器 -->
+    <div class="view-bookmarks" id="view-bookmarks">
+      <header class="content-header">
+        <h2 class="content-title" id="content-title">全部书签</h2>
+        <span class="content-count" id="bookmark-count"></span>
+      </header>
+      <div class="bookmark-list" id="bookmark-list"></div>
+    </div>
+
+    <!-- 驾驶舱视图容器（默认隐藏） -->
+    <div class="view-dashboard" id="view-dashboard" style="display:none;">
+      <header class="content-header">
+        <h2 class="content-title">📊 数据驾驶舱</h2>
+        <button class="dashboard-refresh-btn" id="dashboard-refresh">🔄 刷新</button>
+      </header>
+
+      <!-- KPI 指标卡 -->
+      <div class="kpi-grid" id="kpi-grid"></div>
+
+      <!-- ECharts 图表容器 -->
+      <div class="chart-container" id="chart-container">
+        <div class="chart-placeholder" id="chart-placeholder">图表加载中...</div>
+      </div>
+
+      <!-- 日志表格 -->
+      <div class="logs-section">
+        <h3 class="logs-title">操作日志</h3>
+        <div class="logs-table-wrap">
+          <table class="logs-table" id="logs-table">
+            <thead>
+              <tr><th>时间</th><th>用户</th><th>操作</th><th>状态</th></tr>
+            </thead>
+            <tbody id="logs-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 插件区域 -->
+    <section class="plugin-section" id="plugin-section">
+      <div class="plugin-card-v2" id="plugin-todo"></div>
+    </section>
+  </main>
+</div>
+
+<link rel="stylesheet" href="v3/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="v3/script.js"></script>
