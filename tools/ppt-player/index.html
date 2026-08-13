@@ -285,7 +285,7 @@
 
       // ---- 版本清单 ----
       async function loadManifest() {
-        var res = await fetch('/manifest.json');
+        var res = await fetch('manifest.json');
         manifest = await res.json();
         return manifest;
       }
@@ -414,11 +414,11 @@
         else if (e.key === 'ArrowRight') go(1);
       });
 
-      // ---- 内联本地资源（/V{N}/xxx.css、xxx.js），使导出的单文件真正自包含 ----
+      // ---- 内联本地资源（V{N}/xxx.css、xxx.js），使导出的单文件真正自包含 ----
       async function inlineAssets(html) {
         var doc = new DOMParser().parseFromString(html, 'text/html');
 
-        var links = doc.querySelectorAll('link[rel="stylesheet"][href^="/V"]');
+        var links = doc.querySelectorAll('link[rel="stylesheet"][href]:not([href^="http"])');
         for (var i = 0; i < links.length; i++) {
           var link = links[i];
           try {
@@ -429,7 +429,7 @@
           } catch (e) { /* 内联失败则保留原 link */ }
         }
 
-        var scripts = doc.querySelectorAll('script[src^="/V"]');
+        var scripts = doc.querySelectorAll('script[src]:not([src^="http"])');
         for (var j = 0; j < scripts.length; j++) {
           var s = scripts[j];
           try {
@@ -457,7 +457,7 @@
           return;
         }
         try {
-          // 1. 内联版本资源，规避导出后 /V{N}/xxx 绝对路径 404
+          // 1. 内联版本资源，规避导出后 V{N}/xxx 相对路径失效
           var slideDocHtml = await inlineAssets(html);
 
           // 2. 克隆壳文档，用 DOM API 写入 srcdoc（自动转义，不碰正则）

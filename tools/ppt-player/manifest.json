@@ -3,13 +3,13 @@
     {
       "id": "V1",
       "version": "1.0.0",
-      "entry": "/V1/index.html",
+      "entry": "V1/index.html",
       "description": "第一版示例PPT"
     },
     {
       "id": "V2",
       "version": "2.0.0",
-      "entry": "/V2/index.html",
+      "entry": "V2/index.html",
       "description": "第二版极简引擎（纯CSS动画 + 原生JS）"
     }
   ],
