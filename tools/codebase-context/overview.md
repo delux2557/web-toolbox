@@ -12,8 +12,19 @@
 ├── V3/index.html    ← v3 片段（代码高亮版：修复徽章对比度 + 新文案 + highlight.js）
 ├── V3/style.css     ← v3 样式（徽章对比度修复 + hljs token 配色）
 ├── V3/app.js        ← v3 逻辑（动态加载 highlight.js + 高亮渲染）
+├── V4/index.html    ← v4 片段（场景化上下文：panel-head 内嵌场景选择器）
+├── V4/style.css     ← v4 样式（+ 场景控件 / blockquote / 提示词模态框）
+├── V4/app.js        ← v4 逻辑（+ 场景加载 / Prompt 注入 / 提示词预览）
+├── data/scenarios.json ← 场景模板（纯配置，4 个场景，零硬编码）
 └── overview.md      ← 本文档
 ```
+
+## V4 相对 V3 的改动（场景化上下文）
+1. **场景模板机制**：新建 `data/scenarios.json`（`defaultId` + `list`），`app.js` 启动时 `fetch('../data/scenarios.json')` 动态加载，失败回退内置 `FALLBACK_SCENARIO`（仅内存，不写死 DOM）。
+2. **场景选择器**：嵌入预览面板 `panel-head`（标题+行数 在左，`⚙️ 场景` + `<select>` + `📋 预览` 在右）。切换场景**不重扫文件夹**，仅 `updateExportData()` + `renderPreview()`。
+3. **导出注入 System Prompt**：`buildSystemPromptBlock()` 在导出 Markdown 头部注入 YAML Frontmatter（`scenario` + `system_prompt: |`）+ 人类可读 `>` 引用块；复制/下载都用此内容。
+4. **预览提示词**：`📋 预览` 弹轻量模态框展示完整 systemPrompt（换行显示）+「复制提示词」按钮（无 alert/confirm）。
+5. **渲染器增强**：`mdToHTML` 新增 YAML frontmatter（渲染为 yaml 代码块）与 `>` blockquote（渲染为引用块，主题适配）。
 
 ## V3 相对 V2 的改动
 1. **徽章对比度修复**：`.empty-badge` / `.preview-banner` 文字色 `--accent-ink` → `--accent-strong`，亮暗色均回到 ~7:1（AA）。
@@ -33,11 +44,12 @@
 ```json
 {
   "schemaVersion": 1,
-  "latest": "v3",
+  "latest": "v4",
   "versions": [
     { "id": "v1", "version": "1.0.0", "label": "单文件版", "entry": "V1/index.html" },
     { "id": "v2", "version": "2.0.0", "label": "分离版（HTML/CSS/JS）", "entry": "V2/index.html" },
-    { "id": "v3", "version": "3.0.0", "label": "代码高亮版", "entry": "V3/index.html" }
+    { "id": "v3", "version": "3.0.0", "label": "代码高亮版", "entry": "V3/index.html" },
+    { "id": "v4", "version": "4.0.0", "label": "场景化上下文（可定制 System Prompt）", "entry": "V4/index.html" }
   ]
 }
 ```
@@ -52,6 +64,6 @@
 - 未来加新版：在 `manifest.json` 的 `versions` 增项、更新 `latest`，壳无需改动。
 
 ## 校验结果
-- `V3/app.js` 通过 `node --check`。
-- 高亮冒烟测试通过：`splitHighlighted` 多行注释 span 平衡、`highlightCode` 兜底/支持语言/不支持语言、`renderCodeBlock` 转义防 XSS 与行号模式 span 平衡。
-- 服务器实测：壳 / manifest（latest=v3）/ V1 / V2 / V3 片段均正确返回。
+- `V4/app.js` 通过 `node --check`；`data/scenarios.json` 解析通过（4 个场景，`defaultId=general`）。
+- V1/V2/V3 未做任何改动（本轮仅新增 V4 / data/scenarios.json / 更新 manifest）。
+- 场景逻辑经只读核对：`buildSystemPromptBlock`（YAML frontmatter + 引用块）、`updateExportData`、`loadScenarios` 回退、`mdToHTML` 的 frontmatter/blockquote 渲染。
