@@ -1,0 +1,185 @@
+/* ===== 基础重置 ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+:root {
+  --bg: #ffffff;
+  --ink: #16181d;
+  --muted: #6b7280;
+  --accent: #0ea5a4;
+  --accent-soft: #e6faf9;
+  --line: #e5e3dd;
+  --dur: 600ms;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", Consolas, monospace;
+}
+
+[data-theme="dark"] {
+  --bg: #141519;
+  --ink: #eef0f4;
+  --muted: #9aa1ad;
+  --accent: #2dd4bf;
+  --accent-soft: #123332;
+  --line: #2a2d35;
+}
+
+body {
+  position: relative;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ===== 幻灯片页面 ===== */
+.slide-page {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 6vmin;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  will-change: opacity, transform;
+}
+
+.slide-page.active {
+  display: flex;
+}
+
+.slide-page.exit-fade { opacity: 0; }
+.slide-page.exit-left { opacity: 0; transform: translateX(-100%); }
+.slide-page.exit-right { opacity: 0; transform: translateX(100%); }
+
+.slide-page.enter-fade { opacity: 0; transition: none; }
+.slide-page.enter-left { opacity: 0; transform: translateX(-100%); transition: none; }
+.slide-page.enter-right { opacity: 0; transform: translateX(100%); transition: none; }
+
+.slide-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 60% at 85% 8%, var(--accent-soft), transparent 70%),
+    radial-gradient(50% 50% at 8% 92%, var(--accent-soft), transparent 60%);
+  opacity: 0.7;
+}
+
+/* ===== 内容排版 ===== */
+.slide-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1000px;
+  text-align: left;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 2vmin;
+}
+
+.slide-title { text-align: center; }
+.slide-title h1 {
+  font-size: clamp(44px, 9vw, 108px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+}
+.slide-title .subtitle {
+  font-size: clamp(16px, 2.4vw, 24px);
+  color: var(--muted);
+  margin-top: 3.6vmin;
+  letter-spacing: 0.01em;
+}
+
+/* rAF 驱动的装饰光点 */
+.orb {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 20px 4px var(--accent-soft);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+/* ===== 展示页 ===== */
+.slide-demo { text-align: center; }
+.slide-demo h2 {
+  font-size: clamp(28px, 5vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.demo-caption {
+  color: var(--muted);
+  margin: 1vmin 0 4vmin;
+  font-size: 15px;
+}
+
+.cube-wrap {
+  perspective: 900px;
+  display: inline-block;
+  margin-top: 2vmin;
+}
+
+.cube {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  transform-style: preserve-3d;
+  animation: cube-spin 9s linear infinite;
+}
+
+.cube .face {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--accent);
+}
+.face.front  { transform: translateZ(60px); }
+.face.back   { transform: rotateY(180deg) translateZ(60px); }
+.face.right  { transform: rotateY(90deg) translateZ(60px); }
+.face.left   { transform: rotateY(-90deg) translateZ(60px); }
+.face.top    { transform: rotateX(90deg) translateZ(60px); }
+.face.bottom { transform: rotateX(-90deg) translateZ(60px); }
+
+@keyframes cube-spin {
+  from { transform: rotateX(0deg) rotateY(0deg); }
+  to   { transform: rotateX(360deg) rotateY(360deg); }
+}

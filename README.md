@@ -2,7 +2,7 @@
 
 纯静态小工具集合站 + 前端探索学习实验场。零后端、零构建，可一键部署 GitHub Pages。
 
-> ⚠️ 访问方式提醒：站内项目分两类——**静态工具**（如 en-words，双击 `file://` 即可用）与 **SPA / fetch 项目**（依赖 `fetch` 动态加载，必须通过 HTTP 服务访问：codebase-context、json_test、workbench）。
+> ⚠️ 访问方式提醒：站内项目分两类——**静态工具**（如 en-words，双击 `file://` 即可用）与 **SPA / fetch 项目**（依赖 `fetch` 动态加载，必须通过 HTTP 服务访问：codebase-context、json_test、ppt-player、workbench）。
 
 ## 🛠 工具
 
@@ -10,6 +10,7 @@
 |------|------|------|
 | 📖 [梦幻词栈 · 英语生词拾取器](./tools/en-words/) | ✅ 可用 | 粘贴英文 → 智能识别 TOP 生词 → 生词本复习；离线可用，支持 `file://` 直接打开 |
 | 🔗 [Codebase Context](./tools/codebase-context/) | ✅ 可用 | 选择/拖拽项目文件夹 → 一键生成目录树 + 文件内容 Markdown，喂给 AI；纯浏览器聚合，数据不出设备。SPA 壳 + manifest 多版本注册（单文件 → 分离 → 代码高亮 → 场景化 System Prompt），**需 HTTP 服务访问** |
+| 📽 [PPT Player](./tools/ppt-player/) | ✅ 可用 | 演示文稿播放器：SPA 壳 + manifest 版本注册（V1 示例 / V2 纯 CSS 极简引擎），版本切换 + 导出单文件（DOM 克隆 + 资源内联）；**需 HTTP 服务访问** |
 | ⏱ 番茄时钟 | 🔜 占位 | 简洁番茄工作法计时器（规划中，后续继续做） |
 | { } JSON 格式化 | 🔜 占位 | JSON 格式化、校验、树形浏览（规划中，后续继续做） |
 | 🎨 调色板工具 | 🔜 占位 | 颜色拾取、渐变生成（规划中，后续继续做） |
@@ -28,11 +29,12 @@
 ```bash
 # 1) 静态工具（en-words）：直接双击 index.html 即可
 
-# 2) SPA / fetch 项目（codebase-context / json_test / workbench）：需启动 HTTP 服务
+# 2) SPA / fetch 项目（codebase-context / json_test / ppt-player / workbench）：需启动 HTTP 服务
 python -m http.server 8080
 # 然后访问：
 #   http://localhost:8080/tools/codebase-context/
 #   http://localhost:8080/tools/json_test/
+#   http://localhost:8080/tools/ppt-player/
 #   http://localhost:8080/tools/workbench/
 ```
 

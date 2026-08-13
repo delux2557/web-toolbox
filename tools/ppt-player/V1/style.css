@@ -1,0 +1,182 @@
+/* ===== 基础重置 ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+:root {
+  --bg: #ffffff;
+  --ink: #16181d;
+  --muted: #6b7280;
+  --accent: #3b5bdb;
+  --accent-soft: #eef1ff;
+  --line: #e5e3dd;
+  --dur: 600ms;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", Consolas, monospace;
+}
+
+[data-theme="dark"] {
+  --bg: #141519;
+  --ink: #eef0f4;
+  --muted: #9aa1ad;
+  --accent: #7c9bff;
+  --accent-soft: #1e2233;
+  --line: #2a2d35;
+}
+
+body {
+  position: relative;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+/* ===== 幻灯片页面 ===== */
+.slide-page {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 6vmin;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  will-change: opacity, transform;
+}
+
+.slide-page.active {
+  display: flex;
+}
+
+/* 退出动画（过渡到这些状态） */
+.slide-page.exit-fade { opacity: 0; }
+.slide-page.exit-left { opacity: 0; transform: translateX(-100%); }
+.slide-page.exit-right { opacity: 0; transform: translateX(100%); }
+
+/* 进入初始状态（transition 置空，移除该类后触发过渡） */
+.slide-page.enter-fade { opacity: 0; transition: none; }
+.slide-page.enter-left { opacity: 0; transform: translateX(-100%); transition: none; }
+.slide-page.enter-right { opacity: 0; transform: translateX(100%); transition: none; }
+
+/* 背景装饰 */
+.slide-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 60% at 85% 8%, var(--accent-soft), transparent 70%),
+    radial-gradient(50% 50% at 8% 92%, var(--accent-soft), transparent 60%);
+  opacity: 0.6;
+}
+
+/* ===== 内容排版 ===== */
+.slide-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1000px;
+  text-align: left;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 2vmin;
+}
+
+/* 标题页（居中） */
+.slide-title { text-align: center; }
+.slide-title h1 {
+  font-size: clamp(44px, 9vw, 108px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+}
+.slide-title .subtitle {
+  font-size: clamp(16px, 2.4vw, 24px);
+  color: var(--muted);
+  margin-top: 3.6vmin;
+  letter-spacing: 0.01em;
+}
+
+/* 图表页 */
+.slide-chart h2 {
+  font-size: clamp(28px, 5vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.chart-caption {
+  color: var(--muted);
+  margin: 0.6vmin 0 3vmin;
+  font-size: 15px;
+}
+#chart-container {
+  width: 100%;
+  height: 46vh;
+  min-height: 280px;
+}
+
+/* 总结页 */
+.slide-summary h2 {
+  font-size: clamp(28px, 5vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 4vmin;
+}
+.feature-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.feature-list li {
+  display: flex;
+  gap: 2.4vmin;
+  align-items: flex-start;
+  padding: 2.4vmin 0;
+  border-top: 1px solid var(--line);
+}
+.feature-list li:last-child { border-bottom: 1px solid var(--line); }
+.feature-num {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--accent);
+  padding-top: 0.5vmin;
+}
+.feature-body h3 {
+  font-size: clamp(18px, 3vw, 26px);
+  font-weight: 600;
+}
+.feature-body p {
+  color: var(--muted);
+  margin-top: 0.6vmin;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.feature-body code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--accent);
+}

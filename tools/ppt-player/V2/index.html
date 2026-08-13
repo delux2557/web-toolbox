@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>V2 极简引擎</title>
+  <!--
+    ============================================================
+    PPT 生成 Agent 开发规范（契约手册 / GOLDEN RULES）
+    任何 AI 在生成 V{N} 版本时必须严格遵守：
+    1. 文件隔离：资源放在 /V{N}/ 目录，引用用绝对路径（如 /V2/style.css），禁止 ./ 相对路径
+    2. 契约挂载：window.__SLIDE_ENGINE__ = { init, goTo, destroy }，goTo 必须返回 Promise
+    3. 生命周期：
+       - init(config)：设置 totalPages，默认显示第一页（加 .active）
+       - goTo(index, transition)：isAnimating 防连点锁；支持 fade / slide-left / slide-right；
+         动画结束 resolve()；动画中重复调用直接 resolve() 忽略，绝不报错
+       - destroy()：清除所有 setInterval / requestAnimationFrame，并 dispose 图表实例
+    4. 主题同步：加载前从 localStorage('ppt-theme') 读主题设置 <html data-theme>，监听 message 的 THEME_CHANGE
+    5. 就绪通知：onload 时 postMessage({ type:'SLIDE_READY', totalPages:N }, '*')
+    6. 编辑预留：为 h1/h2/h3/p/li/span 加 contenteditable，input 回传
+       postMessage({ type:'EDIT_CONTENT', page:index, data:{ tag, text } }, '*')
+    ============================================================
+  -->
+  <script>
+    // 主题防闪烁（与壳共享 localStorage）
+    (function () {
+      try {
+        var t = localStorage.getItem('ppt-theme');
+        if (t === 'dark' || t === 'light') {
+          document.documentElement.setAttribute('data-theme', t);
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/V2/style.css" />
+  <script src="/V2/app.js"></script>
+</head>
+<body>
+  <!-- 第1页：标题页 -->
+  <section class="slide-page" data-index="0">
+    <div class="slide-inner slide-title">
+      <p class="eyebrow">V2 · ZERO DEPENDENCY</p>
+      <h1>V2 极简引擎</h1>
+      <p class="subtitle">纯CSS动画 · 零依赖 · 原生JS</p>
+    </div>
+    <div class="orb" id="orb" aria-hidden="true"></div>
+  </section>
+
+  <!-- 第2页：展示页 -->
+  <section class="slide-page" data-index="1">
+    <div class="slide-inner slide-demo">
+      <h2>CSS 驱动的 3D 立方体</h2>
+      <p class="demo-caption">无需 WebGL · 无第三方库，纯 CSS transform 实现</p>
+      <div class="cube-wrap">
+        <div class="cube">
+          <div class="face front">1</div>
+          <div class="face back">2</div>
+          <div class="face right">3</div>
+          <div class="face left">4</div>
+          <div class="face top">5</div>
+          <div class="face bottom">6</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</body>
+</html>
