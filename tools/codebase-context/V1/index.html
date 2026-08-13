@@ -1,0 +1,1119 @@
+<style>
+  /* ============ Design Tokens ============ */
+  :root {
+    --font-sans: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", "Consolas", monospace;
+
+    --radius-s: 7px;
+    --radius-m: 10px;
+    --radius-l: 16px;
+
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+    --shadow-1: 0 1px 2px oklch(0 0 0 / 0.04), 0 4px 18px oklch(0 0 0 / 0.05);
+    --shadow-2: 0 2px 6px oklch(0 0 0 / 0.06), 0 14px 40px oklch(0 0 0 / 0.09);
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: oklch(97.6% 0.005 240);
+    --surface: oklch(99.4% 0.003 240);
+    --surface-2: oklch(95.8% 0.007 240);
+    --surface-3: oklch(93% 0.009 240);
+    --border: oklch(90.5% 0.009 240);
+    --border-strong: oklch(84.5% 0.012 240);
+    --text: oklch(24% 0.02 255);
+    --text-2: oklch(45% 0.015 255);
+    --text-3: oklch(58% 0.012 250);
+    --accent: oklch(0.58 0.18 265);
+    --accent-strong: oklch(0.48 0.22 265);
+    --accent-ink: oklch(0.98 0.01 265);
+    --accent-soft: oklch(0.93 0.04 265);
+    --success: oklch(0.52 0.13 155);
+    --warn: oklch(0.66 0.15 65);
+    --danger: oklch(0.58 0.19 25);
+    --code-bg: oklch(96.8% 0.008 250);
+    --code-header: oklch(93.4% 0.01 250);
+    --glass: oklch(99% 0.003 240 / 0.72);
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: oklch(16.5% 0.012 250);
+    --surface: oklch(20% 0.012 250);
+    --surface-2: oklch(23% 0.013 250);
+    --surface-3: oklch(27% 0.014 250);
+    --border: oklch(27% 0.015 250);
+    --border-strong: oklch(34% 0.015 250);
+    --text: oklch(93% 0.008 240);
+    --text-2: oklch(72% 0.012 240);
+    --text-3: oklch(58% 0.01 240);
+    --accent: oklch(0.72 0.16 265);
+    --accent-strong: oklch(0.80 0.14 265);
+    --accent-ink: oklch(0.20 0.02 265);
+    --accent-soft: oklch(0.30 0.06 265);
+    --success: oklch(0.72 0.13 155);
+    --warn: oklch(0.80 0.12 75);
+    --danger: oklch(0.70 0.16 25);
+    --code-bg: oklch(15% 0.01 250);
+    --code-header: oklch(18.5% 0.011 250);
+    --glass: oklch(20% 0.012 250 / 0.7);
+    --shadow-1: none;
+    --shadow-2: none;
+  }
+
+  /* ============ Reset & Base ============ */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-kerning: normal;
+    overflow: hidden;
+  }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+
+  button { font-family: inherit; font-size: inherit; color: inherit; cursor: pointer; }
+  code, pre, kbd { font-family: var(--font-mono); font-variant-ligatures: none; }
+  svg { display: block; }
+
+  /* subtle ambient glow, restrained */
+  .bg-glow {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(52% 42% at 82% -8%, oklch(0.85 0.10 72 / 0.20), transparent 60%),
+      radial-gradient(46% 40% at 8% 108%, oklch(0.82 0.06 250 / 0.16), transparent 60%);
+    transition: opacity 300ms var(--ease-out);
+  }
+  :root[data-theme="dark"] .bg-glow { opacity: 0.55; }
+
+  .app {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ============ Topbar ============ */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; height: 58px; flex-shrink: 0;
+    background: var(--glass);
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    border-bottom: 1px solid var(--border);
+    position: relative; z-index: 20;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .logo {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: var(--accent); color: var(--accent-ink);
+    display: grid; place-items: center; flex-shrink: 0;
+  }
+  .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+  .brand-name { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+  .brand-sub { font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono); }
+
+  .topbar-actions { display: flex; align-items: center; gap: 8px; }
+  .icon-btn {
+    width: 34px; height: 34px; border-radius: 8px;
+    display: grid; place-items: center;
+    background: transparent; border: 1px solid transparent;
+    color: var(--text-2);
+    transition: background 140ms var(--ease-out), color 140ms var(--ease-out), border-color 140ms var(--ease-out);
+  }
+  .icon-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+
+  /* ============ Main ============ */
+  main { flex: 1; overflow: hidden; position: relative; }
+
+  /* ============ Empty State ============ */
+  .empty {
+    height: 100%; display: flex; align-items: center; justify-content: center; padding: 32px;
+  }
+  .empty-card {
+    width: 100%; max-width: 620px; text-align: center;
+    animation: rise 600ms var(--ease-out) both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  .empty-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent-ink);
+    font-size: 12.5px; font-weight: 500; margin-bottom: 22px;
+  }
+  .empty h1 { font-size: clamp(28px, 4.6vw, 40px); line-height: 1.08; margin: 0 0 12px; letter-spacing: -0.02em; font-weight: 650; }
+  .empty h1 .accent { color: var(--accent-strong); }
+  .empty p.lead { color: var(--text-2); margin: 0 0 30px; font-size: 16px; }
+
+  .dropzone {
+    position: relative;
+    border: 1.5px dashed var(--border-strong); border-radius: var(--radius-l);
+    padding: 42px 28px; cursor: pointer;
+    background: var(--surface);
+    transition: border-color 180ms var(--ease-out), background 180ms var(--ease-out), transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out);
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent-strong); background: var(--surface-2); }
+  .dropzone.drag { box-shadow: var(--shadow-1); transform: scale(1.008); }
+  .dropzone .dz-icon { width: 46px; height: 46px; margin: 0 auto 14px; color: var(--accent-strong); }
+  .dropzone .dz-title { font-weight: 600; font-size: 16px; }
+  .dropzone .dz-hint { color: var(--text-3); font-size: 13px; margin-top: 6px; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 42px; padding: 0 18px; border-radius: var(--radius-m);
+    font-weight: 600; font-size: 14px; border: 1px solid transparent;
+    transition: transform 140ms var(--ease-out), background 140ms var(--ease-out), border-color 140ms var(--ease-out), color 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { transform: translateY(1px) scale(0.99); }
+  .btn-primary {
+    background: var(--accent); color: var(--accent-ink);
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.10) inset;
+  }
+  .btn-primary:hover { background: var(--accent-strong); }
+  .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+  .btn-ghost:hover { background: var(--surface-2); }
+  .btn:disabled { opacity: 0.42; cursor: not-allowed; }
+  .btn:disabled:active { transform: none; }
+  .btn-sm { height: 34px; padding: 0 13px; font-size: 13px; border-radius: 8px; }
+
+  .empty-features { display: flex; justify-content: center; gap: 24px; margin-top: 28px; flex-wrap: wrap; }
+  .feature { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 13px; }
+  .feature svg { color: var(--text-3); opacity: 0.8; }
+  .feature b { color: var(--text-2); font-weight: 600; }
+
+  .compat-note { margin-top: 22px; font-size: 12.5px; color: var(--text-3); font-family: var(--font-mono); }
+
+  /* ============ Scan panel ============ */
+  .scan {
+    height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 20px; padding: 40px;
+  }
+  .spinner {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid var(--surface-3); border-top-color: var(--accent-strong);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .scan-text { text-align: center; }
+  .scan-text .t1 { font-weight: 600; font-size: 16px; }
+  .scan-text .t2 { color: var(--text-3); font-size: 13px; margin-top: 4px; font-family: var(--font-mono); max-width: 560px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .progress-wrap { width: min(420px, 82vw); }
+  .progress-bar { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; border-radius: 999px; background: var(--accent-strong); transition: width 120ms linear; }
+  .progress-label { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--text-3); font-family: var(--font-mono); }
+
+  /* ============ Results ============ */
+  .results { height: 100%; display: flex; flex-direction: column; padding: 16px 20px 0; gap: 14px; }
+
+  .summary { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    display: inline-flex; align-items: baseline; gap: 7px;
+    padding: 8px 14px; border-radius: var(--radius-m);
+    background: var(--surface); border: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .chip .k { color: var(--text-3); font-size: 12px; }
+  .chip .v { font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .chip.warn .v { color: var(--warn); }
+
+  .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .toolbar .spacer { flex: 1; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); user-select: none; cursor: pointer; }
+  .switch input { display: none; }
+  .switch .track { width: 34px; height: 20px; border-radius: 999px; background: var(--surface-3); position: relative; transition: background 160ms var(--ease-out); }
+  .switch .track::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; transition: transform 160ms var(--ease-out); box-shadow: 0 1px 3px oklch(0 0 0 / 0.3);
+  }
+  .switch input:checked + .track { background: var(--accent-strong); }
+  .switch input:checked + .track::after { transform: translateX(14px); }
+
+  .layout {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 268px 1fr; gap: 14px;
+  }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-l);
+    display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 11px 14px; border-bottom: 1px solid var(--border);
+    font-size: 12.5px; font-weight: 600; color: var(--text-2); letter-spacing: 0.02em;
+    flex-shrink: 0;
+  }
+  .panel-head .count { margin-left: auto; color: var(--text-3); font-family: var(--font-mono); font-weight: 500; }
+
+  .tree-scroll { flex: 1; overflow: auto; padding: 10px 8px; }
+  .preview-scroll { flex: 1; overflow: auto; padding: 18px 20px 30px; }
+
+  /* ============ Tree ============ */
+  .tree ul { list-style: none; margin: 0; padding: 0; }
+  .tree .nested { margin-left: 15px; border-left: 1px solid var(--border); padding-left: 6px; display: none; }
+  .tree li.open > .nested { display: block; }
+  .tree-row {
+    display: flex; align-items: center; gap: 7px;
+    padding: 4px 8px; border-radius: 6px;
+    font-size: 13px; color: var(--text-2); cursor: default;
+    font-family: var(--font-mono); white-space: nowrap;
+  }
+  .tree-row:hover { background: var(--surface-2); }
+  .tree-row .tw { width: 14px; text-align: center; color: var(--text-3); flex-shrink: 0; font-size: 10px; }
+  .tree-row .fi { width: 15px; height: 15px; flex-shrink: 0; color: var(--text-3); }
+  .tree-row.is-dir { cursor: pointer; }
+  .tree-row.is-dir .fi { color: var(--accent-strong); }
+
+  /* ============ Preview ============ */
+  .preview { font-size: 14px; }
+  .preview h1 {
+    font-size: 24px; margin: 0 0 14px; letter-spacing: -0.02em; font-weight: 650;
+    padding-bottom: 14px; border-bottom: 1px solid var(--border);
+  }
+  .preview h2 { font-size: 17px; margin: 28px 0 10px; font-weight: 650; letter-spacing: -0.01em; }
+  .preview h3 { font-size: 14px; margin: 26px 0 8px; font-weight: 600; color: var(--text-2); }
+  .preview h3 code { color: var(--accent-strong); }
+  .preview p { margin: 6px 0; color: var(--text-2); }
+  .preview p.kpi { font-size: 13.5px; }
+  .preview p.kpi strong { color: var(--text); font-weight: 600; }
+  .preview code { font-size: 0.9em; background: var(--surface-2); padding: 2px 6px; border-radius: 5px; color: var(--text); }
+  .preview hr { border: none; border-top: 1px solid var(--border); margin: 22px 0; }
+
+  figure.code { margin: 8px 0 22px; border: 1px solid var(--border); border-radius: var(--radius-m); overflow: hidden; }
+  figure.code figcaption {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 13px; font-size: 12px; color: var(--text-3);
+    background: var(--code-header); border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono); text-transform: lowercase;
+  }
+  figure.code pre { margin: 0; padding: 14px 16px; background: var(--code-bg); overflow: auto; }
+  figure.code pre > code { background: transparent; padding: 0; border-radius: 0; font-size: 13px; line-height: 1.6; color: var(--text); }
+  .line-nums .cl { display: grid; grid-template-columns: 42px 1fr; }
+  .line-nums .cln { color: var(--text-3); text-align: right; padding-right: 14px; user-select: none; opacity: 0.6; }
+  .line-nums .clc { white-space: pre-wrap; word-break: break-all; }
+
+  .fold {
+    display: flex; align-items: center; gap: 14px; justify-content: center;
+    padding: 22px 16px; margin: 26px 0; color: var(--text-3);
+    border: 1px dashed var(--border-strong); border-radius: var(--radius-m);
+    background: var(--surface-2); font-size: 13px; text-align: center;
+  }
+  .fold p { margin: 0; }
+  .fold .fold-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-strong); flex-shrink: 0; }
+
+  .preview-banner {
+    display: none; align-items: center; gap: 8px;
+    margin-bottom: 12px; padding: 9px 13px; border-radius: var(--radius-m);
+    background: var(--accent-soft); color: var(--accent-ink); font-size: 13px;
+  }
+  .preview-banner.visible { display: flex; }
+
+  /* ============ Statusbar ============ */
+  .statusbar {
+    display: flex; align-items: center; gap: 16px;
+    height: 40px; padding: 0 20px; flex-shrink: 0;
+    border-top: 1px solid var(--border);
+    background: var(--glass); backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    font-size: 12.5px; color: var(--text-3); font-family: var(--font-mono);
+  }
+  .statusbar .stat { font-variant-numeric: tabular-nums; }
+  .statusbar .stat b { color: var(--text-2); font-weight: 600; }
+  .statusbar .spacer { flex: 1; }
+  .statusbar .log { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 44%; text-align: right; }
+
+  /* ============ Toast ============ */
+  .toast-wrap { position: fixed; bottom: 52px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+  .toast {
+    background: var(--text); color: var(--bg);
+    padding: 10px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 500;
+    box-shadow: var(--shadow-2);
+    opacity: 0; transform: translateY(8px) scale(0.96);
+    transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+    max-width: min(560px, 86vw);
+  }
+  .toast.show { opacity: 1; transform: none; }
+  .toast.error { background: var(--danger); color: #fff; }
+
+  /* ============ Focus & Motion ============ */
+  :focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; border-radius: 6px; }
+  [hidden] { display: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+
+  /* ============ Responsive ============ */
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; grid-template-rows: minmax(140px, 30%) 1fr; }
+    .statusbar .log { display: none; }
+  }
+</style>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 6l-4 6 4 6M17 6l4 6-4 6M13.5 4l-3 16" />
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">Context</span>
+        <span class="brand-sub">codebase → markdown</span>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="themeToggle" title="切换明暗主题" aria-label="切换明暗主题">
+        <svg id="themeIconSun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg id="themeIconMoon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Empty state -->
+    <section class="empty" id="emptyState">
+      <div class="empty-card">
+        <div class="empty-badge">🔎 本地运行 · 数据不离开浏览器</div>
+        <h1>把代码库变成 <span class="accent">AI 上下文</span></h1>
+        <p class="lead">选择一个项目文件夹，自动生成目录树 + 文件内容的 Markdown，复制或下载即可喂给模型。</p>
+        <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="选择文件夹">
+          <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          </svg>
+          <div class="dz-title">选择文件夹</div>
+          <div class="dz-hint">点击浏览，或将文件夹拖拽到此处</div>
+        </div>
+        <div class="empty-features">
+          <span class="feature"><b>智能过滤</b> 忽略 node_modules / .git / 二进制</span>
+          <span class="feature"><b>5MB 上限</b> 超大文件自动跳过</span>
+          <span class="feature"><b>一键导出</b> 复制 / 下载 .md</span>
+        </div>
+        <div class="compat-note" id="compatNote"></div>
+      </div>
+    </section>
+
+    <!-- Scanning -->
+    <section class="scan" id="scanState" hidden>
+      <div class="spinner" aria-hidden="true"></div>
+      <div class="scan-text">
+        <div class="t1">正在扫描文件…</div>
+        <div class="t2" id="currentFile">准备中</div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-label"><span id="progressText">已扫描 0 个文件</span><span id="progressPct">0%</span></div>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section class="results" id="resultsState" hidden>
+      <div class="summary" id="summary"></div>
+
+      <div class="toolbar">
+        <button class="btn btn-primary" id="copyBtn">📋 一键复制</button>
+        <button class="btn btn-ghost" id="downloadBtn">⬇️ 下载 .md</button>
+        <label class="switch">
+          <input type="checkbox" id="lineNumToggle" />
+          <span class="track"></span>
+          行号
+        </label>
+        <div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" id="reselectBtn">↺ 重新选择</button>
+      </div>
+
+      <div class="layout">
+        <aside class="panel">
+          <div class="panel-head">🌳 目录结构<span class="count" id="treeCount"></span></div>
+          <div class="tree-scroll"><div class="tree" id="treeRoot"></div></div>
+        </aside>
+        <section class="panel">
+          <div class="panel-head">📄 内容预览<span class="count" id="previewCount"></span></div>
+          <div class="preview-scroll">
+            <div class="preview-banner" id="previewBanner">⚠️ 预览已折叠 · 请下载完整文件查看全部内容</div>
+            <div class="preview" id="preview"></div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="statusbar" id="statusbar" hidden>
+    <span class="stat">文件 <b id="stFiles">0</b></span>
+    <span class="stat">字符 <b id="stChars">0</b></span>
+    <span class="stat">Token <b id="stTokens">0</b></span>
+    <span class="spacer"></span>
+    <span class="log" id="stLog"></span>
+  </footer>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+<input type="file" id="fileInput" webkitdirectory multiple hidden />
+
+<script>
+"use strict";
+
+/* ============================================================
+ * Code Context Aggregator
+ * 单文件实现：文件遍历 → 过滤 → 聚合 → 导出
+ * ============================================================ */
+
+/* ---------- Constants ---------- */
+const MAX_FILE_SIZE = 5 * 1024 * 1024;   // 5MB
+const COPY_LIMIT    = 500 * 1024;        // 500KB 字符
+const CONCURRENCY   = 50;                // 并发读取上限
+const PREVIEW_HEAD  = 2000;              // 预览首部行数
+const PREVIEW_TAIL  = 200;               // 预览尾部行数
+
+const IGNORED_DIRS = new Set([
+  "node_modules", ".git", ".hg", ".svn", "dist", "build", "out", "output",
+  "__pycache__", ".venv", "venv", ".env", "env", "coverage", ".next", ".nuxt",
+  ".output", ".cache", ".parcel-cache", ".idea", ".vscode", ".vs", "target",
+  "vendor", "bower_components", ".gradle", ".turbo", ".expo", ".svelte-kit",
+  ".angular", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".eggs",
+  ".docusaurus", ".astro", ".vercel", ".netlify", ".yarn", ".pnpm-store",
+  "Pods", "DerivedData", "bin", "obj", "cmake-build-debug", "__pypackages__"
+]);
+
+const IGNORED_NAMES = new Set([
+  "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb",
+  "cargo.lock", "gemfile.lock", "poetry.lock", "composer.lock", "pipfile.lock",
+  "npm-shrinkwrap.json", ".ds_store", "thumbs.db", "desktop.ini"
+]);
+
+const TEXT_EXTS = new Set([
+  "js", "mjs", "cjs", "jsx", "ts", "tsx", "py", "java", "go", "rs", "rb", "php",
+  "c", "h", "cc", "cpp", "cxx", "hpp", "hh", "cs", "sh", "bash", "zsh", "fish",
+  "ps1", "bat", "cmd", "sql", "graphql", "gql", "swift", "kt", "kts", "dart",
+  "r", "lua", "pl", "pm", "ex", "exs", "erl", "hrl", "clj", "cljs", "cljc",
+  "scala", "sc", "groovy", "gradle", "ini", "cfg", "conf", "toml", "yaml", "yml",
+  "json", "jsonc", "json5", "xml", "svg", "html", "htm", "xhtml", "css", "scss",
+  "sass", "less", "styl", "vue", "svelte", "astro", "md", "mdx", "markdown",
+  "txt", "text", "log", "csv", "tsv", "properties", "rst", "adoc", "tex", "bib",
+  "proto", "thrift", "sol", "nix", "elm", "hs", "fs", "fsx", "fsi", "zig", "nim",
+  "vb", "prisma", "edge", "liquid", "ejs", "hbs", "twig", "jinja", "pug",
+  "mustache", "handlebars", "http", "rest", "dockerfile", "makefile", "cmake"
+]);
+
+const LANG_MAP = {
+  js: "javascript", mjs: "javascript", cjs: "javascript", jsx: "jsx",
+  ts: "typescript", tsx: "tsx", py: "python", java: "java", go: "go",
+  rs: "rust", rb: "ruby", php: "php", c: "c", h: "c", cc: "cpp", cpp: "cpp",
+  cxx: "cpp", hpp: "cpp", hh: "cpp", cs: "csharp", sh: "bash", bash: "bash",
+  zsh: "bash", fish: "fish", ps1: "powershell", bat: "batch", sql: "sql",
+  graphql: "graphql", gql: "graphql", swift: "swift", kt: "kotlin", kts: "kotlin",
+  dart: "dart", r: "r", lua: "lua", pl: "perl", ex: "elixir", exs: "elixir",
+  erl: "erlang", hrl: "erlang", clj: "clojure", cljs: "clojure", scala: "scala",
+  groovy: "groovy", toml: "toml", yaml: "yaml", yml: "yaml", json: "json",
+  jsonc: "jsonc", xml: "xml", html: "html", htm: "html", css: "css", scss: "scss",
+  sass: "sass", less: "less", vue: "vue", svelte: "svelte", astro: "astro",
+  md: "markdown", mdx: "mdx", txt: "text", csv: "text", log: "text",
+  dockerfile: "dockerfile", makefile: "makefile", cmake: "cmake", proto: "protobuf",
+  sol: "solidity", nix: "nix", elm: "elm", hs: "haskell", fs: "fsharp",
+  fsx: "fsharp", zig: "zig", nim: "nim", vb: "vbnet", tex: "latex", pug: "pug",
+  ejs: "ejs", hbs: "handlebars", ini: "ini", conf: "ini", properties: "properties",
+  rst: "rst", http: "http", prisma: "prisma"
+};
+
+/* ---------- DOM refs ---------- */
+const $ = (id) => document.getElementById(id);
+const els = {
+  empty: $("emptyState"), scan: $("scanState"), results: $("resultsState"),
+  dropzone: $("dropzone"), compat: $("compatNote"), fileInput: $("fileInput"),
+  currentFile: $("currentFile"), progressFill: $("progressFill"),
+  progressText: $("progressText"), progressPct: $("progressPct"),
+  summary: $("summary"), copyBtn: $("copyBtn"), downloadBtn: $("downloadBtn"),
+  lineNumToggle: $("lineNumToggle"), reselectBtn: $("reselectBtn"),
+  treeRoot: $("treeRoot"), treeCount: $("treeCount"), preview: $("preview"),
+  previewCount: $("previewCount"), previewBanner: $("previewBanner"),
+  statusbar: $("statusbar"), stFiles: $("stFiles"), stChars: $("stChars"),
+  stTokens: $("stTokens"), stLog: $("stLog"), toastWrap: $("toastWrap")
+};
+
+/* ---------- App state ---------- */
+let fullMarkdown = "";
+let fileCount = 0;
+let totalChars = 0;
+let tokenEst = 0;
+let skipCount = 0;
+let logLine = "";
+
+/* ============================================================
+ * Theme
+ * ============================================================ */
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  $("themeIconSun").style.display = theme === "dark" ? "none" : "block";
+  $("themeIconMoon").style.display = theme === "dark" ? "block" : "none";
+  try { localStorage.setItem("cca-theme", theme); } catch (_) {}
+}
+function initTheme() {
+  let stored = null;
+  try { stored = localStorage.getItem("cca-theme"); } catch (_) {}
+  const pref = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  applyTheme(stored || pref);
+}
+$("themeToggle").addEventListener("click", () => {
+  const cur = document.documentElement.dataset.theme;
+  applyTheme(cur === "dark" ? "light" : "dark");
+});
+
+/* ============================================================
+ * Helpers
+ * ============================================================ */
+function extOf(name) {
+  const i = name.lastIndexOf(".");
+  if (i <= 0) return "";
+  return name.slice(i + 1).toLowerCase();
+}
+function pathHasIgnoredDir(path) {
+  const parts = path.split("/");
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (IGNORED_DIRS.has(parts[i])) return true;
+  }
+  return false;
+}
+function shouldInclude(path, name) {
+  const base = name.toLowerCase();
+  if (IGNORED_NAMES.has(base)) return false;
+  if (/\.min\.(js|css|mjs)$/i.test(base)) return false;
+  if (/\.(map|d\.ts)$/i.test(base)) return false;
+  if (/\.lock$/i.test(base)) return false;
+  const ext = extOf(base);
+  if (!ext) return false;            // 无扩展名的点文件（.env / .gitignore 等）默认跳过
+  return TEXT_EXTS.has(ext);
+}
+function humanSize(chars) {
+  if (chars < 1000) return chars + " 字符";
+  if (chars < 1e6) return (chars / 1024).toFixed(1) + " KB";
+  return (chars / 1048576).toFixed(2) + " MB";
+}
+function num(n) { return (n || 0).toLocaleString("en-US"); }
+function langFor(path) { return LANG_MAP[extOf(path)] || ""; }
+function timestamp() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+function escapeHTML(s) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function toast(msg, type) {
+  const el = document.createElement("div");
+  el.className = "toast" + (type ? " " + type : "");
+  el.textContent = msg;
+  els.toastWrap.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 220);
+  }, 2400);
+}
+function setLog(msg) { logLine = msg; els.stLog.textContent = msg; }
+
+/* 并发受限的 map */
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let idx = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (idx < items.length) {
+      const i = idx++;
+      results[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+/* ============================================================
+ * File reading
+ * ============================================================ */
+async function readEntry(entry) {
+  try {
+    const file = entry.file ? entry.file : await entry.handle.getFile();
+    if (file.size > MAX_FILE_SIZE) return { ok: false, reason: "size", size: file.size };
+    const content = await file.text();
+    return { ok: true, size: file.size, content };
+  } catch (e) {
+    return { ok: false, reason: "error", error: e };
+  }
+}
+
+/* ============================================================
+ * Directory traversal
+ * ============================================================ */
+async function walkHandle(handle, base, out) {
+  for await (const entry of handle.values()) {
+    const rel = base ? `${base}/${entry.name}` : entry.name;
+    if (entry.kind === "directory") {
+      if (IGNORED_DIRS.has(entry.name)) continue;
+      await walkHandle(entry, rel, out);
+    } else {
+      out.push({ path: rel, name: entry.name, handle: entry });
+    }
+  }
+  return out;
+}
+
+/* ============================================================
+ * Tree (nested object → ASCII string + DOM)
+ * ============================================================ */
+function buildTreeObject(paths) {
+  const root = { children: new Map() };
+  for (const p of paths) {
+    const parts = p.split("/");
+    let node = root;
+    for (const part of parts) {
+      if (!node.children.has(part)) node.children.set(part, { children: new Map() });
+      node = node.children.get(part);
+    }
+    node.isFile = true;
+  }
+  return root;
+}
+function treeASCII(node, prefix, out) {
+  const entries = [...node.children.entries()];
+  entries.forEach(([name, child], i) => {
+    const last = i === entries.length - 1;
+    out.push(prefix + (last ? "└── " : "├── ") + name + (child.isFile ? "" : "/"));
+    if (!child.isFile) treeASCII(child, prefix + (last ? "    " : "│   "), out);
+  });
+}
+
+const ICON_FOLDER = '<svg class="fi" viewBox="0 0 24 24" fill="currentColor"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const ICON_FILE = '<svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/></svg>';
+
+function treeDOM(node) {
+  const ul = document.createElement("ul");
+  for (const [name, child] of node.children) {
+    const li = document.createElement("li");
+    const row = document.createElement("div");
+    if (child.isFile) {
+      row.className = "tree-row is-file";
+      row.innerHTML = ICON_FILE + '<span>' + escapeHTML(name) + "</span>";
+      li.appendChild(row);
+    } else {
+      row.className = "tree-row is-dir";
+      const tw = document.createElement("span");
+      tw.className = "tw"; tw.textContent = "▾";
+      row.innerHTML = ICON_FOLDER + '<span>' + escapeHTML(name) + "</span>";
+      row.prepend(tw);
+      const nested = treeDOM(child);
+      nested.className = "nested";
+      li.appendChild(row);
+      li.appendChild(nested);
+      li.classList.add("open");
+      row.addEventListener("click", () => {
+        const open = li.classList.toggle("open");
+        tw.textContent = open ? "▾" : "▸";
+      });
+    }
+    ul.appendChild(li);
+  }
+  return ul;
+}
+
+/* ============================================================
+ * Markdown generation
+ * ============================================================ */
+function fence(content, lang) {
+  let ticks = "```";
+  while (content.includes(ticks)) ticks += "`";
+  const open = ticks + (lang ? lang : "");
+  return open + "\n" + content + (content.endsWith("\n") ? "" : "\n") + ticks;
+}
+function buildMarkdown(rootName, files, warnings) {
+  const chars = files.reduce((s, f) => s + f.content.length, 0);
+  const tokens = Math.round(chars / 4);
+  const treeObj = buildTreeObject(files.map((f) => f.path));
+  const treeLines = [];
+  treeASCII(treeObj, "", treeLines);
+
+  const lines = [];
+  lines.push("# 📊 Codebase Context");
+  lines.push("");
+  lines.push("**项目**: `" + rootName + "`");
+  lines.push("");
+  lines.push("- **总文件数**: " + files.length);
+  lines.push("- **总字符数**: " + humanSize(chars) + " (" + num(chars) + ")");
+  lines.push("- **预估 Token**: ~" + num(tokens));
+  if (warnings.length) lines.push("- **跳过文件**: " + warnings.length);
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push("## 🌳 目录结构");
+  lines.push("");
+  lines.push(fence(treeLines.join("\n"), "text"));
+  lines.push("");
+  lines.push("## 📁 文件内容聚合");
+  lines.push("");
+
+  for (const f of files) {
+    lines.push("### `" + f.path + "`");
+    lines.push("");
+    lines.push(fence(f.content, langFor(f.path)));
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+/* ============================================================
+ * Markdown → HTML (轻量渲染器，无第三方库)
+ * ============================================================ */
+function inlineMarkdown(text) {
+  return escapeHTML(text)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+function renderCodeBlock(code, lang, lineNumbers) {
+  const label = escapeHTML(lang || "text");
+  if (lineNumbers) {
+    const ls = code.split("\n");
+    if (ls.length && ls[ls.length - 1] === "") ls.pop();
+    const body = ls.map((l, i) =>
+      '<div class="cl"><span class="cln">' + (i + 1) + '</span><span class="clc">' + (escapeHTML(l) || " ") + "</span></div>"
+    ).join("");
+    return '<figure class="code"><figcaption>' + label + "</figcaption><pre>" + body + "</pre></figure>";
+  }
+  return '<figure class="code"><figcaption>' + label + "</figcaption><pre><code>" + escapeHTML(code) + "</code></pre></figure>";
+}
+function mdToHTML(md, lineNumbers) {
+  const lines = md.split("\n");
+  let html = "";
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const open = line.match(/^(`{3,})([^`]*)$/);
+    if (open) {
+      const fenceLen = open[1].length;
+      const lang = open[2].trim();
+      const buf = [];
+      i++;
+      while (i < lines.length) {
+        const close = lines[i].match(/^(`{3,})\s*$/);
+        if (close && close[1].length >= fenceLen) { i++; break; }
+        buf.push(lines[i]);
+        i++;
+      }
+      html += renderCodeBlock(buf.join("\n"), lang, lineNumbers);
+      continue;
+    }
+    if (/^###\s/.test(line)) { html += "<h3>" + inlineMarkdown(line.slice(4).trim()) + "</h3>"; i++; continue; }
+    if (/^##\s/.test(line)) { html += "<h2>" + inlineMarkdown(line.slice(3).trim()) + "</h2>"; i++; continue; }
+    if (/^#\s/.test(line)) { html += "<h1>" + inlineMarkdown(line.slice(2).trim()) + "</h1>"; i++; continue; }
+    if (/^-{3,}\s*$/.test(line)) { html += "<hr>"; i++; continue; }
+    if (line.trim() === "") { i++; continue; }
+    if (/^[-*]\s+/.test(line)) { html += '<p class="kpi">' + inlineMarkdown(line.replace(/^[-*]\s+/, "")) + "</p>"; i++; continue; }
+    html += "<p>" + inlineMarkdown(line) + "</p>";
+    i++;
+  }
+  return html;
+}
+
+/* ============================================================
+ * Preview (fold-aware truncation)
+ * ============================================================ */
+function previewSplit(md, headLines, tailLines) {
+  const lines = md.split("\n");
+  const total = lines.length;
+  if (total <= headLines + tailLines) return { head: md, tail: "", fold: 0 };
+
+  let hi = headLines;
+  let openLen = 0;
+  for (let i = 0; i < hi; i++) {
+    const m = lines[i].match(/^(`{3,})(.*)$/);
+    if (m) {
+      if (openLen === 0) openLen = m[1].length;
+      else if (m[1].length >= openLen) openLen = 0;
+    }
+  }
+  if (openLen > 0) {
+    while (hi < total) {
+      const m = lines[hi].match(/^(`{3,})\s*$/);
+      hi++;
+      if (m && m[1].length >= openLen) break;
+    }
+  }
+
+  let lo = total - tailLines;
+  while (lo > hi && !lines[lo].startsWith("### ")) lo--;
+  if (lo <= hi) lo = total;
+
+  return {
+    head: lines.slice(0, hi).join("\n"),
+    tail: lo < total ? lines.slice(lo).join("\n") : "",
+    fold: Math.max(0, lo - hi)
+  };
+}
+
+/* ============================================================
+ * Render pipeline
+ * ============================================================ */
+function renderResults(rootName, files, warnings) {
+  fileCount = files.length;
+  totalChars = files.reduce((s, f) => s + f.content.length, 0);
+  tokenEst = Math.round(totalChars / 4);
+  skipCount = warnings.length;
+
+  fullMarkdown = buildMarkdown(rootName, files, warnings);
+
+  // summary chips
+  let chipHTML = "";
+  chipHTML += '<div class="chip"><span class="k">项目</span><span class="v">' + escapeHTML(rootName) + "</span></div>";
+  chipHTML += '<div class="chip"><span class="k">文件</span><span class="v">' + num(fileCount) + "</span></div>";
+  chipHTML += '<div class="chip"><span class="k">字符</span><span class="v">' + humanSize(totalChars) + "</span></div>";
+  chipHTML += '<div class="chip"><span class="k">Token</span><span class="v">~' + num(tokenEst) + "</span></div>";
+  if (skipCount > 0) chipHTML += '<div class="chip warn"><span class="k">跳过</span><span class="v">' + num(skipCount) + "</span></div>";
+  els.summary.innerHTML = chipHTML;
+
+  // tree
+  const treeObj = buildTreeObject(files.map((f) => f.path));
+  els.treeRoot.innerHTML = "";
+  els.treeRoot.appendChild(treeDOM(treeObj));
+  els.treeCount.textContent = num(fileCount) + " 文件";
+
+  // preview
+  renderPreview();
+
+  // statusbar
+  els.statusbar.hidden = false;
+  els.stFiles.textContent = num(fileCount);
+  els.stChars.textContent = humanSize(totalChars);
+  els.stTokens.textContent = "~" + num(tokenEst);
+  if (skipCount > 0) setLog("已跳过 " + skipCount + " 个文件（过大 / 无权限 / 非文本）");
+  else setLog("就绪 · 生成于 " + new Date().toLocaleTimeString("zh-CN"));
+
+  // 导出分流：内容 ≥ 500KB 时禁用复制、突出下载
+  const canCopy = fullMarkdown.length < COPY_LIMIT;
+  els.copyBtn.disabled = !canCopy;
+  els.copyBtn.title = canCopy ? "" : "内容过大，建议下载";
+  els.downloadBtn.classList.toggle("btn-primary", !canCopy);
+  els.downloadBtn.classList.toggle("btn-ghost", canCopy);
+  if (!canCopy) els.copyBtn.textContent = "📋 内容过大（禁用）";
+  else els.copyBtn.textContent = "📋 一键复制";
+
+  els.empty.hidden = true;
+  els.scan.hidden = true;
+  els.results.hidden = false;
+}
+
+function renderPreview() {
+  const lineNumbers = els.lineNumToggle.checked;
+  const { head, tail, fold } = previewSplit(fullMarkdown, PREVIEW_HEAD, PREVIEW_TAIL);
+  const headHTML = mdToHTML(head, lineNumbers);
+  const tailHTML = tail ? mdToHTML(tail, lineNumbers) : "";
+  const foldHTML = fold > 0
+    ? '<div class="fold"><span class="fold-dot"></span><p>中间 ' + num(fold) + ' 行已折叠 · 请下载完整文件查看</p><span class="fold-dot"></span></div>'
+    : "";
+  els.preview.innerHTML = headHTML + foldHTML + tailHTML;
+  els.preview.classList.toggle("line-nums", lineNumbers);
+  els.previewBanner.classList.toggle("visible", fold > 0);
+  els.previewCount.textContent = (fold > 0 ? "预览已折叠" : num(fullMarkdown.split("\n").length) + " 行");
+}
+
+/* ============================================================
+ * Processing pipeline (shared by picker / input / drop)
+ * ============================================================ */
+async function processFiles(rootName, rawEntries) {
+  els.empty.hidden = true;
+  els.results.hidden = true;
+  els.statusbar.hidden = true;
+  els.scan.hidden = false;
+  els.progressFill.style.width = "0%";
+  els.progressText.textContent = "已扫描 0 个文件";
+  els.progressPct.textContent = "0%";
+  els.currentFile.textContent = "准备中";
+
+  const included = rawEntries.filter((e) => !pathHasIgnoredDir(e.path) && shouldInclude(e.path, e.name));
+  included.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" }));
+
+  const total = included.length;
+  let done = 0;
+  let lastPaint = 0;
+
+  const results = await mapWithConcurrency(included, CONCURRENCY, async (entry) => {
+    const r = await readEntry(entry);
+    done++;
+    const now = performance.now();
+    if (now - lastPaint > 60 || done === total) {
+      lastPaint = now;
+      const pct = total ? ((done / total) * 100).toFixed(1) : "100";
+      els.progressFill.style.width = pct + "%";
+      els.progressText.textContent = "已扫描 " + done + " / " + total + " 个文件";
+      els.progressPct.textContent = pct + "%";
+      els.currentFile.textContent = entry.path;
+    }
+    return { path: entry.path, ...r };
+  });
+
+  const files = [];
+  const warnings = [];
+  for (const r of results) {
+    if (r.ok) files.push({ path: r.path, content: r.content, size: r.size });
+    else warnings.push({ path: r.path, reason: r.reason });
+  }
+
+  // 让进度条走满后再切屏，避免闪烁
+  els.progressFill.style.width = "100%";
+  els.progressPct.textContent = "100%";
+  await new Promise((res) => setTimeout(res, 180));
+
+  renderResults(rootName, files, warnings);
+  toast("已聚合 " + num(files.length) + " 个文件" + (warnings.length ? " · 跳过 " + warnings.length : ""));
+}
+
+/* ============================================================
+ * Entry points
+ * ============================================================ */
+async function pickDirectory() {
+  if (window.isSecureContext && "showDirectoryPicker" in window) {
+    try {
+      const dirHandle = await window.showDirectoryPicker();
+      const entries = await walkHandle(dirHandle, "", []);
+      await processFiles(dirHandle.name, entries);
+    } catch (e) {
+      if (e && e.name === "AbortError") return; // 用户取消
+      throw e;
+    }
+  } else {
+    els.fileInput.value = "";
+    els.fileInput.click();
+  }
+}
+
+els.dropzone.addEventListener("click", pickDirectory);
+els.dropzone.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickDirectory(); }
+});
+els.reselectBtn.addEventListener("click", () => {
+  els.results.hidden = true;
+  els.statusbar.hidden = true;
+  els.empty.hidden = false;
+});
+
+els.fileInput.addEventListener("change", async () => {
+  const fl = [...els.fileInput.files];
+  if (!fl.length) return;
+  const rootName = fl[0].webkitRelativePath.split("/")[0] || "project";
+  const entries = fl.map((f) => {
+    const rel = f.webkitRelativePath.split("/").slice(1).join("/");
+    return { path: rel, name: f.name, file: f };
+  });
+  await processFiles(rootName, entries);
+});
+
+/* 拖拽文件夹（FileSystemEntry API） */
+function readAllEntries(reader) {
+  return new Promise((resolve, reject) => {
+    const all = [];
+    const read = () => reader.readEntries((batch) => {
+      if (!batch.length) { resolve(all); return; }
+      all.push(...batch);
+      read();
+    }, reject);
+    read();
+  });
+}
+function walkEntry(entry, base, out) {
+  return new Promise((resolve, reject) => {
+    if (entry.isFile) {
+      entry.file((file) => {
+        out.push({ path: base ? base + "/" + entry.name : entry.name, name: entry.name, file });
+        resolve();
+      }, reject);
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      readAllEntries(reader).then(async (entries) => {
+        for (const c of entries) await walkEntry(c, base ? base + "/" + entry.name : entry.name, out);
+        resolve();
+      }).catch(reject);
+    } else { resolve(); }
+  });
+}
+["dragenter", "dragover"].forEach((ev) =>
+  els.dropzone.addEventListener(ev, (e) => { e.preventDefault(); els.dropzone.classList.add("drag"); })
+);
+["dragleave", "drop"].forEach((ev) =>
+  els.dropzone.addEventListener(ev, (e) => { e.preventDefault(); els.dropzone.classList.remove("drag"); })
+);
+els.dropzone.addEventListener("drop", async (e) => {
+  const items = e.dataTransfer && e.dataTransfer.items;
+  if (!items || !items.length) return;
+  const entry = items[0].webkitGetAsEntry && items[0].webkitGetAsEntry();
+  if (!entry) { toast("当前浏览器不支持拖拽文件夹，请点击选择", "error"); return; }
+  const out = [];
+  await walkEntry(entry, "", out);
+  await processFiles(entry.name, out);
+});
+
+/* ============================================================
+ * Export
+ * ============================================================ */
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  const ok = document.execCommand("copy");
+  ta.remove();
+  if (!ok) throw new Error("execCommand copy failed");
+}
+els.copyBtn.addEventListener("click", async () => {
+  if (!fullMarkdown) return;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(fullMarkdown);
+    } else {
+      fallbackCopy(fullMarkdown);
+    }
+    toast("已复制 " + num(fileCount) + " 个文件");
+  } catch (e) {
+    try {
+      fallbackCopy(fullMarkdown);
+      toast("已复制 " + num(fileCount) + " 个文件");
+    } catch (e2) {
+      toast("复制失败，请改用下载", "error");
+    }
+  }
+});
+els.downloadBtn.addEventListener("click", () => {
+  if (!fullMarkdown) return;
+  const filename = "context_" + timestamp() + ".md";
+  const blob = new Blob([fullMarkdown], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1200);
+  toast("已下载 " + filename);
+});
+
+/* line-number toggle re-renders preview */
+els.lineNumToggle.addEventListener("change", renderPreview);
+
+/* ============================================================
+ * Boot
+ * ============================================================ */
+initTheme();
+
+const hasFS = window.isSecureContext && "showDirectoryPicker" in window;
+els.compat.textContent = hasFS
+  ? "✓ 当前浏览器支持文件系统访问，可选择任意文件夹"
+  : "当前环境不支持目录选择 API，将使用上传方式（不支持子目录递归拖拽）";
+</script>

@@ -2,14 +2,14 @@
 
 纯静态小工具集合站 + 前端探索学习实验场。零后端、零构建，可一键部署 GitHub Pages。
 
-> ⚠️ 访问方式提醒：本站分两类内容——**工具**（双击 `file://` 即可用）与**学习项目**（依赖 `fetch` 动态加载，必须通过 HTTP 服务访问）。
+> ⚠️ 访问方式提醒：站内项目分两类——**静态工具**（如 en-words，双击 `file://` 即可用）与 **SPA / fetch 项目**（依赖 `fetch` 动态加载，必须通过 HTTP 服务访问：codebase-context、json_test、workbench）。
 
 ## 🛠 工具
 
 | 工具 | 状态 | 说明 |
 |------|------|------|
 | 📖 [梦幻词栈 · 英语生词拾取器](./tools/en-words/) | ✅ 可用 | 粘贴英文 → 智能识别 TOP 生词 → 生词本复习；离线可用，支持 `file://` 直接打开 |
-| 🔗 [Codebase Context](./tools/codebase-context/) | ✅ 可用 | 选择/拖拽项目文件夹 → 一键生成目录树 + 文件内容 Markdown，喂给 AI；纯浏览器聚合，数据不出设备，支持 `file://` 打开 |
+| 🔗 [Codebase Context](./tools/codebase-context/) | ✅ 可用 | 选择/拖拽项目文件夹 → 一键生成目录树 + 文件内容 Markdown，喂给 AI；纯浏览器聚合，数据不出设备。SPA 壳 + manifest 版本化（V1 单文件 → V2 分离 → V3 代码高亮），**需 HTTP 服务访问** |
 | ⏱ 番茄时钟 | 🔜 占位 | 简洁番茄工作法计时器（规划中，后续继续做） |
 | { } JSON 格式化 | 🔜 占位 | JSON 格式化、校验、树形浏览（规划中，后续继续做） |
 | 🎨 调色板工具 | 🔜 占位 | 颜色拾取、渐变生成（规划中，后续继续做） |
@@ -26,13 +26,12 @@
 ## 本地使用
 
 ```bash
-# 1) 工具（en-words / codebase-context）：直接双击 index.html 即可
-#    - codebase-context 在 file:// 下使用"上传文件夹"模式；
-#      在 HTTPS / localhost 下额外支持目录选择 API（showDirectoryPicker）与剪贴板复制，体验完整
+# 1) 静态工具（en-words）：直接双击 index.html 即可
 
-# 2) 学习项目（json_test / workbench）：需启动 HTTP 服务
+# 2) SPA / fetch 项目（codebase-context / json_test / workbench）：需启动 HTTP 服务
 python -m http.server 8080
 # 然后访问：
+#   http://localhost:8080/tools/codebase-context/
 #   http://localhost:8080/tools/json_test/
 #   http://localhost:8080/tools/workbench/
 ```
@@ -58,8 +57,8 @@ python -m http.server 8080
 -   纯静态 HTML/CSS/JS，零外部依赖
 -   词典数据以 `window.EWDICT` 形式通过 `<script>` 加载（en-words）
 -   识别引擎使用策略模式，为二期 AI 识别预留扩展点
--   Codebase Context 基于 File System Access API + 拖拽/上传多通道遍历，浏览器端聚合代码库为 Markdown
 -   学习项目采用数据驱动渲染 / 插件化架构（fetch + manifest 声明式配置），需 HTTP 服务
+-   Codebase Context 演进为 SPA 壳 + manifest 版本注册（fetch 注入版本片段 + 防 FOUC 预加载 + highlight.js 代码高亮），底层仍为 File System Access API / 拖拽 / 上传多通道聚合，需 HTTP 服务
 
 ## 后续计划
 

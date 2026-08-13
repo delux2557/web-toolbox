@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "latest": "v3",
+  "versions": [
+    { "id": "v1", "version": "1.0.0", "label": "单文件版", "entry": "V1/index.html", "build": "single-file", "buildTime": "2026-08-12 23:29" },
+    { "id": "v2", "version": "2.0.0", "label": "分离版（HTML/CSS/JS）", "entry": "V2/index.html", "build": "split", "buildTime": "2026-08-13 10:40" },
+    { "id": "v3", "version": "3.0.0", "label": "代码高亮版", "entry": "V3/index.html", "build": "highlight", "buildTime": "2026-08-13 11:10" }
+  ]
+}
