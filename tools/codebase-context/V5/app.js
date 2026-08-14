@@ -1,466 +1,3 @@
-<style>
-  /* ============ Design Tokens ============ */
-  :root {
-    --font-sans: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-    --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", "Consolas", monospace;
-
-    --radius-s: 7px;
-    --radius-m: 10px;
-    --radius-l: 16px;
-
-    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-
-    --shadow-1: 0 1px 2px oklch(0 0 0 / 0.04), 0 4px 18px oklch(0 0 0 / 0.05);
-    --shadow-2: 0 2px 6px oklch(0 0 0 / 0.06), 0 14px 40px oklch(0 0 0 / 0.09);
-  }
-
-  :root[data-theme="light"] {
-    color-scheme: light;
-    --bg: oklch(97.6% 0.005 240);
-    --surface: oklch(99.4% 0.003 240);
-    --surface-2: oklch(95.8% 0.007 240);
-    --surface-3: oklch(93% 0.009 240);
-    --border: oklch(90.5% 0.009 240);
-    --border-strong: oklch(84.5% 0.012 240);
-    --text: oklch(24% 0.02 255);
-    --text-2: oklch(45% 0.015 255);
-    --text-3: oklch(58% 0.012 250);
-    --accent: oklch(0.58 0.18 265);
-    --accent-strong: oklch(0.48 0.22 265);
-    --accent-ink: oklch(0.98 0.01 265);
-    --accent-soft: oklch(0.93 0.04 265);
-    --success: oklch(0.52 0.13 155);
-    --warn: oklch(0.66 0.15 65);
-    --danger: oklch(0.58 0.19 25);
-    --code-bg: oklch(96.8% 0.008 250);
-    --code-header: oklch(93.4% 0.01 250);
-    --glass: oklch(99% 0.003 240 / 0.72);
-  }
-
-  :root[data-theme="dark"] {
-    color-scheme: dark;
-    --bg: oklch(16.5% 0.012 250);
-    --surface: oklch(20% 0.012 250);
-    --surface-2: oklch(23% 0.013 250);
-    --surface-3: oklch(27% 0.014 250);
-    --border: oklch(27% 0.015 250);
-    --border-strong: oklch(34% 0.015 250);
-    --text: oklch(93% 0.008 240);
-    --text-2: oklch(72% 0.012 240);
-    --text-3: oklch(58% 0.01 240);
-    --accent: oklch(0.72 0.16 265);
-    --accent-strong: oklch(0.80 0.14 265);
-    --accent-ink: oklch(0.20 0.02 265);
-    --accent-soft: oklch(0.30 0.06 265);
-    --success: oklch(0.72 0.13 155);
-    --warn: oklch(0.80 0.12 75);
-    --danger: oklch(0.70 0.16 25);
-    --code-bg: oklch(15% 0.01 250);
-    --code-header: oklch(18.5% 0.011 250);
-    --glass: oklch(20% 0.012 250 / 0.7);
-    --shadow-1: none;
-    --shadow-2: none;
-  }
-
-  /* ============ Reset & Base ============ */
-  *, *::before, *::after { box-sizing: border-box; }
-  html, body { height: 100%; }
-  body {
-    margin: 0;
-    font-family: var(--font-sans);
-    font-size: 15px;
-    line-height: 1.55;
-    color: var(--text);
-    background: var(--bg);
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
-    font-kerning: normal;
-    overflow: hidden;
-  }
-  ::selection { background: var(--accent); color: var(--accent-ink); }
-
-  button { font-family: inherit; font-size: inherit; color: inherit; cursor: pointer; }
-  code, pre, kbd { font-family: var(--font-mono); font-variant-ligatures: none; }
-  svg { display: block; }
-
-  /* subtle ambient glow, restrained */
-  .bg-glow {
-    position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    background:
-      radial-gradient(52% 42% at 82% -8%, oklch(0.85 0.10 72 / 0.20), transparent 60%),
-      radial-gradient(46% 40% at 8% 108%, oklch(0.82 0.06 250 / 0.16), transparent 60%);
-    transition: opacity 300ms var(--ease-out);
-  }
-  :root[data-theme="dark"] .bg-glow { opacity: 0.55; }
-
-  .app {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* ============ Topbar ============ */
-  .topbar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 20px; height: 58px; flex-shrink: 0;
-    background: var(--glass);
-    backdrop-filter: blur(14px) saturate(1.2);
-    -webkit-backdrop-filter: blur(14px) saturate(1.2);
-    border-bottom: 1px solid var(--border);
-    position: relative; z-index: 20;
-  }
-  .brand { display: flex; align-items: center; gap: 11px; }
-  .logo {
-    width: 30px; height: 30px; border-radius: 8px;
-    background: var(--accent); color: var(--accent-ink);
-    display: grid; place-items: center; flex-shrink: 0;
-  }
-  .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-  .brand-name { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
-  .brand-sub { font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono); }
-
-  .topbar-actions { display: flex; align-items: center; gap: 8px; }
-  .icon-btn {
-    width: 34px; height: 34px; border-radius: 8px;
-    display: grid; place-items: center;
-    background: transparent; border: 1px solid transparent;
-    color: var(--text-2);
-    transition: background 140ms var(--ease-out), color 140ms var(--ease-out), border-color 140ms var(--ease-out);
-  }
-  .icon-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border); }
-
-  /* ============ Main ============ */
-  main { flex: 1; overflow: hidden; position: relative; }
-
-  /* ============ Empty State ============ */
-  .empty {
-    height: 100%; display: flex; align-items: center; justify-content: center; padding: 32px;
-  }
-  .empty-card {
-    width: 100%; max-width: 620px; text-align: center;
-    animation: rise 600ms var(--ease-out) both;
-  }
-  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-
-  .empty-badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 5px 12px; border-radius: 999px;
-    background: var(--accent-soft); color: var(--accent-ink);
-    font-size: 12.5px; font-weight: 500; margin-bottom: 22px;
-  }
-  .empty h1 { font-size: clamp(28px, 4.6vw, 40px); line-height: 1.08; margin: 0 0 12px; letter-spacing: -0.02em; font-weight: 650; }
-  .empty h1 .accent { color: var(--accent-strong); }
-  .empty p.lead { color: var(--text-2); margin: 0 0 30px; font-size: 16px; }
-
-  .dropzone {
-    position: relative;
-    border: 1.5px dashed var(--border-strong); border-radius: var(--radius-l);
-    padding: 42px 28px; cursor: pointer;
-    background: var(--surface);
-    transition: border-color 180ms var(--ease-out), background 180ms var(--ease-out), transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out);
-  }
-  .dropzone:hover, .dropzone.drag { border-color: var(--accent-strong); background: var(--surface-2); }
-  .dropzone.drag { box-shadow: var(--shadow-1); transform: scale(1.008); }
-  .dropzone .dz-icon { width: 46px; height: 46px; margin: 0 auto 14px; color: var(--accent-strong); }
-  .dropzone .dz-title { font-weight: 600; font-size: 16px; }
-  .dropzone .dz-hint { color: var(--text-3); font-size: 13px; margin-top: 6px; }
-
-  .btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    height: 42px; padding: 0 18px; border-radius: var(--radius-m);
-    font-weight: 600; font-size: 14px; border: 1px solid transparent;
-    transition: transform 140ms var(--ease-out), background 140ms var(--ease-out), border-color 140ms var(--ease-out), color 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
-    -webkit-tap-highlight-color: transparent;
-  }
-  .btn:active { transform: translateY(1px) scale(0.99); }
-  .btn-primary {
-    background: var(--accent); color: var(--accent-ink);
-    box-shadow: 0 1px 2px oklch(0 0 0 / 0.10) inset;
-  }
-  .btn-primary:hover { background: var(--accent-strong); }
-  .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
-  .btn-ghost:hover { background: var(--surface-2); }
-  .btn:disabled { opacity: 0.42; cursor: not-allowed; }
-  .btn:disabled:active { transform: none; }
-  .btn-sm { height: 34px; padding: 0 13px; font-size: 13px; border-radius: 8px; }
-
-  .empty-features { display: flex; justify-content: center; gap: 24px; margin-top: 28px; flex-wrap: wrap; }
-  .feature { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 13px; }
-  .feature svg { color: var(--text-3); opacity: 0.8; }
-  .feature b { color: var(--text-2); font-weight: 600; }
-
-  .compat-note { margin-top: 22px; font-size: 12.5px; color: var(--text-3); font-family: var(--font-mono); }
-
-  /* ============ Scan panel ============ */
-  .scan {
-    height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 20px; padding: 40px;
-  }
-  .spinner {
-    width: 34px; height: 34px; border-radius: 50%;
-    border: 3px solid var(--surface-3); border-top-color: var(--accent-strong);
-    animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .scan-text { text-align: center; }
-  .scan-text .t1 { font-weight: 600; font-size: 16px; }
-  .scan-text .t2 { color: var(--text-3); font-size: 13px; margin-top: 4px; font-family: var(--font-mono); max-width: 560px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .progress-wrap { width: min(420px, 82vw); }
-  .progress-bar { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
-  .progress-fill { height: 100%; width: 0%; border-radius: 999px; background: var(--accent-strong); transition: width 120ms linear; }
-  .progress-label { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--text-3); font-family: var(--font-mono); }
-
-  /* ============ Results ============ */
-  .results { height: 100%; display: flex; flex-direction: column; padding: 16px 20px 0; gap: 14px; }
-
-  .summary { display: flex; flex-wrap: wrap; gap: 10px; }
-  .chip {
-    display: inline-flex; align-items: baseline; gap: 7px;
-    padding: 8px 14px; border-radius: var(--radius-m);
-    background: var(--surface); border: 1px solid var(--border);
-    font-size: 13px;
-  }
-  .chip .k { color: var(--text-3); font-size: 12px; }
-  .chip .v { font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-  .chip.warn .v { color: var(--warn); }
-
-  .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .toolbar .spacer { flex: 1; }
-  .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); user-select: none; cursor: pointer; }
-  .switch input { display: none; }
-  .switch .track { width: 34px; height: 20px; border-radius: 999px; background: var(--surface-3); position: relative; transition: background 160ms var(--ease-out); }
-  .switch .track::after {
-    content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
-    background: #fff; transition: transform 160ms var(--ease-out); box-shadow: 0 1px 3px oklch(0 0 0 / 0.3);
-  }
-  .switch input:checked + .track { background: var(--accent-strong); }
-  .switch input:checked + .track::after { transform: translateX(14px); }
-
-  .layout {
-    flex: 1; min-height: 0;
-    display: grid; grid-template-columns: 268px 1fr; gap: 14px;
-  }
-
-  .panel {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-l);
-    display: flex; flex-direction: column; min-height: 0; overflow: hidden;
-  }
-  .panel-head {
-    display: flex; align-items: center; gap: 8px;
-    padding: 11px 14px; border-bottom: 1px solid var(--border);
-    font-size: 12.5px; font-weight: 600; color: var(--text-2); letter-spacing: 0.02em;
-    flex-shrink: 0;
-  }
-  .panel-head .count { margin-left: auto; color: var(--text-3); font-family: var(--font-mono); font-weight: 500; }
-
-  .tree-scroll { flex: 1; overflow: auto; padding: 10px 8px; }
-  .preview-scroll { flex: 1; overflow: auto; padding: 18px 20px 30px; }
-
-  /* ============ Tree ============ */
-  .tree ul { list-style: none; margin: 0; padding: 0; }
-  .tree .nested { margin-left: 15px; border-left: 1px solid var(--border); padding-left: 6px; display: none; }
-  .tree li.open > .nested { display: block; }
-  .tree-row {
-    display: flex; align-items: center; gap: 7px;
-    padding: 4px 8px; border-radius: 6px;
-    font-size: 13px; color: var(--text-2); cursor: default;
-    font-family: var(--font-mono); white-space: nowrap;
-  }
-  .tree-row:hover { background: var(--surface-2); }
-  .tree-row .tw { width: 14px; text-align: center; color: var(--text-3); flex-shrink: 0; font-size: 10px; }
-  .tree-row .fi { width: 15px; height: 15px; flex-shrink: 0; color: var(--text-3); }
-  .tree-row.is-dir { cursor: pointer; }
-  .tree-row.is-dir .fi { color: var(--accent-strong); }
-
-  /* ============ Preview ============ */
-  .preview { font-size: 14px; }
-  .preview h1 {
-    font-size: 24px; margin: 0 0 14px; letter-spacing: -0.02em; font-weight: 650;
-    padding-bottom: 14px; border-bottom: 1px solid var(--border);
-  }
-  .preview h2 { font-size: 17px; margin: 28px 0 10px; font-weight: 650; letter-spacing: -0.01em; }
-  .preview h3 { font-size: 14px; margin: 26px 0 8px; font-weight: 600; color: var(--text-2); }
-  .preview h3 code { color: var(--accent-strong); }
-  .preview p { margin: 6px 0; color: var(--text-2); }
-  .preview p.kpi { font-size: 13.5px; }
-  .preview p.kpi strong { color: var(--text); font-weight: 600; }
-  .preview code { font-size: 0.9em; background: var(--surface-2); padding: 2px 6px; border-radius: 5px; color: var(--text); }
-  .preview hr { border: none; border-top: 1px solid var(--border); margin: 22px 0; }
-
-  figure.code { margin: 8px 0 22px; border: 1px solid var(--border); border-radius: var(--radius-m); overflow: hidden; }
-  figure.code figcaption {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 7px 13px; font-size: 12px; color: var(--text-3);
-    background: var(--code-header); border-bottom: 1px solid var(--border);
-    font-family: var(--font-mono); text-transform: lowercase;
-  }
-  figure.code pre { margin: 0; padding: 14px 16px; background: var(--code-bg); overflow: auto; }
-  figure.code pre > code { background: transparent; padding: 0; border-radius: 0; font-size: 13px; line-height: 1.6; color: var(--text); }
-  .line-nums .cl { display: grid; grid-template-columns: 42px 1fr; }
-  .line-nums .cln { color: var(--text-3); text-align: right; padding-right: 14px; user-select: none; opacity: 0.6; }
-  .line-nums .clc { white-space: pre-wrap; word-break: break-all; }
-
-  .fold {
-    display: flex; align-items: center; gap: 14px; justify-content: center;
-    padding: 22px 16px; margin: 26px 0; color: var(--text-3);
-    border: 1px dashed var(--border-strong); border-radius: var(--radius-m);
-    background: var(--surface-2); font-size: 13px; text-align: center;
-  }
-  .fold p { margin: 0; }
-  .fold .fold-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-strong); flex-shrink: 0; }
-
-  .preview-banner {
-    display: none; align-items: center; gap: 8px;
-    margin-bottom: 12px; padding: 9px 13px; border-radius: var(--radius-m);
-    background: var(--accent-soft); color: var(--accent-ink); font-size: 13px;
-  }
-  .preview-banner.visible { display: flex; }
-
-  /* ============ Statusbar ============ */
-  .statusbar {
-    display: flex; align-items: center; gap: 16px;
-    height: 40px; padding: 0 20px; flex-shrink: 0;
-    border-top: 1px solid var(--border);
-    background: var(--glass); backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    font-size: 12.5px; color: var(--text-3); font-family: var(--font-mono);
-  }
-  .statusbar .stat { font-variant-numeric: tabular-nums; }
-  .statusbar .stat b { color: var(--text-2); font-weight: 600; }
-  .statusbar .spacer { flex: 1; }
-  .statusbar .log { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 44%; text-align: right; }
-
-  /* ============ Toast ============ */
-  .toast-wrap { position: fixed; bottom: 52px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
-  .toast {
-    background: var(--text); color: var(--bg);
-    padding: 10px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 500;
-    box-shadow: var(--shadow-2);
-    opacity: 0; transform: translateY(8px) scale(0.96);
-    transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
-    max-width: min(560px, 86vw);
-  }
-  .toast.show { opacity: 1; transform: none; }
-  .toast.error { background: var(--danger); color: #fff; }
-
-  /* ============ Focus & Motion ============ */
-  :focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; border-radius: 6px; }
-  [hidden] { display: none !important; }
-
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
-  }
-
-  /* ============ Responsive ============ */
-  @media (max-width: 860px) {
-    .layout { grid-template-columns: 1fr; grid-template-rows: minmax(140px, 30%) 1fr; }
-    .statusbar .log { display: none; }
-  }
-</style>
-<div class="bg-glow" aria-hidden="true"></div>
-
-<div class="app">
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M7 6l-4 6 4 6M17 6l4 6-4 6M13.5 4l-3 16" />
-        </svg>
-      </div>
-      <div class="brand-text">
-        <span class="brand-name">Context</span>
-        <span class="brand-sub">codebase → markdown</span>
-      </div>
-    </div>
-    <div class="topbar-actions">
-      <button class="icon-btn" id="themeToggle" title="切换明暗主题" aria-label="切换明暗主题">
-        <svg id="themeIconSun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-        <svg id="themeIconMoon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-      </button>
-    </div>
-  </header>
-
-  <main>
-    <!-- Empty state -->
-    <section class="empty" id="emptyState">
-      <div class="empty-card">
-        <div class="empty-badge">🔎 本地运行 · 数据不离开浏览器</div>
-        <h1>把代码库变成 <span class="accent">AI 上下文</span></h1>
-        <p class="lead">选择一个项目文件夹，自动生成目录树 + 文件内容的 Markdown，复制或下载即可喂给模型。</p>
-        <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="选择文件夹">
-          <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          </svg>
-          <div class="dz-title">选择文件夹</div>
-          <div class="dz-hint">点击浏览，或将文件夹拖拽到此处</div>
-        </div>
-        <div class="empty-features">
-          <span class="feature"><b>智能过滤</b> 忽略 node_modules / .git / 二进制</span>
-          <span class="feature"><b>5MB 上限</b> 超大文件自动跳过</span>
-          <span class="feature"><b>一键导出</b> 复制 / 下载 .md</span>
-        </div>
-        <div class="compat-note" id="compatNote"></div>
-      </div>
-    </section>
-
-    <!-- Scanning -->
-    <section class="scan" id="scanState" hidden>
-      <div class="spinner" aria-hidden="true"></div>
-      <div class="scan-text">
-        <div class="t1">正在扫描文件…</div>
-        <div class="t2" id="currentFile">准备中</div>
-      </div>
-      <div class="progress-wrap">
-        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-        <div class="progress-label"><span id="progressText">已扫描 0 个文件</span><span id="progressPct">0%</span></div>
-      </div>
-    </section>
-
-    <!-- Results -->
-    <section class="results" id="resultsState" hidden>
-      <div class="summary" id="summary"></div>
-
-      <div class="toolbar">
-        <button class="btn btn-primary" id="copyBtn">📋 一键复制</button>
-        <button class="btn btn-ghost" id="downloadBtn">⬇️ 下载 .md</button>
-        <label class="switch">
-          <input type="checkbox" id="lineNumToggle" />
-          <span class="track"></span>
-          行号
-        </label>
-        <div class="spacer"></div>
-        <button class="btn btn-ghost btn-sm" id="reselectBtn">↺ 重新选择</button>
-      </div>
-
-      <div class="layout">
-        <aside class="panel">
-          <div class="panel-head">🌳 目录结构<span class="count" id="treeCount"></span></div>
-          <div class="tree-scroll"><div class="tree" id="treeRoot"></div></div>
-        </aside>
-        <section class="panel">
-          <div class="panel-head">📄 内容预览<span class="count" id="previewCount"></span></div>
-          <div class="preview-scroll">
-            <div class="preview-banner" id="previewBanner">⚠️ 预览已折叠 · 请下载完整文件查看全部内容</div>
-            <div class="preview" id="preview"></div>
-          </div>
-        </section>
-      </div>
-    </section>
-  </main>
-
-  <footer class="statusbar" id="statusbar" hidden>
-    <span class="stat">文件 <b id="stFiles">0</b></span>
-    <span class="stat">字符 <b id="stChars">0</b></span>
-    <span class="stat">Token <b id="stTokens">0</b></span>
-    <span class="spacer"></span>
-    <span class="log" id="stLog"></span>
-  </footer>
-</div>
-
-<div class="toast-wrap" id="toastWrap"></div>
-<input type="file" id="fileInput" webkitdirectory multiple hidden />
-
-<script>
 "use strict";
 
 /* ============================================================
@@ -542,11 +79,25 @@ const els = {
 
 /* ---------- App state ---------- */
 let fullMarkdown = "";
+let markdownBody = "";   // 缓存不含 System Prompt 的主体（目录树 + 文件内容），供场景切换局部刷新复用
 let fileCount = 0;
 let totalChars = 0;
 let tokenEst = 0;
 let skipCount = 0;
 let logLine = "";
+
+/* ---------- 场景状态（纯配置驱动，零硬编码） ---------- */
+const FALLBACK_SCENARIO = {
+  id: "general-fallback",
+  name: "通用模式",
+  systemPrompt: "你是一位技术专家，请全面分析以下代码库。"
+};
+let scenarios = [];
+let currentScenario = FALLBACK_SCENARIO;
+let scenariosPromise = null;
+let currentFiles = [];
+let currentRootName = "";
+let currentWarnings = [];
 
 /* ============================================================
  * Theme
@@ -605,8 +156,37 @@ function timestamp() {
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
+/* ============================================================
+ * 注入防护（XSS / HTML 注入 / 脚本注入）
+ * ------------------------------------------------------------
+ * 约定：任何「用户可控文本」（文件名、路径、文件内容、场景数据）在写入
+ * innerHTML 前，都必须经过 escapeHTML 或 sanitizeHighlightedHTML 之一。
+ *
+ * 防范的注入类型与对应手段：
+ * 1) HTML 标签注入   <img onerror=...> / <script>  → escapeHTML 转义 & < > " '
+ * 2) 事件属性注入   on* / javascript: URL          → 转义引号 + 白名单清洗
+ * 3) 第三方库输出污染（hljs 的 .value）              → sanitizeHighlightedHTML 白名单
+ * 4) 属性值逃逸      " 或 ' 提前闭合属性             → escapeHTML 同时转义双/单引号
+ *
+ * 其余写入路径（textContent / option.value / textarea.value）为属性赋值，
+ * 浏览器不解析为 HTML，天然安全，无需转义。
+ * ============================================================ */
 function escapeHTML(s) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+/* ---- highlight.js 动态加载（CDN，业内主流高亮库）---- */
+let highlightReady = null;
+function ensureHighlight() {
+  if (highlightReady) return highlightReady;
+  highlightReady = new Promise((resolve) => {
+    if (window.hljs) { resolve(true); return; }
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js";
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
+  });
+  return highlightReady;
 }
 function toast(msg, type) {
   const el = document.createElement("div");
@@ -767,6 +347,23 @@ function buildMarkdown(rootName, files, warnings) {
   return lines.join("\n");
 }
 
+/* 场景 System Prompt 注入块：人类可读强引导（引用块） */
+function buildSystemPromptBlock(scenario) {
+  const s = scenario || FALLBACK_SCENARIO;
+  const prompt = s.systemPrompt || "";
+  const parts = [];
+  parts.push("> ⚙️ 系统指令（System Prompt）：请严格遵循以下场景设定进行回答。");
+  prompt.split("\n").forEach((l) => parts.push("> " + l));
+  parts.push("");
+  return parts.join("\n") + "\n";
+}
+
+/* 重建待导出 Markdown（首次扫描 / 重新扫描时调用）；主体部分缓存到 markdownBody */
+function updateExportData() {
+  markdownBody = buildMarkdown(currentRootName, currentFiles, currentWarnings);
+  fullMarkdown = buildSystemPromptBlock(currentScenario) + markdownBody;
+}
+
 /* ============================================================
  * Markdown → HTML (轻量渲染器，无第三方库)
  * ============================================================ */
@@ -775,17 +372,63 @@ function inlineMarkdown(text) {
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/`([^`]+)`/g, "<code>$1</code>");
 }
+/* 白名单清洗高亮输出：hljs 的 .value 虽已自行转义，但它是唯一「未经本地 escapeHTML」
+   就直接写入 innerHTML 的路径。这里再加一道纵深防御——只放行 hljs 约定的
+   <span class="hljs-*"> 与 </span>，其余任何标签、事件属性或孤立 < > 一律转义，
+   杜绝第三方库输出被污染时引入任意标签 / 脚本。 */
+function sanitizeHighlightedHTML(html) {
+  return html.replace(/<\/?[a-zA-Z][^>]*>|[<>]/g, (tag) => {
+    if (tag === "<") return "&lt;";
+    if (tag === ">") return "&gt;";
+    if (tag.toLowerCase() === "</span>") return tag;
+    const m = /^<span\s+class="([^"]*)"\s*>$/i.exec(tag);
+    if (m && /^hljs-[A-Za-z0-9_-]+(?:\s+[A-Za-z0-9_-]+)*$/.test(m[1].trim())) return tag;
+    return tag.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  });
+}
+function highlightCode(code, lang) {
+  if (window.hljs && lang && window.hljs.getLanguage(lang)) {
+    try {
+      return sanitizeHighlightedHTML(
+        window.hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
+      );
+    } catch (e) { /* 忽略，退回纯文本 */ }
+  }
+  return null;
+}
+/* 把高亮后的 HTML 按行拆分，并保证每行的 <span> 平衡（多行注释/字符串不破色） */
+function splitHighlighted(html) {
+  const raw = html.split("\n");
+  const tagRe = /<span[^>]*>|<\/span>/g;
+  const startStack = [], endStack = [];
+  const open = [];
+  raw.forEach((line) => {
+    startStack.push(open.slice());
+    let m;
+    tagRe.lastIndex = 0;
+    while ((m = tagRe.exec(line)) !== null) {
+      if (m[0].charAt(1) === "/") open.pop();
+      else open.push(m[0]);
+    }
+    endStack.push(open.slice());
+  });
+  return raw.map((line, i) =>
+    startStack[i].join("") + line + "</span>".repeat(endStack[i].length)
+  );
+}
 function renderCodeBlock(code, lang, lineNumbers) {
   const label = escapeHTML(lang || "text");
+  const highlighted = highlightCode(code, lang);
+  const html = highlighted != null ? highlighted : escapeHTML(code);
   if (lineNumbers) {
-    const ls = code.split("\n");
+    const ls = splitHighlighted(html);
     if (ls.length && ls[ls.length - 1] === "") ls.pop();
     const body = ls.map((l, i) =>
-      '<div class="cl"><span class="cln">' + (i + 1) + '</span><span class="clc">' + (escapeHTML(l) || " ") + "</span></div>"
+      '<div class="cl"><span class="cln">' + (i + 1) + '</span><span class="clc">' + (l || " ") + "</span></div>"
     ).join("");
     return '<figure class="code"><figcaption>' + label + "</figcaption><pre>" + body + "</pre></figure>";
   }
-  return '<figure class="code"><figcaption>' + label + "</figcaption><pre><code>" + escapeHTML(code) + "</code></pre></figure>";
+  return '<figure class="code"><figcaption>' + label + "</figcaption><pre><code>" + html + "</code></pre></figure>";
 }
 function mdToHTML(md, lineNumbers) {
   const lines = md.split("\n");
@@ -793,6 +436,13 @@ function mdToHTML(md, lineNumbers) {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
+    // 引用块（人类可读的 System Prompt 引导）
+    if (line.startsWith("> ")) {
+      const buf = [];
+      while (i < lines.length && lines[i].startsWith("> ")) { buf.push(lines[i].slice(2)); i++; }
+      html += "<blockquote>" + buf.map((l) => inlineMarkdown(l)).join("<br>") + "</blockquote>";
+      continue;
+    }
     const open = line.match(/^(`{3,})([^`]*)$/);
     if (open) {
       const fenceLen = open[1].length;
@@ -859,13 +509,17 @@ function previewSplit(md, headLines, tailLines) {
 /* ============================================================
  * Render pipeline
  * ============================================================ */
-function renderResults(rootName, files, warnings) {
+async function renderResults(rootName, files, warnings) {
+  currentRootName = rootName;
+  currentFiles = files;
+  currentWarnings = warnings;
   fileCount = files.length;
   totalChars = files.reduce((s, f) => s + f.content.length, 0);
   tokenEst = Math.round(totalChars / 4);
   skipCount = warnings.length;
 
-  fullMarkdown = buildMarkdown(rootName, files, warnings);
+  await loadScenarios();       // 确保场景就绪（真实默认或兜底）
+  updateExportData();
 
   // summary chips
   let chipHTML = "";
@@ -882,7 +536,8 @@ function renderResults(rootName, files, warnings) {
   els.treeRoot.appendChild(treeDOM(treeObj));
   els.treeCount.textContent = num(fileCount) + " 文件";
 
-  // preview
+  // preview（先确保高亮库就绪）
+  await ensureHighlight();
   renderPreview();
 
   // statusbar
@@ -968,7 +623,7 @@ async function processFiles(rootName, rawEntries) {
   els.progressPct.textContent = "100%";
   await new Promise((res) => setTimeout(res, 180));
 
-  renderResults(rootName, files, warnings);
+  await renderResults(rootName, files, warnings);
   toast("已聚合 " + num(files.length) + " 个文件" + (warnings.length ? " · 跳过 " + warnings.length : ""));
 }
 
@@ -1108,12 +763,124 @@ els.downloadBtn.addEventListener("click", () => {
 els.lineNumToggle.addEventListener("change", renderPreview);
 
 /* ============================================================
+ * 场景模板（Scenario）—— 纯配置驱动，零硬编码
+ * ============================================================ */
+function renderScenarioOptions() {
+  const sel = document.getElementById("scenarioSelect");
+  if (!sel) return;
+  sel.innerHTML = "";
+  const list = scenarios.length ? scenarios : [FALLBACK_SCENARIO];
+  list.forEach((s) => {
+    const opt = document.createElement("option");
+    opt.value = s.id;
+    opt.textContent = s.name;
+    if (currentScenario && s.id === currentScenario.id) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function switchScenario(next) {
+  currentScenario = next || FALLBACK_SCENARIO;
+
+  // 仅重建导出数据：主体复用缓存的 markdownBody，不重新扫描，导出内容始终完整
+  const promptMD = buildSystemPromptBlock(currentScenario);
+  fullMarkdown = promptMD + markdownBody;
+
+  // 局部刷新：只替换预览区顶部的提示词引用块，下方目录树 / 代码块保持静止
+  const promptHTML = mdToHTML(promptMD, els.lineNumToggle.checked);
+  const quote = els.preview.querySelector("blockquote");
+  if (quote) {
+    quote.outerHTML = promptHTML;
+  } else {
+    // 兜底：边缘情况找不到 blockquote 时，回退全量重绘以保证 UI 一致
+    renderPreview();
+  }
+}
+
+function showPromptModal() {
+  if (!currentScenario) return;
+  const old = document.getElementById("promptModalOverlay");
+  if (old) old.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "promptModalOverlay";
+  overlay.className = "prompt-modal-overlay";
+  overlay.innerHTML =
+    '<div class="prompt-modal" role="dialog" aria-modal="true" aria-label="场景提示词">' +
+      '<div class="prompt-modal-head"><span class="prompt-modal-title">⚙️ ' + escapeHTML(currentScenario.name) + '</span>' +
+        '<button class="prompt-modal-close" id="promptModalClose" aria-label="关闭">&times;</button></div>' +
+      '<div class="prompt-modal-body">' + escapeHTML(currentScenario.systemPrompt) + '</div>' +
+      '<div class="prompt-modal-foot">' +
+        '<button class="btn btn-ghost btn-sm" id="promptModalCopy">📋 复制提示词</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  document.getElementById("promptModalClose").addEventListener("click", () => overlay.remove());
+  document.getElementById("promptModalCopy").addEventListener("click", async () => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(currentScenario.systemPrompt);
+      } else {
+        fallbackCopy(currentScenario.systemPrompt);
+      }
+      toast("已复制提示词");
+    } catch (e) {
+      try { fallbackCopy(currentScenario.systemPrompt); toast("已复制提示词"); }
+      catch (e2) { toast("复制失败", "error"); }
+    }
+  });
+  document.addEventListener("keydown", function onEsc(e) {
+    if (e.key === "Escape") { overlay.remove(); document.removeEventListener("keydown", onEsc); }
+  });
+}
+
+function loadScenarios() {
+  if (!scenariosPromise) {
+    scenariosPromise = (async () => {
+      try {
+        const resp = await fetch("data/scenarios.json?t=" + Date.now());
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const data = await resp.json();
+        const list = (data && Array.isArray(data.list)) ? data.list : [];
+        scenarios = list;
+        const defId = data && data.defaultId;
+        currentScenario = list.find((s) => s.id === defId) || list[0] || FALLBACK_SCENARIO;
+      } catch (e) {
+        console.warn("[V4] scenarios.json 加载失败，使用兜底场景", e);
+        scenarios = [];
+        currentScenario = FALLBACK_SCENARIO;
+      }
+      renderScenarioOptions();
+    })();
+  }
+  return scenariosPromise;
+}
+
+const scenarioSelectEl = document.getElementById("scenarioSelect");
+if (scenarioSelectEl) {
+  scenarioSelectEl.addEventListener("change", () => {
+    const found = scenarios.find((s) => s.id === scenarioSelectEl.value);
+    switchScenario(found || FALLBACK_SCENARIO);
+  });
+}
+const previewPromptBtn = document.getElementById("previewPromptBtn");
+if (previewPromptBtn) {
+  previewPromptBtn.addEventListener("click", showPromptModal);
+}
+
+/* ============================================================
  * Boot
  * ============================================================ */
 initTheme();
+
+// 预加载代码高亮库（并行，不阻塞首屏）
+ensureHighlight();
+
+// 预加载场景模板（并行；renderResults 内会 await 确保就绪）
+loadScenarios();
 
 const hasFS = window.isSecureContext && "showDirectoryPicker" in window;
 els.compat.textContent = hasFS
   ? "✓ 当前浏览器支持文件系统访问，可选择任意文件夹"
   : "当前环境不支持目录选择 API，将使用上传方式（不支持子目录递归拖拽）";
-</script>

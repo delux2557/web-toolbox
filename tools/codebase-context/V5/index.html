@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="V3/style.css" />
+<link rel="stylesheet" href="V5/style.css" />
 <div class="bg-glow" aria-hidden="true"></div>
 
 <div class="app">
@@ -80,7 +80,14 @@
           <div class="tree-scroll"><div class="tree" id="treeRoot"></div></div>
         </aside>
         <section class="panel">
-          <div class="panel-head">📄 内容预览<span class="count" id="previewCount"></span></div>
+          <div class="panel-head">
+            <span class="panel-title">📄 内容预览</span>
+            <span class="count" id="previewCount"></span>
+            <span class="head-spacer"></span>
+            <span class="scenario-label">⚙️ 场景</span>
+            <select id="scenarioSelect" aria-label="选择场景"></select>
+            <button class="btn-ghost btn-sm" id="previewPromptBtn" title="预览当前场景提示词">📋 预览</button>
+          </div>
           <div class="preview-scroll">
             <div class="preview-banner" id="previewBanner">⚠️ 预览已折叠 · 请下载完整文件查看全部内容</div>
             <div class="preview" id="preview"></div>
@@ -102,4 +109,4 @@
 <div class="toast-wrap" id="toastWrap"></div>
 <input type="file" id="fileInput" webkitdirectory multiple hidden />
 
-<script src="V3/app.js"></script>
+<script src="V5/app.js"></script>

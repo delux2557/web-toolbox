@@ -145,7 +145,7 @@
   .empty-badge {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 5px 12px; border-radius: 999px;
-    background: var(--accent-soft); color: var(--accent-ink);
+    background: var(--accent-soft); color: var(--accent-strong);
     font-size: 12.5px; font-weight: 500; margin-bottom: 22px;
   }
   .empty h1 { font-size: clamp(28px, 4.6vw, 40px); line-height: 1.08; margin: 0 0 12px; letter-spacing: -0.02em; font-weight: 650; }
@@ -250,7 +250,19 @@
     font-size: 12.5px; font-weight: 600; color: var(--text-2); letter-spacing: 0.02em;
     flex-shrink: 0;
   }
-  .panel-head .count { margin-left: auto; color: var(--text-3); font-family: var(--font-mono); font-weight: 500; }
+  .panel-head .panel-title { font-weight: 600; }
+  .panel-head .count { color: var(--text-3); font-family: var(--font-mono); font-weight: 500; }
+  .panel-head .head-spacer { flex: 1; }
+  .scenario-label { font-size: 12px; font-weight: 500; color: var(--text-3); white-space: nowrap; }
+  #scenarioSelect {
+    height: 28px; padding: 0 6px; font-size: 12px; font-weight: 400;
+    min-width: 112px; max-width: 150px;
+    border: 1px solid var(--border-strong); border-radius: 6px;
+    background: var(--surface); color: var(--text-2);
+    cursor: pointer; outline: none;
+  }
+  #scenarioSelect:focus { border-color: var(--accent-strong); }
+  #previewPromptBtn { height: 28px; padding: 0 12px; font-size: 12px; white-space: nowrap; }
 
   .tree-scroll { flex: 1; overflow: auto; padding: 10px 8px; }
   .preview-scroll { flex: 1; overflow: auto; padding: 18px 20px 30px; }
@@ -299,6 +311,49 @@
   .line-nums .cln { color: var(--text-3); text-align: right; padding-right: 14px; user-select: none; opacity: 0.6; }
   .line-nums .clc { white-space: pre-wrap; word-break: break-all; }
 
+  /* ============ 代码高亮（highlight.js 仅加 class，配色在此定义）============ */
+  :root[data-theme="light"] {
+    --hl-keyword: oklch(0.50 0.20 285);
+    --hl-string:  oklch(0.50 0.13 150);
+    --hl-comment: oklch(0.55 0.02 250);
+    --hl-number:  oklch(0.60 0.16 45);
+    --hl-literal: oklch(0.52 0.18 330);
+    --hl-title:   oklch(0.48 0.15 220);
+    --hl-type:    oklch(0.50 0.14 160);
+    --hl-attr:    oklch(0.52 0.14 40);
+    --hl-regexp:  oklch(0.55 0.16 45);
+    --hl-meta:    oklch(0.50 0.12 150);
+    --hl-punct:   oklch(0.58 0.01 250);
+  }
+  :root[data-theme="dark"] {
+    --hl-keyword: oklch(0.76 0.14 285);
+    --hl-string:  oklch(0.76 0.13 150);
+    --hl-comment: oklch(0.56 0.01 250);
+    --hl-number:  oklch(0.80 0.14 60);
+    --hl-literal: oklch(0.78 0.12 330);
+    --hl-title:   oklch(0.74 0.13 220);
+    --hl-type:    oklch(0.76 0.12 160);
+    --hl-attr:    oklch(0.78 0.12 55);
+    --hl-regexp:  oklch(0.80 0.13 60);
+    --hl-meta:    oklch(0.74 0.11 150);
+    --hl-punct:   oklch(0.62 0.01 250);
+  }
+  figure.code .hljs-keyword, figure.code .hljs-selector-tag, figure.code .hljs-name, figure.code .hljs-tag { color: var(--hl-keyword); }
+  figure.code .hljs-string, figure.code .hljs-template-string, figure.code .hljs-attr { color: var(--hl-string); }
+  figure.code .hljs-comment, figure.code .hljs-quote { color: var(--hl-comment); font-style: italic; }
+  figure.code .hljs-number, figure.code .hljs-symbol { color: var(--hl-number); }
+  figure.code .hljs-literal { color: var(--hl-literal); }
+  figure.code .hljs-title, figure.code .hljs-title.function_, figure.code .hljs-title.class_ { color: var(--hl-title); }
+  figure.code .hljs-type, figure.code .hljs-built_in { color: var(--hl-type); }
+  figure.code .hljs-attribute { color: var(--hl-attr); }
+  figure.code .hljs-regexp { color: var(--hl-regexp); }
+  figure.code .hljs-meta, figure.code .hljs-doctag { color: var(--hl-meta); }
+  figure.code .hljs-punctuation { color: var(--hl-punct); }
+  figure.code .hljs-addition { color: var(--success); }
+  figure.code .hljs-deletion { color: var(--danger); }
+  figure.code .hljs-emphasis { font-style: italic; }
+  figure.code .hljs-strong { font-weight: 600; }
+
   .fold {
     display: flex; align-items: center; gap: 14px; justify-content: center;
     padding: 22px 16px; margin: 26px 0; color: var(--text-3);
@@ -311,9 +366,42 @@
   .preview-banner {
     display: none; align-items: center; gap: 8px;
     margin-bottom: 12px; padding: 9px 13px; border-radius: var(--radius-m);
-    background: var(--accent-soft); color: var(--accent-ink); font-size: 13px;
+    background: var(--accent-soft); color: var(--accent-strong); font-size: 13px;
   }
   .preview-banner.visible { display: flex; }
+
+  .preview blockquote {
+    margin: 12px 0 22px;
+    padding: 12px 16px;
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    color: var(--text-2);
+    border-radius: 0 var(--radius-m) var(--radius-m) 0;
+    font-size: 13.5px; line-height: 1.7;
+  }
+  .preview blockquote::first-line { font-weight: 600; color: var(--text); }
+  .preview-loading {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 200px; color: var(--text-3); font-size: 13px;
+  }
+
+  /* ============ 场景提示词模态框 ============ */
+  .prompt-modal-overlay {
+    position: fixed; inset: 0; z-index: 10000;
+    display: flex; align-items: center; justify-content: center;
+    background: oklch(0 0 0 / 0.4); padding: 24px;
+  }
+  .prompt-modal {
+    width: 100%; max-width: 480px; max-height: 80vh; display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; box-shadow: 0 16px 48px oklch(0 0 0 / 0.2); overflow: hidden;
+  }
+  .prompt-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .prompt-modal-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .prompt-modal-close { border: none; background: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--text-3); padding: 2px 8px; border-radius: 6px; }
+  .prompt-modal-close:hover { background: var(--surface-2); color: var(--text); }
+  .prompt-modal-body { padding: 16px 18px; overflow: auto; font-size: 13.5px; line-height: 1.7; color: var(--text-2); white-space: pre-wrap; word-break: break-word; }
+  .prompt-modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); }
 
   /* ============ Statusbar ============ */
   .statusbar {

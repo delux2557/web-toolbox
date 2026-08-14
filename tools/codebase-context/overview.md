@@ -5,22 +5,18 @@
 (根目录)
 ├── index.html       ← 壳（SPA）：骨架屏 + 主题前置 + fetch 注入版本
 ├── manifest.json    ← 版本注册表（latest 字段优先，语义版本兜底）
-├── V1/index.html    ← v1 片段（内联 <style> + 内联 <script>）
-├── V2/index.html    ← v2 片段（<link> + 标记 + <script src>，根相对路径）
-├── V2/style.css     ← v2 全部样式（蓝紫 Indigo OKLCH）
-├── V2/app.js        ← v2 全部逻辑
-├── V3/index.html    ← v3 片段（代码高亮版：修复徽章对比度 + 新文案 + highlight.js）
-├── V3/style.css     ← v3 样式（徽章对比度修复 + hljs token 配色）
-├── V3/app.js        ← v3 逻辑（动态加载 highlight.js + 高亮渲染）
 ├── V4/index.html    ← v4 片段（场景化上下文：panel-head 内嵌场景选择器）
 ├── V4/style.css     ← v4 样式（+ 场景控件 / blockquote / 提示词模态框）
 ├── V4/app.js        ← v4 逻辑（+ 场景加载 / Prompt 注入 / 提示词预览）
+├── V5/index.html    ← v5 片段（场景切换局部刷新）
+├── V5/style.css     ← v5 样式
+├── V5/app.js        ← v5 逻辑（局部更新引擎）
 ├── data/scenarios.json ← 场景模板（纯配置，4 个场景，零硬编码）
 └── overview.md      ← 本文档
 ```
 
 ## V4 相对 V3 的改动（场景化上下文）
-1. **场景模板机制**：新建 `data/scenarios.json`（`defaultId` + `list`），`app.js` 启动时 `fetch('../data/scenarios.json')` 动态加载，失败回退内置 `FALLBACK_SCENARIO`（仅内存，不写死 DOM）。
+1. **场景模板机制**：新建 `data/scenarios.json`（`defaultId` + `list`），`app.js` 启动时 `fetch('data/scenarios.json')` 动态加载，失败回退内置 `FALLBACK_SCENARIO`（仅内存，不写死 DOM）。
 2. **场景选择器**：嵌入预览面板 `panel-head`（标题+行数 在左，`⚙️ 场景` + `<select>` + `📋 预览` 在右）。切换场景**不重扫文件夹**，仅 `updateExportData()` + `renderPreview()`。
 3. **导出注入 System Prompt**：`buildSystemPromptBlock()` 在导出 Markdown 头部注入 YAML Frontmatter（`scenario` + `system_prompt: |`）+ 人类可读 `>` 引用块；复制/下载都用此内容。
 4. **预览提示词**：`📋 预览` 弹轻量模态框展示完整 systemPrompt（换行显示）+「复制提示词」按钮（无 alert/confirm）。
@@ -44,12 +40,10 @@
 ```json
 {
   "schemaVersion": 1,
-  "latest": "v4",
+  "latest": "v5",
   "versions": [
-    { "id": "v1", "version": "1.0.0", "label": "单文件版", "entry": "V1/index.html" },
-    { "id": "v2", "version": "2.0.0", "label": "分离版（HTML/CSS/JS）", "entry": "V2/index.html" },
-    { "id": "v3", "version": "3.0.0", "label": "代码高亮版", "entry": "V3/index.html" },
-    { "id": "v4", "version": "4.0.0", "label": "场景化上下文（可定制 System Prompt）", "entry": "V4/index.html" }
+    { "id": "v4", "version": "4.0.0", "label": "场景化上下文（可定制 System Prompt）", "entry": "V4/index.html" },
+    { "id": "v5", "version": "5.0.0", "label": "场景切换局部刷新", "entry": "V5/index.html" }
   ]
 }
 ```
@@ -64,6 +58,6 @@
 - 未来加新版：在 `manifest.json` 的 `versions` 增项、更新 `latest`，壳无需改动。
 
 ## 校验结果
-- `V4/app.js` 通过 `node --check`；`data/scenarios.json` 解析通过（4 个场景，`defaultId=general`）。
-- V1/V2/V3 未做任何改动（本轮仅新增 V4 / data/scenarios.json / 更新 manifest）。
+- `V4/app.js`、`V5/app.js` 通过 `node --check`；`data/scenarios.json` 解析通过（4 个场景，`defaultId=general`）。
+- V1/V2/V3 已移除（历史版本，见 git 历史）；当前仅保留 V4 / V5。
 - 场景逻辑经只读核对：`buildSystemPromptBlock`（YAML frontmatter + 引用块）、`updateExportData`、`loadScenarios` 回退、`mdToHTML` 的 frontmatter/blockquote 渲染。
