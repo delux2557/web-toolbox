@@ -11,6 +11,7 @@
 | 📖 [梦幻词栈 · 英语生词拾取器](./tools/en-words/) | ✅ 可用 | 粘贴英文 → 智能识别 TOP 生词 → 生词本复习；离线可用，支持 `file://` 直接打开 |
 | 🔗 [Codebase Context](./tools/codebase-context/) | ✅ 可用 | 选择/拖拽项目文件夹 → 一键生成目录树 + 文件内容 Markdown，喂给 AI；纯浏览器聚合，数据不出设备。SPA 壳 + manifest 多版本注册（单文件 → 分离 → 代码高亮 → 场景化 System Prompt），**需 HTTP 服务访问** |
 | 📽 [PPT Player](./tools/ppt-player/) | ✅ 可用 | 演示文稿播放器：SPA 壳 + manifest 版本注册（V1 示例 / V2 纯 CSS 极简引擎），版本切换 + 导出单文件（DOM 克隆 + 资源内联）；**需 HTTP 服务访问** |
+| 📝 [Assessment Studio](./tools/assessment-studio/test-v3.html) | ✅ 可用 | 在线考试系统 V3.3：练习/考试双模式 + 即时反馈 + 计时评分；单文件纯静态，支持 `file://` 直接打开 |
 | ⏱ 番茄时钟 | 🔜 占位 | 简洁番茄工作法计时器（规划中，后续继续做） |
 | { } JSON 格式化 | 🔜 占位 | JSON 格式化、校验、树形浏览（规划中，后续继续做） |
 | 🎨 调色板工具 | 🔜 占位 | 颜色拾取、渐变生成（规划中，后续继续做） |
@@ -27,7 +28,7 @@
 ## 本地使用
 
 ```bash
-# 1) 静态工具（en-words）：直接双击 index.html 即可
+# 1) 静态工具（en-words / assessment-studio）：直接双击 index.html（或 test-v3.html）即可
 
 # 2) SPA / fetch 项目（codebase-context / json_test / ppt-player / workbench）：需启动 HTTP 服务
 python -m http.server 8080
