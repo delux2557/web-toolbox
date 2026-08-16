@@ -1,0 +1,78 @@
+/* ============================================================
+   themes/color.css · 颜色层（由 data-color 驱动）
+   ------------------------------------------------------------
+   权威的颜色定义：背景层级、边框、文字、强调色、语义色、代码块。
+   与 design-system/tokens.css 的 [data-theme] 同值（后加载覆盖，
+   本项目以本文件为"单一真相"）；tokens.css 保留作兼容兜底。
+
+   解耦约定：
+     data-color → 颜色（本文件）
+     data-style → 形态（styles.css：圆角/阴影/模糊）
+   两维度独立，任意组合（2 色系 × 3 风格 = 6 套主题）无需改业务代码。
+   ============================================================ */
+
+/* ---------- 浅色 ---------- */
+:root[data-color="light"] {
+  color-scheme: light;
+
+  --bg: oklch(97.6% 0.005 240);
+  --surface: oklch(99.4% 0.003 240);
+  --surface-2: oklch(95.8% 0.007 240);
+  --surface-3: oklch(93% 0.009 240);
+
+  --border: oklch(90.5% 0.009 240);
+  --border-strong: oklch(84.5% 0.012 240);
+
+  --text: oklch(24% 0.02 255);
+  --text-2: oklch(45% 0.015 255);
+  --text-3: oklch(58% 0.012 250);
+
+  --accent: oklch(0.58 0.18 265);
+  --accent-strong: oklch(0.48 0.22 265);
+  --accent-ink: oklch(0.98 0.01 265);
+  --accent-soft: oklch(0.93 0.04 265);
+
+  --success: oklch(0.52 0.13 155);
+  --warn: oklch(0.66 0.15 65);
+  --danger: oklch(0.58 0.19 25);
+
+  --code-bg: oklch(96.8% 0.008 250);
+  --code-header: oklch(93.4% 0.01 250);
+
+  --glass: oklch(99% 0.003 240 / 0.72);
+  /* 卡片表面透度基准（形态层按风格覆盖：玻璃透 6%，其余 0） */
+  --surface-alpha: 0;
+}
+
+/* ---------- 深色 ---------- */
+:root[data-color="dark"] {
+  color-scheme: dark;
+
+  --bg: oklch(16.5% 0.012 250);
+  --surface: oklch(20% 0.012 250);
+  --surface-2: oklch(23% 0.013 250);
+  --surface-3: oklch(27% 0.014 250);
+
+  --border: oklch(27% 0.015 250);
+  --border-strong: oklch(34% 0.015 250);
+
+  --text: oklch(93% 0.008 240);
+  --text-2: oklch(72% 0.012 240);
+  --text-3: oklch(58% 0.01 240);
+
+  --accent: oklch(0.72 0.16 265);
+  --accent-strong: oklch(0.80 0.14 265);
+  --accent-ink: oklch(0.20 0.02 265);
+  --accent-soft: oklch(0.30 0.06 265);
+
+  --success: oklch(0.72 0.13 155);
+  --warn: oklch(0.80 0.12 75);
+  --danger: oklch(0.70 0.16 25);
+
+  --code-bg: oklch(15% 0.01 250);
+  --code-header: oklch(18.5% 0.011 250);
+
+  --glass: oklch(20% 0.012 250 / 0.7);
+  /* 深色下玻璃略透一点（深色半透明对层次感更敏感） */
+  --surface-alpha: 0;
+}

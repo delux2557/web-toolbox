@@ -15,6 +15,7 @@ import { xiaohongshu } from '@/configs/xiaohongshu'
 
 // 组件型插件：懒加载（点击才编译/加载；单文件模式下全部内联）
 const UrlDecoder = defineAsyncComponent(() => import('@/components/plugins/UrlDecoder.vue'))
+const TableHelper = defineAsyncComponent(() => import('@/components/plugins/TableHelper.vue'))
 
 /** 全部插件（新增插件：在这里加一行） */
 export const pluginRegistry: PluginManifest[] = [
@@ -41,6 +42,14 @@ export const pluginRegistry: PluginManifest[] = [
     description: 'URL / 文本编解码小工具（组件型插件示例）',
     kind: 'component',
     component: UrlDecoder,
+  },
+  {
+    id: 'table-helper',
+    name: '表格助手',
+    category: '数据处理',
+    description: '粘贴表格代码，一键导出 CSV / JSON',
+    kind: 'component',
+    component: TableHelper,
   },
 ]
 

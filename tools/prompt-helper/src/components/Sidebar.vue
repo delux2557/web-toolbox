@@ -14,7 +14,7 @@ import { useHistoryStore } from '@/stores/history'
 import { useLauncherStore } from '@/stores/launcher'
 import { groupPluginsByCategory, pluginRegistry } from '@/plugins'
 import type { PluginManifest } from '@/types/plugin'
-import { useTheme } from '@/composables/useTheme'
+import { useTheme, type VisualStyle } from '@/composables/useTheme'
 import { useToast } from '@/composables/useToast'
 import { formatDateTime } from '@/utils/format'
 import Modal from './Modal.vue'
@@ -22,8 +22,15 @@ import Modal from './Modal.vue'
 const workflow = useWorkflowStore()
 const history = useHistoryStore()
 const launcher = useLauncherStore()
-const { theme, toggle } = useTheme()
+const { color, style, toggleColor, setStyle } = useTheme()
 const { show } = useToast()
+
+/** 风格选择器的选项（label 是用户可读名） */
+const STYLE_OPTIONS: Array<{ id: VisualStyle; label: string }> = [
+  { id: 'clean', label: '极简' },
+  { id: 'glass', label: '玻璃' },
+  { id: 'industrial', label: '工业' },
+]
 
 const categories = groupPluginsByCategory(pluginRegistry)
 
@@ -140,21 +147,53 @@ function newWorkflow() {
       </div>
     </div>
 
-    <div class="sidebar-footer">
-      <span>深色主题</span>
-      <label class="switch">
-        <input type="checkbox" :checked="theme === 'dark'" @change="toggle" />
-        <span class="track"></span>
-      </label>
-      <span style="flex: 1"></span>
-      <button
-        type="button"
-        style="border: none; background: none; color: var(--text-3); cursor: pointer; font-size: 13px"
-        title="清空当前草稿，重新开始"
-        @click="newWorkflow"
-      >
-        新建
-      </button>
+    <div class="sidebar-footer theme-footer">
+      <!-- 色系：亮 / 暗（点击切换） -->
+      <div class="theme-row">
+        <span class="theme-label">色系</span>
+        <div class="seg">
+          <button
+            type="button"
+            :class="{ on: color === 'light' }"
+            @click="color === 'dark' && toggleColor()"
+          >
+            亮
+          </button>
+          <button
+            type="button"
+            :class="{ on: color === 'dark' }"
+            @click="color === 'light' && toggleColor()"
+          >
+            暗
+          </button>
+        </div>
+      </div>
+      <!-- 风格：极简 / 玻璃 / 工业 -->
+      <div class="theme-row">
+        <span class="theme-label">风格</span>
+        <div class="seg">
+          <button
+            v-for="opt in STYLE_OPTIONS"
+            :key="opt.id"
+            type="button"
+            :class="{ on: style === opt.id }"
+            @click="setStyle(opt.id)"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between">
+        <span class="theme-tip">色系 × 风格 自由组合</span>
+        <button
+          type="button"
+          style="border: none; background: none; color: var(--text-3); cursor: pointer; font-size: 13px"
+          title="清空当前草稿，重新开始"
+          @click="newWorkflow"
+        >
+          新建
+        </button>
+      </div>
     </div>
   </aside>
 

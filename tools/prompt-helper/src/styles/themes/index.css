@@ -1,0 +1,13 @@
+/* ============================================================
+   themes/index.css · 主题系统入口
+   ------------------------------------------------------------
+   在 main.ts 中按顺序引入：
+     tokens.css → components.css → design-extras.css → themes/index.css
+   本文件（最后加载）成为主题变量的"权威层"。
+
+   架构：
+     data-color  → color.css（颜色：明/暗）
+     data-style  → styles.css（形态：clean / glass / industrial）
+   ============================================================ */
+@import './color.css';
+@import './styles.css';

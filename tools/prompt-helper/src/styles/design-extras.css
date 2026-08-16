@@ -43,7 +43,7 @@
 .sidebar-logo {
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--radius-s);
   background: var(--accent);
   color: var(--accent-ink);
   display: grid;
@@ -75,7 +75,7 @@
   width: 100%;
   text-align: left;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-s);
   padding: 7px 9px;
   font-size: 13px;
   color: var(--text-2);
@@ -102,7 +102,7 @@
   font-size: 10px;
   color: var(--text-3);
   border: 0.5px solid var(--border-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 0 5px;
   margin-left: 6px;
   vertical-align: 1px;
@@ -123,13 +123,64 @@
   color: var(--text-2);
 }
 
+/* ============ 主题组合选择器（色系 × 风格） ============ */
+.theme-footer {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.theme-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.theme-label {
+  font-size: 12px;
+  color: var(--text-3);
+  width: 32px;
+  flex-shrink: 0;
+}
+.theme-tip {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-s);
+  overflow: hidden;
+  flex: 1;
+}
+.seg button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  padding: 3px 0;
+  cursor: pointer;
+  transition: background 140ms var(--ease-out), color 140ms var(--ease-out);
+}
+.seg button + button {
+  border-left: 1px solid var(--border);
+}
+.seg button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.seg button.on {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 500;
+}
+
 /* ============ 历史条目 ============ */
 .history-item {
   display: block;
   width: 100%;
   text-align: left;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-s);
   padding: 7px 9px;
   background: transparent;
   cursor: pointer;
@@ -142,7 +193,7 @@
   font-size: 10.5px;
   color: var(--accent-ink);
   background: var(--accent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
   margin-left: 6px;
   vertical-align: 1px;
@@ -175,7 +226,7 @@
   color: var(--text-3);
   font-size: 11.5px;
   padding: 1px 5px;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   cursor: pointer;
 }
 .history-item .hi-actions button:hover { background: var(--surface-3); color: var(--danger); }
@@ -190,8 +241,8 @@
   gap: 12px;
   padding: 12px 24px;
   background: var(--glass);
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(var(--blur)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(1.2);
   border-bottom: 1px solid var(--border);
 }
 .workflow-toolbar .wt-title {
@@ -209,13 +260,13 @@
 .workflow-toolbar .wt-progress-bar {
   flex: 1;
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface-3);
   overflow: hidden;
 }
 .workflow-toolbar .wt-progress-fill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent-strong);
   transition: width 200ms var(--ease-out);
 }
@@ -235,7 +286,7 @@
 }
 .anchor-pill {
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 4px 12px;
   font-size: 12px;
   color: var(--text-2);
@@ -309,7 +360,7 @@
   cursor: pointer;
   font-size: 12px;
   padding: 1px 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 .field-label .fl-actions button:hover { background: var(--surface-2); color: var(--text); }
 .field-hint {
@@ -359,7 +410,7 @@
 .step-index {
   width: 24px;
   height: 24px;
-  border-radius: 7px;
+  border-radius: var(--radius-s);
   background: var(--accent);
   color: var(--accent-ink);
   display: grid;
@@ -375,7 +426,7 @@
 }
 .step-badge {
   font-size: 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 2px 9px;
 }
 .step-badge.filled { background: color-mix(in oklab, var(--success) 14%, transparent); color: var(--success); }
@@ -416,7 +467,7 @@
   gap: 8px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-s);
   padding: 6px 10px;
   font-size: 12.5px;
   color: var(--text-2);
@@ -430,7 +481,7 @@
   cursor: pointer;
   font-size: 13px;
   padding: 0 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 .file-chip .fc-remove:hover { color: var(--danger); }
 
@@ -443,7 +494,7 @@
   color: var(--accent-strong);
   background: var(--accent-soft);
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 4px 12px;
   cursor: pointer;
 }
@@ -564,4 +615,31 @@
 @media (max-width: 860px) {
   .sidebar { width: 200px; }
   .sidebar-item-desc { display: none; }
+}
+
+/* ============ 卡片族统一消费形态变量（v1.5.1：让风格切换"看得见"） ============
+   为什么单独追加这一段：
+   之前卡片只有 border、没有 box-shadow，glass 风格的弥散阴影渲染不出来，
+   风格切换"有变量变化但看不见"。
+   现在统一给"卡片"（panel/步骤卡片/输出面板）：
+     box-shadow: var(--shadow-1)           → 玻璃有影、极简/工业无影
+     background: color-mix(...)            → 玻璃微透、其余不透（基色归颜色层，
+                                             透度归形态层 --surface-alpha，任意
+                                             明暗×风格组合都正确）
+     transition                            → 换肤平滑过渡
+   ============================================================ */
+.panel,
+.step-card,
+.output-panel {
+  box-shadow: var(--shadow-1);
+  background: color-mix(
+    in oklab,
+    var(--surface) calc(100% - var(--surface-alpha)),
+    transparent
+  );
+  transition:
+    border-color 0.2s var(--ease-out),
+    box-shadow 0.3s var(--ease-out),
+    border-radius 0.3s var(--ease-out),
+    background 0.3s var(--ease-out);
 }

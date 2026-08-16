@@ -1,12 +1,13 @@
 {
   "name": "prompt-helper",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.6.0",
   "description": "AI 提示词结构化工作台：把向 AI 提问变成按最佳实践填空的标准流程",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && node scripts/build.mjs clean && vite build && node scripts/build.mjs",
+    "build:multi": "vue-tsc --noEmit && node scripts/build.mjs clean && cross-env SINGLE_FILE=false vite build && node scripts/build.mjs multi",
     "release": "vue-tsc --noEmit && node scripts/build.mjs clean && vite build && node scripts/build.mjs release",
     "preview": "vite preview",
     "test": "vitest run",
@@ -19,6 +20,8 @@
   "devDependencies": {
     "@types/node": "^26.2.0",
     "@vitejs/plugin-vue": "^6.0.8",
+    "cross-env": "^10.1.0",
+    "happy-dom": "^20.11.2",
     "typescript": "5.9",
     "vite": "^8.2.1",
     "vite-plugin-singlefile": "^2.3.3",

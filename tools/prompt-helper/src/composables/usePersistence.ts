@@ -13,8 +13,12 @@ import { watch, type Ref } from 'vue'
 
 /** 所有存储 key 的唯一来源（避免各处写魔法字符串） */
 export const STORAGE_KEYS = {
-  /** 主题：light / dark */
+  /** 主题：light / dark（旧 key，v1.5 起由 color 取代，仅兼容迁移用） */
   theme: 'ph:theme',
+  /** 色系（v1.5+）：light / dark */
+  color: 'ph:color',
+  /** 视觉风格（v1.5+）：clean / glass / industrial */
+  style: 'ph:style',
   /** 用户偏好（隐藏字段/改样板句等），见 types/workflow.ts 的 WorkflowPrefs */
   prefs: 'ph:prefs',
   /** 工作流草稿前缀：ph:draft:{workflowId}，每个工作流一份 */
@@ -25,7 +29,12 @@ export const STORAGE_KEYS = {
   activeHistory: 'ph:activeHistory',
   /** 当前激活的插件（launcher store，刷新后不丢） */
   activePlugin: 'ph:activePlugin',
+  /** 数据 schema 版本号（v1.6+）：持久化结构变更时递增，供未来迁移判断 */
+  schemaVersion: 'ph:schema-version',
 } as const
+
+/** 当前数据 schema 版本（=1 为 v1.6 首次引入；结构变更时递增并在迁移逻辑处说明） */
+export const SCHEMA_VERSION = 1
 
 /** 读取并反序列化（解析失败返回兜底值，避免一个坏数据搞崩整个应用） */
 export function load<T>(key: string, fallback: T): T {

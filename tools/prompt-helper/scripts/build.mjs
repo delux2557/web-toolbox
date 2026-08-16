@@ -28,6 +28,7 @@ const VERSION_DIR_RE = /^v\d+\.\d+\.\d+$/
 // ---------- 解析命令行参数 ----------
 const args = process.argv.slice(2)
 const isRelease = args[0] === 'release'
+const isMulti = args[0] === 'multi'
 
 function getArg(name) {
   const values = []
@@ -96,7 +97,7 @@ function safeRm(target) {
 function cleanIsolated(keepExtra = []) {
   const dist = join(ROOT, 'dist')
   if (!existsSync(dist)) return
-  const keep = new Set(['latest', '.tmp-build', ...keepExtra])
+  const keep = new Set(['latest', '.tmp-build', 'multi', ...keepExtra])
   for (const entry of readdirSafe(dist)) {
     if (keep.has(entry) || VERSION_DIR_RE.test(entry)) continue
     const p = join(dist, entry)
@@ -111,6 +112,29 @@ function readdirSafe(dir) {
   } catch {
     return []
   }
+}
+
+/** 递归拷贝目录（逐文件"读-写"，避免 cpSync 的 unlink 被沙箱拦截） */
+function copyDir(from, to) {
+  const entries = readdirSafe(from)
+  mkdirSync(to, { recursive: true })
+  for (const name of entries) {
+    const src = join(from, name)
+    const dst = join(to, name)
+    if (statSync(src).isDirectory()) copyDir(src, dst)
+    else copyFile(src, dst)
+  }
+}
+
+/** 发布成功后把 package.json 的 version 同步为最新已发布版本（消除双真相） */
+function syncPkgVersion(version) {
+  const pkgPath = join(ROOT, 'package.json')
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+  const bare = version.replace(/^v/, '')
+  if (pkg.version === bare) return
+  pkg.version = bare
+  writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8')
+  console.log(`📌 已同步 package.json version → ${bare}`)
 }
 
 // ---------- 更新 latest（带 .bak 回退） ----------
@@ -148,6 +172,17 @@ if (args[0] === 'clean') {
   process.exit(0)
 }
 
+// multi 模式：多文件构建产物（部署版，index.html + assets/，插件按需加载）
+if (isMulti) {
+  const MULTI = join(ROOT, 'dist', 'multi')
+  safeRm(MULTI)
+  copyDir(TMP, MULTI)
+  console.log(`✅ 多文件构建产物已就绪：dist/multi/（index.html + assets/）`)
+  console.log(`   由 build:multi 生成（SINGLE_FILE=false，跳过单文件内联）`)
+  console.log(`   适合静态服务器部署：首屏只加载核心，插件按需加载`)
+  process.exit(0)
+}
+
 if (!existsSync(SRC_HTML)) {
   console.error('❌ 未找到构建产物 dist/.tmp-build/index.html，请先运行 vite build')
   process.exit(1)
@@ -170,8 +205,16 @@ if (!isRelease) {
     process.exit(1)
   }
   const messages = getArg('message')
+  const force = getArg('force').length > 0
 
+  // 防覆盖：历史归档已存在时阻止（除非 --force 显式覆盖）
   const targetDir = join(ROOT, 'dist', version)
+  if (existsSync(targetDir) && !force) {
+    console.error(`❌ dist/${version} 已存在（防止覆盖历史归档）。`)
+    console.error(`   如确认要覆盖，请追加 --force；如需新版本，请更换 --version`)
+    process.exit(1)
+  }
+
   mkdirSync(targetDir, { recursive: true })
   copyFile(SRC_HTML, join(targetDir, 'index.html'))
   console.log(`📦 已归档: dist/${version}/index.html`)
@@ -179,6 +222,7 @@ if (!isRelease) {
   writeRelease(version, messages)
   updateLatest()
   cleanIsolated([version])
+  syncPkgVersion(version)
   console.log(`✅ 发布完成 ${version}：${htmlSize} KB（未压缩）`)
   console.log(`   产物：dist/${version}/index.html  |  说明：dist/${version}/RELEASE.md`)
   console.log(`   latest 已同步到 ${version}，旧文件备份在 dist/latest/index.html.bak`)

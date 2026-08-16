@@ -21,4 +21,9 @@ export interface ApiProvider {
 }
 
 /** 当前是否处于"云端模式"（服务端部署后置为 true，或由构建环境变量注入） */
-export const IS_SERVER_MODE = false
+/**
+ * 当前是否处于"云端模式"（有服务端后通过构建注入：
+ *   .env 文件写 VITE_SERVER_MODE=true，或构建命令注入）
+ * 切换后 services/index.ts 改为实例化 HttpApiProvider，插件零改动。
+ */
+export const IS_SERVER_MODE = import.meta.env.VITE_SERVER_MODE === 'true'

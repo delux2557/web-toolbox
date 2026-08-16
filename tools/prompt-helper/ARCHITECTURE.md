@@ -63,6 +63,23 @@ const MyTool = defineAsyncComponent(() => import('@/components/plugins/MyTool.vu
 
 ---
 
+## 二·五、多维主题系统（v1.5+）
+
+**两个独立维度，任意组合（2 色系 × 3 风格 = 6 套主题）**：
+
+| 维度 | 属性 | 层文件 | 值 |
+|---|---|---|---|
+| 色系（颜色） | `data-color` | `src/styles/themes/color.css` | `light` / `dark` |
+| 风格（形态） | `data-style` | `src/styles/themes/styles.css` | `clean`（默认）/ `glass` / `industrial` |
+
+- **解耦原则**：颜色层只管色值（背景/文字/边框），形态层只管圆角/阴影/模糊；互不干扰，新增风格只需在 `styles.css` 加一组变量覆盖
+- **权威层级**：`themes/` 最后加载覆盖 design-system 默认值；切换主题**任何 Vue 组件零改动**（组件只用 `var(--xxx)`）
+- **硬编码纪律**：全项目（含 design-system）圆角/阴影/模糊已收敛为变量（`--radius-xs/s/m/l/pill`、`--shadow-1/2`、`--blur`），新组件必须用变量
+- **持久化**：`ph:color` + `ph:style`；v1.4 旧 `ph:theme` 自动迁移；`index.html` 内联脚本在首帧前设置三个属性防闪烁
+- **风格说明**：clean 静谧极简（默认，适合长文本）；glass 浅层玻璃（顶栏/侧边栏，内容卡片保持实体背景防 blur 掉帧）；industrial 工业哑光（数据排查场景）
+
+---
+
 ## 四、平台服务抽象（services/）与能力边界
 
 插件通过 `api`（见 `src/services/index.ts`）访问平台能力，**不感知本地还是云端**：

@@ -3,20 +3,29 @@
 // - Vitest：单元测试（复用同一份 alias 配置）
 //
 // 打包架构（版本化发布）：
-//   vite build 只负责把产物构建到 dist/.tmp-build/index.html（单文件），
+//   vite build 只负责把产物构建到 dist/.tmp-build（单文件 index.html），
 //   然后由 scripts/build.mjs 布置到正式位置：
 //     npm run build            → dist/latest/index.html
 //     npm run release -- --version v1.2.0 --message "xxx"
 //                              → dist/v1.2.0/index.html + RELEASE.md + 更新 latest
+//     npm run build:multi      → dist/multi/（多文件：index.html + assets/）
 //   为什么多绕一步？vite build 默认会清空整个 outDir，
 //   如果直接输出 dist/，历史版本文件夹（v1.0.0/…）会被全部删掉。
+//
+// 双轨构建（v1.6+ 接通）：
+//   SINGLE_FILE=false（build:multi）时跳过 viteSingleFile，
+//   产出"代码拆分"版本（插件按需加载，适合静态服务器部署）；
+//   默认 SINGLE_FILE=true，单文件内联（零安装分发，双击即用）。
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 import { fileURLToPath, URL } from 'node:url'
 
+/** 单文件模式：默认开启，build:multi 时关闭（跨平台环境变量由 cross-env 注入） */
+const isSingleFile = process.env.SINGLE_FILE !== 'false'
+
 export default defineConfig({
-  plugins: [vue(), viteSingleFile()],
+  plugins: [vue(), ...(isSingleFile ? [viteSingleFile()] : [])],
   resolve: {
     // 路径别名：代码里写 @/xxx 就指向 src/xxx，避免写一长串相对路径
     alias: {

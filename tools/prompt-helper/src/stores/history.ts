@@ -8,7 +8,12 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import type { HistoryEntry, WorkflowDraft } from '@/types/workflow'
-import { load, save, STORAGE_KEYS } from '@/composables/usePersistence'
+import {
+  load,
+  save,
+  SCHEMA_VERSION,
+  STORAGE_KEYS,
+} from '@/composables/usePersistence'
 import { genId } from '@/utils/format'
 
 /** 深拷贝草稿（草稿是纯 JSON 数据，用 JSON 方法即可） */
@@ -16,9 +21,32 @@ function cloneDraft(draft: WorkflowDraft): WorkflowDraft {
   return JSON.parse(JSON.stringify(draft)) as WorkflowDraft
 }
 
+/**
+ * 从 localStorage 读取历史并净化：过滤缺关键字段的损坏条目，
+ * 防止旧版本数据（或手动改坏的 localStorage）拖垮列表。
+ * 同时记录当前 schema 版本，供未来数据迁移判断。
+ */
+function loadEntries(): HistoryEntry[] {
+  const list = load<HistoryEntry[]>(STORAGE_KEYS.history, [])
+  if (!Array.isArray(list)) return []
+  const clean = list.filter(
+    (e) =>
+      e &&
+      typeof e.id === 'string' &&
+      typeof e.workflowId === 'string' &&
+      typeof e.name === 'string' &&
+      typeof e.draft === 'object',
+  )
+  if (clean.length !== list.length) {
+    save(STORAGE_KEYS.history, clean)
+  }
+  save(STORAGE_KEYS.schemaVersion, SCHEMA_VERSION)
+  return clean
+}
+
 export const useHistoryStore = defineStore('history', () => {
   /** 历史列表（新的在前） */
-  const entries = ref<HistoryEntry[]>(load<HistoryEntry[]>(STORAGE_KEYS.history, []))
+  const entries = ref<HistoryEntry[]>(loadEntries())
 
   // 任何改动自动持久化
   watch(entries, (list) => save(STORAGE_KEYS.history, list), { deep: true })

@@ -1,0 +1,84 @@
+/* ============================================================
+   themes/styles.css · 形态层（由 data-style 驱动）
+   ------------------------------------------------------------
+   三套视觉风格，只覆盖"形态"变量（圆角/阴影/模糊/玻璃），
+   完全不碰颜色（颜色归 color.css 管）——两维度彻底解耦。
+
+   clean（默认）      静谧极简：小圆角、无阴影、实体表面
+                      适合长时间文本/表格处理，视觉疲劳最小
+   glass             浅层玻璃：大圆角、轻弥散阴影、顶栏侧边栏毛玻璃
+                      只作用于顶层（侧边栏/工具条/弹窗），
+                      内容卡片保持实体背景——避免大面积 blur
+                      掉帧与文本对比度问题
+   industrial        工业实用：极小圆角、无阴影、扁平强对比
+                      契合 SQL/DDL 等数据排查场景的专业可靠感
+   ============================================================ */
+
+/* ---------- 基础形态（默认值，也被 clean 复用） ---------- */
+:root {
+  /* 新增令牌：细圆角（小标签/徽标用）与胶囊圆角（开关/气泡用），
+     把组件样式里的硬编码数字收敛到这里 */
+  --radius-xs: 4px;
+  --radius-pill: 999px;
+  /* 玻璃模糊强度（毛玻璃只用于顶栏/侧边栏，由 design-extras 消费） */
+  --blur: 14px;
+}
+
+/* ============ 风格 1：清新极简（默认） ============ */
+:root[data-style="clean"] {
+  --radius-s: 6px;
+  --radius-m: 8px;
+  --radius-l: 12px;
+
+  /* 无阴影：靠留白和 1px 细边框建立层次 */
+  --shadow-1: none;
+  --shadow-2: none;
+
+  --blur: 0px; /* 实体顶栏，不模糊 */
+
+  /* 卡片完全不透明：纯平表面 */
+  --surface-alpha: 0;
+}
+
+/* ============ 风格 2：毛玻璃质感 ============ */
+:root[data-style="glass"] {
+  --radius-s: 10px;
+  --radius-m: 14px;
+  --radius-l: 22px;
+
+  /* 轻弥散阴影：悬浮感而不厚重 */
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.05), 0 8px 28px oklch(0 0 0 / 0.09);
+  --shadow-2: 0 2px 8px oklch(0 0 0 / 0.07), 0 20px 60px oklch(0 0 0 / 0.14);
+
+  --blur: 22px; /* 顶栏/侧边栏更强的玻璃感 */
+
+  /* 卡片微微透出底层颜色（轻玻璃，文本对比度不受损） */
+  --surface-alpha: 0.06;
+}
+/* 深色下玻璃略透一点（基色由颜色层提供，这里只按明暗微调透度） */
+:root[data-color="dark"][data-style="glass"] {
+  --surface-alpha: 0.14;
+}
+
+/* ============ 风格 3：工业哑光 ============ */
+:root[data-style="industrial"] {
+  --radius-s: 2px;
+  --radius-m: 4px;
+  --radius-l: 6px;
+
+  --shadow-1: none;
+  --shadow-2: none;
+
+  --blur: 0px;
+
+  --surface-alpha: 0;
+}
+/* 工业风增强边框对比（硬朗感；值按明暗分别给出，避免风格层猜颜色） */
+:root[data-color="light"][data-style="industrial"] {
+  --border: oklch(78% 0.02 250);
+  --border-strong: oklch(68% 0.025 250);
+}
+:root[data-color="dark"][data-style="industrial"] {
+  --border: oklch(36% 0.02 250);
+  --border-strong: oklch(46% 0.02 250);
+}

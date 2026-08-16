@@ -5,8 +5,15 @@
 //   persist / load  → localStorage（按插件隔离 key 空间）
 //   aiGenerate      → 用户自备 API Key + OpenAI 兼容接口（fetch）
 //   pushConnector   → 用户配置 webhook URL；未配置时降级为复制到剪贴板
-// 边界（写进 ARCHITECTURE.md）：无 OAuth、无定时任务、无云端聚合；
-// 需要这些能力时切换到 HttpApiProvider。
+//
+// ⚠️ 信任边界（务必理解）：
+//   - API Key 明文存 localStorage（ph:ai:key），"不出本机"是相对安全——
+//     任何能注入本页面的 XSS 都能窃取。因此插件内容渲染必须遵守
+//     textContent 纪律（本项目全局如此，禁止 v-html 渲染用户输入）。
+//   - aiGenerate 的 fetch 是跨域请求，file:// 协议下浏览器会拦截 CORS；
+//     该能力面向"自建服务端/本地代理"场景，单文件分发时需用户
+//     配置允许跨域的接口（或未来走 HttpApiProvider）。
+// 需要更强能力（OAuth、定时任务、云端聚合）时切换到 HttpApiProvider。
 // ============================================================
 import type { ApiProvider } from './types'
 import { load, save } from '@/composables/usePersistence'

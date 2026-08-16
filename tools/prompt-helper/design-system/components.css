@@ -51,14 +51,14 @@ svg { display: block; }
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 20px; height: 58px; flex-shrink: 0;
   background: var(--glass);
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(var(--blur)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(1.2);
   border-bottom: 1px solid var(--border);
   position: relative; z-index: 20;
 }
 .brand { display: flex; align-items: center; gap: 11px; }
 .logo {
-  width: 30px; height: 30px; border-radius: 8px;
+  width: 30px; height: 30px; border-radius: var(--radius-s);
   background: var(--accent); color: var(--accent-ink);
   display: grid; place-items: center; flex-shrink: 0;
 }
@@ -68,7 +68,7 @@ svg { display: block; }
 
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
 .icon-btn {
-  width: 34px; height: 34px; border-radius: 8px;
+  width: 34px; height: 34px; border-radius: var(--radius-s);
   display: grid; place-items: center;
   background: transparent; border: 1px solid transparent;
   color: var(--text-2);
@@ -91,7 +91,7 @@ main { flex: 1; overflow: hidden; position: relative; }
 
 .empty-badge {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 12px; border-radius: 999px;
+  padding: 5px 12px; border-radius: var(--radius-pill);
   background: var(--accent-soft); color: var(--accent-strong);
   font-size: 12.5px; font-weight: 500; margin-bottom: 22px;
 }
@@ -135,12 +135,12 @@ main { flex: 1; overflow: hidden; position: relative; }
 .btn-ghost:hover { background: var(--surface-2); }
 .btn:disabled { opacity: 0.42; cursor: not-allowed; }
 .btn:disabled:active { transform: none; }
-.btn-sm { height: 34px; padding: 0 13px; font-size: 13px; border-radius: 8px; }
+.btn-sm { height: 34px; padding: 0 13px; font-size: 13px; border-radius: var(--radius-s); }
 
 /* ============ 开关（Switch） ============ */
 .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); user-select: none; cursor: pointer; }
 .switch input { display: none; }
-.switch .track { width: 34px; height: 20px; border-radius: 999px; background: var(--surface-3); position: relative; transition: background 160ms var(--ease-out); }
+.switch .track { width: 34px; height: 20px; border-radius: var(--radius-pill); background: var(--surface-3); position: relative; transition: background 160ms var(--ease-out); }
 .switch .track::after {
   content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
   background: #fff; transition: transform 160ms var(--ease-out); box-shadow: 0 1px 3px oklch(0 0 0 / 0.3);
@@ -190,7 +190,7 @@ main { flex: 1; overflow: hidden; position: relative; }
 .select-control {
   height: 28px; padding: 0 6px; font-size: 12px; font-weight: 400;
   min-width: 112px; max-width: 150px;
-  border: 1px solid var(--border-strong); border-radius: 6px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-s);
   background: var(--surface); color: var(--text-2);
   cursor: pointer; outline: none;
 }
@@ -205,8 +205,8 @@ main { flex: 1; overflow: hidden; position: relative; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .progress-wrap { width: min(420px, 82vw); }
-.progress-bar { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
-.progress-fill { height: 100%; width: 0%; border-radius: 999px; background: var(--accent-strong); transition: width 120ms linear; }
+.progress-bar { height: 6px; border-radius: var(--radius-pill); background: var(--surface-3); overflow: hidden; }
+.progress-fill { height: 100%; width: 0%; border-radius: var(--radius-pill); background: var(--accent-strong); transition: width 120ms linear; }
 .progress-label { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--text-3); font-family: var(--font-mono); }
 
 /* ============ 目录树（树形结构通用样式，可选） ============ */
@@ -215,7 +215,7 @@ main { flex: 1; overflow: hidden; position: relative; }
 .tree li.open > .nested { display: block; }
 .tree-row {
   display: flex; align-items: center; gap: 7px;
-  padding: 4px 8px; border-radius: 6px;
+  padding: 4px 8px; border-radius: var(--radius-s);
   font-size: 13px; color: var(--text-2); cursor: default;
   font-family: var(--font-mono); white-space: nowrap;
 }
@@ -244,11 +244,11 @@ main { flex: 1; overflow: hidden; position: relative; }
 .modal {
   width: 100%; max-width: 480px; max-height: 80vh; display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 12px; box-shadow: 0 16px 48px oklch(0 0 0 / 0.2); overflow: hidden;
+  border-radius: var(--radius-l); box-shadow: var(--shadow-2); overflow: hidden;
 }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
 .modal-title { font-size: 14px; font-weight: 600; color: var(--text); }
-.modal-close { border: none; background: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--text-3); padding: 2px 8px; border-radius: 6px; }
+.modal-close { border: none; background: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--text-3); padding: 2px 8px; border-radius: var(--radius-s); }
 .modal-close:hover { background: var(--surface-2); color: var(--text); }
 .modal-body { padding: 16px 18px; overflow: auto; font-size: 13.5px; line-height: 1.7; color: var(--text-2); white-space: pre-wrap; word-break: break-word; }
 .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); }
@@ -257,7 +257,7 @@ main { flex: 1; overflow: hidden; position: relative; }
 .toast-wrap { position: fixed; bottom: 52px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
 .toast {
   background: var(--text); color: var(--bg);
-  padding: 10px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 500;
+  padding: 10px 16px; border-radius: var(--radius-m); font-size: 13.5px; font-weight: 500;
   box-shadow: var(--shadow-2);
   opacity: 0; transform: translateY(8px) scale(0.96);
   transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
@@ -271,8 +271,8 @@ main { flex: 1; overflow: hidden; position: relative; }
   display: flex; align-items: center; gap: 16px;
   height: 40px; padding: 0 20px; flex-shrink: 0;
   border-top: 1px solid var(--border);
-  background: var(--glass); backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: var(--glass); backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   font-size: 12.5px; color: var(--text-3); font-family: var(--font-mono);
 }
 .statusbar .stat { font-variant-numeric: tabular-nums; }
@@ -290,7 +290,7 @@ main { flex: 1; overflow: hidden; position: relative; }
 .markdown h3 { font-size: 14px; margin: 26px 0 8px; font-weight: 600; color: var(--text-2); }
 .markdown h3 code { color: var(--accent-strong); }
 .markdown p { margin: 6px 0; color: var(--text-2); }
-.markdown code { font-size: 0.9em; background: var(--surface-2); padding: 2px 6px; border-radius: 5px; color: var(--text); }
+.markdown code { font-size: 0.9em; background: var(--surface-2); padding: 2px 6px; border-radius: var(--radius-xs); color: var(--text); }
 .markdown hr { border: none; border-top: 1px solid var(--border); margin: 22px 0; }
 .markdown blockquote {
   margin: 12px 0 22px;
@@ -331,7 +331,7 @@ figure.code .hljs-emphasis { font-style: italic; }
 figure.code .hljs-strong { font-weight: 600; }
 
 /* ============ 焦点可见 & 通用 ============ */
-:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; border-radius: 6px; }
+:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; border-radius: var(--radius-s); }
 [hidden] { display: none !important; }
 
 /* ============ 动效降级（无障碍） ============ */

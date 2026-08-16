@@ -8,6 +8,7 @@ import { createPinia } from 'pinia'
 import '../design-system/tokens.css'
 import '../design-system/components.css'
 import './styles/design-extras.css'
+import './styles/themes/index.css'
 import App from './App.vue'
 
 createApp(App).use(createPinia()).mount('#app')

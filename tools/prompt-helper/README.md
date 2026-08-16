@@ -98,11 +98,15 @@ src/
 │   └── WorkflowView.vue             ← 主工作流视图：组装上面所有组件
 │
 └── styles/
-    └── design-extras.css            ← 补充 design-system 缺失的样式
-                                       （侧边栏/输入框/锚点/步骤卡片等）
+    ├── design-extras.css            ← 补充 design-system 缺失的样式
+    │                                 （侧边栏/输入框/锚点/步骤卡片等）
+    └── themes/                      ← 主题系统（v1.5+，多维主题）
+        ├── color.css                ← 颜色层：data-color="light|dark"
+        ├── styles.css               ← 形态层：data-style="clean|glass|industrial"
+        └── index.css                ← 主题入口（main.ts 最后导入）
 ```
 
-外部的 `design-system/` 是从 V5 提取的"设计资产"，**本项目不修改它**——所有视觉都在 `tokens.css` + `components.css` + 我们自己加的 `design-extras.css` 里。
+**主题架构（v1.5+）**：明暗（`data-color`）与视觉风格（`data-style`）是两个独立维度，可自由组合出 2×3 套主题。视觉权威在 `src/styles/themes/`（后加载覆盖）；`design-system/` 提供默认基底（v1.5 起也收敛了硬编码，随风格变量联动）。切换主题时**任何 Vue 组件代码零改动**——这就是"CSS 变量 + data 属性"换肤的原理。
 
 ---
 
@@ -227,7 +231,7 @@ promptTemplate: '请分析：\n## {{title}}\n\n## {{detail}}'
 
 ### 调整样式
 
-视觉全部来自 `design-system/`（不动）和 `src/styles/design-extras.css`（可改）。改 design-extras 里某个类的样式，立即热更新生效。明暗主题通过 tokens.css 的 CSS 变量自动切换。
+视觉全部来自 `design-system/`（上游基底）+ `src/styles/design-extras.css`（业务补充）+ `src/styles/themes/`（主题权威层，v1.5+）。改 design-extras 里某个类的样式，立即热更新生效。明暗/风格通过 CSS 变量自动切换（侧边栏底部"色系 × 风格"选择器）。
 
 ### 修改编译器规则
 
@@ -260,7 +264,7 @@ promptTemplate: '请分析：\n## {{title}}\n\n## {{detail}}'
 - **TypeScript 5.9**（strict 严格模式）
 - **Pinia 4** 状态管理
 - **Vitest 4** 单元测试
-- 零第三方 UI 库：所有样式来自 `design-system/`
+- 零第三方 UI 库：所有样式来自 `design-system/` + 项目层 `styles/`（themes 主题系统）
 
 ---
 
