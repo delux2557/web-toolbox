@@ -1,0 +1,541 @@
+/* ============================================================
+   design-extras.css · 补充样式（追加在 components.css 之后）
+   ------------------------------------------------------------
+   design-system 只提供了"通用组件"（按钮/面板/开关/弹窗等），
+   本项目还缺：表单输入控件、侧边栏、锚点导航、步骤卡片、
+   输出面板、历史条目等业务级组件。
+   本文件补充它们，且严格使用 tokens.css 的 CSS 变量，
+   明暗主题自动生效。这就是"设计系统 + 业务扩展"的正确姿势。
+   ============================================================ */
+
+/* ============ 整体布局：侧边栏 + 主区 ============ */
+.app-layout {
+  display: flex;
+  height: 100vh;
+}
+.main-area {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;          /* 主区自己滚动，侧边栏固定 */
+  background: var(--bg);
+}
+.main-inner {
+  max-width: 780px;          /* 内容不要太宽，保持阅读舒适度 */
+  margin: 0 auto;
+  padding: 22px 24px 48px;
+}
+
+/* ============ 左侧边栏（AI 对话式） ============ */
+.sidebar {
+  width: 242px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+}
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 12px;
+}
+.sidebar-logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+.sidebar-brand {
+  font-weight: 600;
+  font-size: 14px;
+  flex: 1;
+}
+.sidebar-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;          /* 场景 + 历史太多时这里滚动 */
+  padding: 0 8px 12px;
+}
+.sidebar-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 8px 6px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.sidebar-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 13px;
+  color: var(--text-2);
+  background: transparent;
+  cursor: pointer;
+  transition: background 140ms var(--ease-out), color 140ms var(--ease-out);
+}
+.sidebar-item:hover { background: var(--surface-3); color: var(--text); }
+.sidebar-item.active {
+  background: var(--accent-soft);
+  border-color: color-mix(in oklab, var(--accent) 35%, transparent);
+  color: var(--accent-strong);
+  font-weight: 500;
+}
+.sidebar-item-desc {
+  display: block;
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+  font-weight: 400;
+}
+.sidebar-item.active .sidebar-item-desc { color: var(--text-2); }
+.sidebar-footer {
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* ============ 历史条目 ============ */
+.history-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 140ms var(--ease-out);
+}
+.history-item:hover { background: var(--surface-3); }
+.history-item .hi-title {
+  font-size: 12.5px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-item .hi-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.history-item .hi-actions {
+  display: none;
+  gap: 2px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.history-item:hover .hi-actions { display: inline-flex; }
+.history-item .hi-actions button {
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 11.5px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.history-item .hi-actions button:hover { background: var(--surface-3); color: var(--danger); }
+
+/* ============ 顶栏（工作流工具条） ============ */
+.workflow-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom: 1px solid var(--border);
+}
+.workflow-toolbar .wt-title {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.workflow-toolbar .wt-progress {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.workflow-toolbar .wt-progress-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.workflow-toolbar .wt-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  transition: width 200ms var(--ease-out);
+}
+.workflow-toolbar .wt-count {
+  font-size: 12px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+/* ============ 锚点导航（可点击滚动到对应步骤） ============ */
+.anchor-nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.anchor-pill {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 140ms var(--ease-out);
+}
+.anchor-pill:hover { border-color: var(--border-strong); color: var(--text); }
+.anchor-pill.active {
+  background: var(--accent-soft);
+  border-color: color-mix(in oklab, var(--accent) 35%, transparent);
+  color: var(--accent-strong);
+  font-weight: 500;
+}
+.anchor-pill.done { border-color: color-mix(in oklab, var(--success) 40%, transparent); color: var(--success); }
+.anchor-pill.skipped { text-decoration: line-through; opacity: 0.55; }
+
+/* ============ 表单控件（design-system 缺失的基础款） ============ */
+.input,
+.textarea {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
+}
+.textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.6;
+}
+.input::placeholder,
+.textarea::placeholder { color: var(--text-3); }
+.input:focus,
+.textarea:focus {
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent);
+}
+.textarea.mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+/* ============ 字段块（一个字段的完整单元） ============ */
+.field-block { margin-bottom: 14px; }
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+.field-label .fl-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+.field-label .fl-actions button {
+  border: none;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.field-label .fl-actions button:hover { background: var(--surface-2); color: var(--text); }
+.field-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 5px;
+}
+.field-hint .fh-btn {
+  border: none;
+  background: none;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+.field-hint .fh-btn:hover { text-decoration: underline; }
+.add-more {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-m);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 140ms var(--ease-out);
+}
+.add-more:hover { border-color: var(--accent-strong); color: var(--accent-strong); background: var(--accent-soft); }
+
+/* ============ 步骤卡片 ============ */
+.step-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  scroll-margin-top: 84px;   /* 锚点滚动时给吸顶工具条让位 */
+  transition: border-color 140ms var(--ease-out);
+}
+.step-card.active-step { border-color: color-mix(in oklab, var(--accent) 45%, transparent); }
+.step-card.skipped-step { opacity: 0.62; }
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.step-index {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.step-index.muted { background: var(--surface-3); color: var(--text-3); }
+.step-name {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.step-badge {
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.step-badge.filled { background: color-mix(in oklab, var(--success) 14%, transparent); color: var(--success); }
+.step-badge.optional { border: 1px solid var(--border-strong); color: var(--text-3); }
+.step-badge.skipped { background: var(--surface-3); color: var(--text-3); }
+.step-desc {
+  font-size: 13px;
+  color: var(--text-2);
+  margin: 0 0 14px 34px;
+  line-height: 1.6;
+}
+.step-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+/* ============ 拖拽上传（复用 dropzone 但更紧凑） ============ */
+.file-dropzone {
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-m);
+  padding: 22px 18px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  background: var(--surface-2);
+  transition: border-color 160ms var(--ease-out), background 160ms var(--ease-out);
+}
+.file-dropzone:hover,
+.file-dropzone.drag { border-color: var(--accent-strong); background: var(--accent-soft); }
+.file-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.file-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.file-chip .fc-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-chip .fc-size { color: var(--text-3); font-family: var(--font-mono); font-size: 11.5px; }
+.file-chip .fc-remove {
+  border: none;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+.file-chip .fc-remove:hover { color: var(--danger); }
+
+/* ============ CSV/JSON 表格预览 ============ */
+.csv-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: none;
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.csv-toggle:hover { filter: brightness(0.97); }
+.csv-table-wrap {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.csv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.csv-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  color: var(--text-2);
+  text-align: left;
+  font-weight: 500;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.csv-table td {
+  padding: 6px 10px;
+  border-bottom: 0.5px solid var(--border);
+  color: var(--text);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.csv-table tr:last-child td { border-bottom: none; }
+.csv-note {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 6px;
+}
+
+/* ============ 输出面板 ============ */
+.output-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  margin-top: 26px;
+  scroll-margin-top: 84px;
+}
+.output-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.output-head .oh-title {
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1;
+}
+.output-pre {
+  margin: 0;
+  padding: 16px 18px;
+  max-height: 420px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--code-bg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.output-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.output-foot .of-tip {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+/* ============ 空状态 / 提示条 ============ */
+.empty-hint {
+  text-align: center;
+  color: var(--text-3);
+  font-size: 13px;
+  padding: 30px 0;
+}
+.draft-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-l);
+  padding: 10px 16px;
+  margin-top: 20px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* ============ 模态框（复用 components.css 的 .modal，微调宽度） ============ */
+.modal.wide { max-width: 560px; }
+
+/* ============ 响应式：窄屏时侧边栏收窄 ============ */
+@media (max-width: 860px) {
+  .sidebar { width: 200px; }
+  .sidebar-item-desc { display: none; }
+}

@@ -1,0 +1,136 @@
+/* ============================================================
+   Design Tokens · 设计令牌
+   来源：Context 项目 V5/style.css（OKLCH 色彩体系）
+   用途：移植到 Vue + Vite 项目的全局样式入口
+
+   用法：
+   1. 在项目的 <head> 或 main.js 中引入本文件
+   2. 在 <html> 标签上设置 data-theme="light" 或 data-theme="dark"
+   3. 任意组件中直接使用 var(--xxx) 取值即可
+   ============================================================ */
+
+/* ---------- 通用令牌（不随主题变化） ---------- */
+:root {
+  /* 字体 */
+  --font-sans: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code",
+    "Consolas", monospace;
+
+  /* 圆角 */
+  --radius-s: 7px;
+  --radius-m: 10px;
+  --radius-l: 16px;
+
+  /* 动效缓动 */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* 阴影（深色主题下会被覆盖为 none） */
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.04), 0 4px 18px oklch(0 0 0 / 0.05);
+  --shadow-2: 0 2px 6px oklch(0 0 0 / 0.06), 0 14px 40px oklch(0 0 0 / 0.09);
+}
+
+/* ---------- 浅色主题 ---------- */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* 背景层级：bg 页面底 → surface 卡片 → surface-2/3 次级 */
+  --bg: oklch(97.6% 0.005 240);
+  --surface: oklch(99.4% 0.003 240);
+  --surface-2: oklch(95.8% 0.007 240);
+  --surface-3: oklch(93% 0.009 240);
+
+  /* 边框 */
+  --border: oklch(90.5% 0.009 240);
+  --border-strong: oklch(84.5% 0.012 240);
+
+  /* 文字层级：text 主 → text-2 次 → text-3 弱 */
+  --text: oklch(24% 0.02 255);
+  --text-2: oklch(45% 0.015 255);
+  --text-3: oklch(58% 0.012 250);
+
+  /* 强调色（品牌色，建议换成你自己的主色调） */
+  --accent: oklch(0.58 0.18 265);
+  --accent-strong: oklch(0.48 0.22 265);
+  --accent-ink: oklch(0.98 0.01 265);   /* 强调色底上的文字 */
+  --accent-soft: oklch(0.93 0.04 265);  /* 强调色的浅底 */
+
+  /* 语义色 */
+  --success: oklch(0.52 0.13 155);
+  --warn: oklch(0.66 0.15 65);
+  --danger: oklch(0.58 0.19 25);
+
+  /* 代码块 */
+  --code-bg: oklch(96.8% 0.008 250);
+  --code-header: oklch(93.4% 0.01 250);
+
+  /* 毛玻璃（顶栏/状态栏） */
+  --glass: oklch(99% 0.003 240 / 0.72);
+}
+
+/* ---------- 深色主题 ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: oklch(16.5% 0.012 250);
+  --surface: oklch(20% 0.012 250);
+  --surface-2: oklch(23% 0.013 250);
+  --surface-3: oklch(27% 0.014 250);
+
+  --border: oklch(27% 0.015 250);
+  --border-strong: oklch(34% 0.015 250);
+
+  --text: oklch(93% 0.008 240);
+  --text-2: oklch(72% 0.012 240);
+  --text-3: oklch(58% 0.01 240);
+
+  --accent: oklch(0.72 0.16 265);
+  --accent-strong: oklch(0.80 0.14 265);
+  --accent-ink: oklch(0.20 0.02 265);
+  --accent-soft: oklch(0.30 0.06 265);
+
+  --success: oklch(0.72 0.13 155);
+  --warn: oklch(0.80 0.12 75);
+  --danger: oklch(0.70 0.16 25);
+
+  --code-bg: oklch(15% 0.01 250);
+  --code-header: oklch(18.5% 0.011 250);
+
+  --glass: oklch(20% 0.012 250 / 0.7);
+
+  /* 深色下阴影不可见，直接去掉 */
+  --shadow-1: none;
+  --shadow-2: none;
+}
+
+/* ---------- 代码高亮色板（配合 highlight.js，可选） ----------
+   使用时把 hljs 的 class 应用到 <code> 上即可，如：
+   <code class="hljs">…highlight.js 输出的内容…</code>
+   组件样式（figure.code 等）见 components.css 尾部 */
+:root[data-theme="light"] {
+  --hl-keyword: oklch(0.50 0.20 285);
+  --hl-string: oklch(0.50 0.13 150);
+  --hl-comment: oklch(0.55 0.02 250);
+  --hl-number: oklch(0.60 0.16 45);
+  --hl-literal: oklch(0.52 0.18 330);
+  --hl-title: oklch(0.48 0.15 220);
+  --hl-type: oklch(0.50 0.14 160);
+  --hl-attr: oklch(0.52 0.14 40);
+  --hl-regexp: oklch(0.55 0.16 45);
+  --hl-meta: oklch(0.50 0.12 150);
+  --hl-punct: oklch(0.58 0.01 250);
+}
+
+:root[data-theme="dark"] {
+  --hl-keyword: oklch(0.76 0.14 285);
+  --hl-string: oklch(0.76 0.13 150);
+  --hl-comment: oklch(0.56 0.01 250);
+  --hl-number: oklch(0.80 0.14 60);
+  --hl-literal: oklch(0.78 0.12 330);
+  --hl-title: oklch(0.74 0.13 220);
+  --hl-type: oklch(0.76 0.12 160);
+  --hl-attr: oklch(0.78 0.12 55);
+  --hl-regexp: oklch(0.80 0.13 60);
+  --hl-meta: oklch(0.74 0.11 150);
+  --hl-punct: oklch(0.62 0.01 250);
+}
