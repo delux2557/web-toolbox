@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>表格解析工具</title>
+<style>
+  /* ============ Design Tokens（OKLCH + 数据蓝） ============ */
+  :root {
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, Menlo, monospace;
+    --radius-s: 7px;
+    --radius-m: 10px;
+    --radius-l: 16px;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --shadow-1: 0 1px 2px oklch(0 0 0 / 0.04), 0 4px 18px oklch(0 0 0 / 0.05);
+    --shadow-2: 0 2px 6px oklch(0 0 0 / 0.06), 0 14px 40px oklch(0 0 0 / 0.09);
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: oklch(97.6% 0.006 250);
+    --surface: oklch(99.4% 0.003 250);
+    --surface-2: oklch(95.8% 0.007 250);
+    --surface-3: oklch(93% 0.009 250);
+    --border: oklch(90.5% 0.009 250);
+    --border-strong: oklch(84.5% 0.012 250);
+    --text: oklch(24% 0.02 255);
+    --text-2: oklch(45% 0.015 255);
+    --text-3: oklch(58% 0.012 250);
+    --accent: oklch(0.56 0.16 250);
+    --accent-strong: oklch(0.46 0.18 250);
+    --accent-ink: oklch(0.98 0.01 250);
+    --accent-soft: oklch(0.94 0.04 250);
+    --success: oklch(0.52 0.13 155);
+    --warn: oklch(0.66 0.15 65);
+    --danger: oklch(0.58 0.19 25);
+    --code-bg: oklch(96.8% 0.008 250);
+    --thead: oklch(0.40 0.12 250);
+    --thead-ink: oklch(0.98 0.01 250);
+    --glass: oklch(99% 0.003 250 / 0.72);
+    --focus-ring: oklch(0.46 0.18 250 / 0.12);
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: oklch(16.5% 0.012 250);
+    --surface: oklch(20% 0.012 250);
+    --surface-2: oklch(23% 0.013 250);
+    --surface-3: oklch(27% 0.014 250);
+    --border: oklch(27% 0.015 250);
+    --border-strong: oklch(34% 0.015 250);
+    --text: oklch(93% 0.008 240);
+    --text-2: oklch(72% 0.012 240);
+    --text-3: oklch(58% 0.01 240);
+    --accent: oklch(0.72 0.14 250);
+    --accent-strong: oklch(0.78 0.13 250);
+    --accent-ink: oklch(0.18 0.03 250);
+    --accent-soft: oklch(0.30 0.06 250);
+    --success: oklch(0.72 0.13 155);
+    --warn: oklch(0.80 0.12 75);
+    --danger: oklch(0.70 0.16 25);
+    --code-bg: oklch(15% 0.01 250);
+    --thead: oklch(0.30 0.08 250);
+    --thead-ink: oklch(0.92 0.01 250);
+    --glass: oklch(20% 0.012 250 / 0.7);
+    --focus-ring: oklch(0.78 0.13 250 / 0.20);
+    --shadow-1: none;
+    --shadow-2: none;
+  }
+
+  /* ============ Reset & Base ============ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
+  body {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+  button { font-family: inherit; font-size: inherit; color: inherit; cursor: pointer; }
+  code, pre, kbd, textarea { font-family: var(--font-mono); }
+  svg { display: block; }
+
+  /* 背景环境光晕（克制） */
+  .bg-glow {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(52% 42% at 82% -8%, oklch(0.85 0.10 72 / 0.20), transparent 60%),
+      radial-gradient(46% 40% at 8% 108%, oklch(0.82 0.06 250 / 0.16), transparent 60%);
+    transition: opacity 300ms var(--ease-out);
+  }
+  :root[data-theme="dark"] .bg-glow { opacity: 0.55; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 56px; }
+
+  /* ============ Topbar（玻璃拟态 + 品牌 + 主题切换） ============ */
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 58px;
+    background: var(--glass);
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .logo {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: var(--accent); color: var(--accent-ink);
+    display: grid; place-items: center; flex-shrink: 0;
+  }
+  .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+  .brand-name { font-weight: 650; font-size: 15px; letter-spacing: -0.01em; }
+  .brand-sub { font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono); }
+  .topbar-actions { display: flex; align-items: center; gap: 8px; }
+  .icon-btn {
+    width: 34px; height: 34px; border-radius: 8px;
+    display: grid; place-items: center;
+    background: transparent; border: 1px solid transparent;
+    color: var(--text-2);
+    transition: background 140ms var(--ease-out), color 140ms var(--ease-out), border-color 140ms var(--ease-out);
+  }
+  .icon-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+  .icon-btn .icon-sun, .icon-btn .icon-moon { display: none; }
+  :root[data-theme="light"] .icon-btn .icon-sun { display: block; }
+  :root[data-theme="dark"] .icon-btn .icon-moon { display: block; }
+
+  /* ============ Panel 卡片 ============ */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-l); box-shadow: var(--shadow-1);
+    margin-bottom: 18px; overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 13px 18px; border-bottom: 1px solid var(--border);
+    font-size: 13px; font-weight: 600; color: var(--text-2);
+  }
+  .panel-head .panel-title { font-weight: 600; color: var(--text); font-size: 14px; cursor: default; }
+  .panel-head .head-hint { color: var(--text-3); font-size: 12px; font-family: var(--font-mono); }
+  .panel-head .head-spacer { flex: 1; }
+  .panel-body { padding: 18px; }
+
+  /* 输入区 */
+  .input-row { display: flex; align-items: stretch; gap: 14px; }
+  textarea {
+    flex: 1; min-height: 200px; resize: vertical;
+    border: 1px solid var(--border); border-radius: var(--radius-m);
+    padding: 12px 14px;
+    font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6;
+    color: var(--text); background: var(--code-bg); outline: none;
+  }
+  textarea::placeholder { color: var(--text-3); }
+  textarea:focus {
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+    outline: none;
+  }
+  .btn-col { display: flex; flex-direction: column; gap: 10px; }
+
+  /* ============ Button 体系 ============ */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    height: 40px; padding: 0 18px; border-radius: var(--radius-m);
+    font-weight: 600; font-size: 14px; border: 1px solid transparent;
+    white-space: nowrap;
+    transition: transform 140ms var(--ease-out), background 140ms var(--ease-out), border-color 140ms var(--ease-out), color 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { transform: translateY(1px) scale(0.99); }
+  .btn-primary {
+    background: var(--accent); color: var(--accent-ink);
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.10) inset;
+  }
+  .btn-primary:hover { background: var(--accent-strong); }
+  .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+  .btn-ghost:hover { background: var(--surface-2); }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-success:hover { filter: brightness(0.94); }
+  .btn:disabled { opacity: 0.42; cursor: not-allowed; }
+  .btn:disabled:active { transform: none; }
+  .btn-sm { height: 30px; padding: 0 12px; font-size: 13px; border-radius: 8px; }
+
+  /* ============ Chip 统计 ============ */
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex; align-items: baseline; gap: 7px;
+    padding: 7px 14px; border-radius: var(--radius-m);
+    background: var(--surface); border: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .chip .k { color: var(--text-3); font-size: 12px; }
+  .chip .v { font-weight: 650; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--accent-strong); }
+
+  /* ============ 工具栏控件 ============ */
+  .select-wrap { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-3); }
+  select {
+    height: 30px; padding: 0 8px; font-size: 13px; max-width: 360px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-s);
+    background: var(--surface); color: var(--text-2); cursor: pointer; outline: none;
+  }
+  select:focus {
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+    outline: none;
+  }
+
+  .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); user-select: none; cursor: pointer; }
+  .switch input { display: none; }
+  .switch .track {
+    width: 34px; height: 20px; border-radius: 999px;
+    background: var(--surface-3); position: relative; flex-shrink: 0;
+    transition: background 160ms var(--ease-out);
+  }
+  .switch .track::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; transition: transform 160ms var(--ease-out); box-shadow: 0 1px 3px oklch(0 0 0 / 0.3);
+  }
+  .switch input:checked + .track { background: var(--accent-strong); }
+  .switch input:checked + .track::after { transform: translateX(14px); }
+
+  /* ============ 表格预览（专业设计） ============ */
+  .table-wrap {
+    max-height: 60vh; overflow: auto;
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--thead); color: var(--thead-ink);
+    text-align: left; padding: 10px 12px;
+    border-bottom: 1px solid var(--border); border-right: 1px solid oklch(0 0 0 / 0.08);
+    font-weight: 600; white-space: nowrap;
+  }
+  thead th:last-child { border-right: none; }
+  tbody td {
+    padding: 9px 12px; border-bottom: 1px solid var(--border);
+    vertical-align: top; word-break: break-all;
+    max-width: 320px; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* 序号列：固定宽度、居中、不换行 */
+  thead th:first-child, tbody td:first-child {
+    width: 54px; min-width: 54px; text-align: center;
+    white-space: nowrap; word-break: normal !important;
+    color: var(--text-3);
+  }
+  /* 数字列右对齐 */
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:nth-child(even) { background: var(--surface-2); }
+  tbody tr:hover { background: var(--accent-soft); }
+
+  .preview-note { font-size: 12px; color: var(--text-3); padding: 10px 18px 0; }
+
+  /* ============ 导出栏 ============ */
+  .export-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px 18px; }
+  .export-bar .label { font-size: 14px; font-weight: 600; }
+  .export-note { font-size: 12px; color: var(--text-3); width: 100%; }
+
+  /* ============ 空状态 ============ */
+  .empty-panel { padding: 0; }
+  .empty {
+    padding: 60px 32px; text-align: center;
+    animation: rise 600ms var(--ease-out) both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .empty-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent-strong);
+    font-size: 12.5px; font-weight: 500; margin-bottom: 18px;
+  }
+  .empty-title { font-size: 26px; margin: 0 0 10px; letter-spacing: -0.02em; font-weight: 650; }
+  .empty-title .accent { color: var(--accent-strong); }
+  .empty-lead { color: var(--text-2); margin: 0 0 26px; font-size: 15px; }
+  .empty-features { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; }
+  .feature { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 13px; }
+  .feature b { color: var(--text-2); font-weight: 600; }
+
+  /* ============ 导入示例 ============ */
+  /* 文字链接：辅助入口最低强调等级，默认次要色，hover 才体现交互 */
+  .link-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    border: none; background: none; padding: 4px 8px;
+    font-size: 13px; font-weight: 500; line-height: 1.4;
+    color: var(--text-2); cursor: pointer; border-radius: 6px;
+    transition: color 140ms var(--ease-out), background 140ms var(--ease-out);
+  }
+  .link-btn:hover {
+    color: var(--accent-strong); background: var(--accent-soft);
+    text-decoration: underline;
+  }
+  .link-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+
+  .example-list { display: flex; flex-direction: column; gap: 10px; }
+  .example-card {
+    width: 100%; text-align: left;
+    display: flex; flex-direction: column; gap: 5px;
+    padding: 14px 16px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-m); cursor: pointer;
+    transition: background 140ms var(--ease-out), border-color 140ms var(--ease-out), transform 140ms var(--ease-out);
+  }
+  .example-card:hover { background: var(--accent-soft); border-color: var(--accent-strong); }
+  .example-card:active { transform: translateY(1px); }
+  .ex-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .ex-title { font-weight: 600; font-size: 14px; color: var(--text); }
+  .ex-tag {
+    flex-shrink: 0; font-size: 11px; font-weight: 600;
+    color: var(--accent-strong); background: var(--accent-soft);
+    padding: 1px 8px; border-radius: 999px;
+  }
+  .ex-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+
+  .example-banner {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 14px; margin-bottom: 14px;
+    background: var(--accent-soft); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-m); font-size: 13px; color: var(--text-2);
+  }
+  .example-banner .ex-badge {
+    flex-shrink: 0; background: var(--accent); color: var(--accent-ink);
+    padding: 1px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  }
+  .example-banner .ex-hint { flex: 1; min-width: 180px; }
+
+  /* ============ Toast（底部居中） ============ */
+  .toast {
+    position: fixed; bottom: 48px; left: 50%; z-index: 100;
+    background: var(--text); color: var(--bg);
+    padding: 10px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 500;
+    box-shadow: var(--shadow-2); max-width: min(560px, 86vw);
+    opacity: 0; transform: translate(-50%, 12px) scale(0.96);
+    transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  .toast.ok { background: var(--success); color: #fff; }
+  .toast.warn { background: var(--warn); color: #fff; }
+  .toast.error { background: var(--danger); color: #fff; }
+
+  /* ============ Modal（分层 head/body/foot） ============ */
+  .modal-mask {
+    position: fixed; inset: 0; z-index: 50;
+    background: oklch(0 0 0 / 0.4);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal {
+    width: 100%; max-width: 520px; max-height: 82vh; display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 16px 48px oklch(0 0 0 / 0.25); overflow: hidden;
+  }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+  }
+  .modal-title { font-size: 15px; font-weight: 650; }
+  .modal-close {
+    border: none; background: none; font-size: 20px; line-height: 1; cursor: pointer;
+    color: var(--text-3); padding: 2px 8px; border-radius: 6px;
+  }
+  .modal-close:hover { background: var(--surface-2); color: var(--text); }
+  .modal-body { padding: 16px 18px; overflow: auto; font-size: 13.5px; line-height: 1.75; color: var(--text-2); }
+  .modal-body ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .modal-body li { display: flex; gap: 8px; }
+  .modal-body li::before { content: "•"; color: var(--accent-strong); font-weight: 700; flex-shrink: 0; }
+  .modal-foot { display: flex; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--border); }
+  kbd {
+    background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px;
+    border-radius: 5px; padding: 1px 6px; font-size: 12px; font-family: var(--font-mono); color: var(--text);
+  }
+
+  /* ============ Focus & Motion ============ */
+  :focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+
+  /* ============ Responsive ============ */
+  @media (max-width: 720px) {
+    .input-row { flex-direction: column; }
+    .btn-col { flex-direction: row; }
+    .btn-col .btn { flex: 1; }
+  }
+</style>
+<script>
+/* 主题前置：首帧前设置 data-theme，阻止闪烁 */
+(function () {
+  var KEY = 'table-helper-theme';
+  var t = null;
+  try { t = localStorage.getItem(KEY); } catch (e) {}
+  if (t !== 'dark' && t !== 'light') {
+    t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', t);
+})();
+</script>
+</head>
+<body>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <line x1="3" y1="9" x2="21" y2="9"/>
+        <line x1="3" y1="15" x2="21" y2="15"/>
+        <line x1="9" y1="3" x2="9" y2="21"/>
+        <line x1="15" y1="3" x2="15" y2="21"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <span class="brand-name">表格解析工具</span>
+      <span class="brand-sub">table → csv / json</span>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button class="icon-btn" id="btnTips" title="使用提示" aria-label="使用提示">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    </button>
+    <button class="icon-btn" id="themeToggle" title="切换明暗主题" aria-label="切换明暗主题">
+      <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+      </svg>
+      <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- 输入区 -->
+  <section class="panel">
+    <div class="panel-head">
+      <label class="panel-title" for="inputBox">粘贴表格代码 / 内容</label>
+      <span class="head-spacer"></span>
+      <button class="link-btn" id="btnExample">加载示例</button>
+      <span class="head-hint">Ctrl + Enter 快速解析</span>
+    </div>
+    <div class="panel-body">
+      <div class="input-row">
+        <textarea id="inputBox" placeholder="在此粘贴表格代码 / 内容（如网页 <table> HTML），或点上方「示例」快速体验…"></textarea>
+        <div class="btn-col">
+          <button class="btn btn-primary" id="btnParse">🔍 解析</button>
+          <button class="btn btn-ghost" id="btnReset">↺ 重置</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 结果区 -->
+  <section class="panel" id="resultCard" hidden>
+    <div class="panel-head">
+      <span class="panel-title">数据预览</span>
+      <div class="chips">
+        <span class="chip"><span class="k">数据行数</span><b class="v" id="statRows">0</b></span>
+        <span class="chip"><span class="k">列数</span><b class="v" id="statCols">0</b></span>
+      </div>
+      <span class="head-spacer"></span>
+      <div class="select-wrap" id="selectWrap" hidden>
+        <span>表格来源</span>
+        <select id="tableSelect"></select>
+      </div>
+      <label class="switch" title="开启后再次解析将按列名合并数据，适合分页粘贴">
+        <input type="checkbox" id="appendToggle" />
+        <span class="track"></span>
+        <span>追加模式</span>
+      </label>
+    </div>
+
+    <div class="panel-body">
+      <div class="example-banner" id="exampleBanner" hidden>
+        <span class="ex-badge">示例数据</span>
+        <span class="ex-hint">这是示例演示，帮你快速了解解析效果。</span>
+        <button class="btn btn-ghost btn-sm" id="btnClearExample">清空输入</button>
+      </div>
+      <div class="table-wrap"><table id="previewTable"></table></div>
+      <div class="preview-note" id="previewNote" hidden></div>
+    </div>
+
+    <div class="export-bar">
+      <span class="label">📤 导出：</span>
+      <button class="btn btn-success" id="btnDownload">⬇️ 下载 CSV</button>
+      <button class="btn btn-ghost" id="btnCopyCsv">📋 复制 CSV</button>
+      <button class="btn btn-ghost" id="btnCopyJson">📄 复制 JSON</button>
+      <span class="export-note">CSV：UTF-8 编码（下载含 BOM），字段自动转义，Excel 可直接打开。</span>
+    </div>
+  </section>
+
+  <!-- 空状态 -->
+  <section class="panel empty-panel" id="emptyCard">
+    <div class="empty">
+      <div class="empty-badge">本地运行 · 数据不离开浏览器</div>
+      <h2 class="empty-title">粘贴表格，<span class="accent">一键导出</span></h2>
+      <p class="empty-lead">粘贴表格代码 / 内容，点击「解析」查看数据，支持 CSV / JSON 导出。</p>
+      <div class="empty-features">
+        <span class="feature"><b>智能识别表头</b> data-field / th / 列索引</span>
+        <span class="feature"><b>自动跳过</b> 隐藏列与功能列</span>
+        <span class="feature"><b>追加模式</b> 分页粘贴按列合并</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- 使用提示弹窗 -->
+<div class="modal-mask" id="tipModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="使用提示">
+    <div class="modal-head">
+      <span class="modal-title">使用提示</span>
+      <button class="modal-close" id="btnCloseModalX" aria-label="关闭">&times;</button>
+    </div>
+    <div class="modal-body">
+      <ul>
+        <li>⚠️ 请确认当前内容包含全部目标数据；若表格为分页 / 虚拟滚动，请先切换「每页更多条」或滚动加载完成后再复制。</li>
+        <li>自动识别 <kbd>data-field</kbd> / <kbd>&lt;th&gt;</kbd> / 列索引 作为列名，兼容字段变化。</li>
+        <li>自动跳过隐藏列（display:none）与 复选 / 操作 类功能列。</li>
+        <li>页面存在多个表格时默认解析第一个，可在「表格来源」中切换。</li>
+        <li>开启「追加模式」后，再次解析将按列名对齐合并数据，适合分页粘贴场景。</li>
+        <li>快捷键：<kbd>Ctrl</kbd> + <kbd>Enter</kbd> 快速解析。</li>
+      </ul>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" id="btnCloseModal">知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- 示例选择弹窗 -->
+<div class="modal-mask" id="exampleModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="加载示例">
+    <div class="modal-head">
+      <span class="modal-title">加载示例数据</span>
+      <button class="modal-close" id="btnCloseExampleX" aria-label="关闭">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="example-list" id="exampleList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+ * v2.0 新增：导入示例（场景化示例 + 填充即自动解析 + 示例标识条）
+ *  - 空状态主按钮「加载示例」+ 输入区次按钮「示例」
+ *  - 示例选择弹窗列出 3 个场景示例，点击填充并自动解析
+ *  - 结果区顶部「示例数据」标识条，可一键清空退出
+ *  - 用户手动解析 / Ctrl+Enter / 重置 即退出示例模式
+ * ================================================================== */
+
+/* ---------- 中间模型与适配器（架构预留） ---------- */
+const SKIP_KEYWORDS = ['checkbox', 'selection', 'operation', 'action'];
+const PREVIEW_LIMIT = 200;
+
+class HtmlTableAdapter {
+  /** 安全解析：DOMParser 独立文档，脚本不执行、资源不加载 */
+  load(input) {
+    const doc = new DOMParser().parseFromString(input, 'text/html');
+    return Array.from(doc.querySelectorAll('table')).filter(t => t.querySelector('tr'));
+  }
+  extract(tableEl) { return extractTableData(tableEl); }
+}
+class JsonAdapter {
+  /* 二期实现：对象数组 / 二维数组 / 常见包裹结构（data.list 等） */
+  load() { throw new Error('JSON 数据源解析将于二期支持'); }
+}
+const adapters = { html: new HtmlTableAdapter(), json: new JsonAdapter() };
+
+function detectSourceType(input) {
+  const t = input.trim();
+  return (t.startsWith('{') || t.startsWith('[')) ? 'json' : 'html';
+}
+
+/* ---------- 工具函数 ---------- */
+function isHiddenEl(el) {
+  if (!el || !el.getAttribute) return false;
+  if (el.hasAttribute('hidden')) return true;
+  const s = (el.getAttribute('style') || '').replace(/\s+/g, '').toLowerCase();
+  return s.includes('display:none') || s.includes('visibility:hidden');
+}
+function isSkipCell(el) {
+  if (!el) return false;
+  if (isHiddenEl(el)) return true;
+  const cls = (el.getAttribute('class') || '').toLowerCase();
+  return SKIP_KEYWORDS.some(k => cls.includes(k));
+}
+function cellText(el) { return (el.textContent || '').replace(/\s+/g, ' ').trim(); }
+function rowCells(tr) { return Array.from(tr.children).filter(c => c.tagName === 'TD' || c.tagName === 'TH'); }
+
+/* ---------- 表格提取：识别表头、跳过隐藏/功能列 ---------- */
+function extractTableData(table) {
+  const allRows = Array.from(table.querySelectorAll('tr'));
+  const thead = table.querySelector('thead');
+  let headerRow = null;
+  let bodyRows = [];
+  let useDataFieldAsColumns = false; // 标记是否从 data-field 提取列名
+
+  // 1. 优先从 <thead> 取表头
+  if (thead && thead.querySelector('tr')) {
+    headerRow = thead.querySelector('tr');
+    bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+    if (!bodyRows.length) bodyRows = allRows.filter(tr => !thead.contains(tr));
+  } 
+  // 2. 没有 <thead>，但存在含 <th> 的行
+  else {
+    const first = allRows[0];
+    if (first && first.querySelector('th')) {
+      headerRow = first;
+      bodyRows = allRows.slice(1);
+    } 
+    // 3. ⭐ 智能兜底：检测第一行
+    else if (first) {
+      const cells = rowCells(first);
+      const hasFields = cells.some(c => (c.getAttribute('data-field') || '').trim() !== '');
+      const hasNumeric = cells.some(c => /^\d+$/.test(cellText(c).trim()));
+
+      if (hasFields) {
+        // 有 data-field：不作为表头，而是作为数据行，列名从 data-field 提取
+        useDataFieldAsColumns = true;
+        headerRow = null;
+        bodyRows = allRows; // 所有行都是数据行
+      } else if (!hasNumeric) {
+        // 无 data-field 且不含纯数字：视为表头
+        headerRow = first;
+        bodyRows = allRows.slice(1);
+      } else {
+        // 全是纯数字：全部作为数据，列名回退
+        headerRow = null;
+        bodyRows = allRows;
+      }
+    } else {
+      bodyRows = [];
+    }
+  }
+
+  // 过滤隐藏行、全空行（表头行不进入数据行）
+  bodyRows = bodyRows.filter(tr => {
+    if (isHiddenEl(tr)) return false;
+    const cells = rowCells(tr);
+    return cells.length && cells.some(c => cellText(c) !== '');
+  });
+
+  // 如果使用 data-field 作为列名，从第一行（或任何行）提取字段名
+  let columns = [];
+  if (useDataFieldAsColumns && bodyRows.length > 0) {
+    const sampleRow = bodyRows[0];
+    const cells = rowCells(sampleRow);
+    // 过滤隐藏/功能列（基于首行判断）
+    const skip = new Set();
+    cells.forEach((cell, i) => {
+      if (isSkipCell(cell)) skip.add(i);
+    });
+    const keepIdx = Array.from({ length: cells.length }, (_, i) => i).filter(i => !skip.has(i));
+    columns = keepIdx.map(i => {
+      const field = cells[i].getAttribute('data-field') || '';
+      return field.trim() || ('列' + (i + 1));
+    });
+    // 提取数据行（所有行）
+    const rows = bodyRows.map(tr => {
+      const tds = rowCells(tr);
+      return keepIdx.map(i => (tds[i] ? cellText(tds[i]) : ''));
+    });
+    return { source: 'html', columns, rows };
+  }
+
+  // 常规处理：使用 headerRow 或回退列名
+  const headerCells = headerRow ? rowCells(headerRow) : [];
+  const rawColCount = headerRow ? headerCells.length
+    : (bodyRows.length ? rowCells(bodyRows[0]).length : 0);
+
+  const firstBodyCells = bodyRows.length ? rowCells(bodyRows[0]) : [];
+  const skip = new Set();
+  for (let i = 0; i < rawColCount; i++) {
+    if (isSkipCell(headerCells[i]) || isSkipCell(firstBodyCells[i])) skip.add(i);
+  }
+  const keepIdx = Array.from({ length: rawColCount }, (_, i) => i).filter(i => !skip.has(i));
+
+  columns = headerRow
+    ? keepIdx.map((i, n) => {
+        const c = headerCells[i];
+        const field = c ? (c.getAttribute('data-field') || '').trim() : '';
+        return field || cellText(c) || ('列' + (n + 1));
+      })
+    : keepIdx.map((_, n) => '列' + (n + 1));
+
+  const rows = bodyRows.map(tr => {
+    const cells = rowCells(tr);
+    return keepIdx.map(i => (cells[i] ? cellText(cells[i]) : ''));
+  });
+
+  return { source: 'html', columns, rows };
+}
+
+function tableMeta(t, i) {
+  const trs = Array.from(t.querySelectorAll('tr'));
+  const cols = Math.max(...trs.slice(0, 3).map(tr => tr.children.length));
+  const cls = (t.getAttribute('class') || '').trim();
+  let label = '表格' + (i + 1) + ' · ' + trs.length + '行×' + cols + '列';
+  if (cls) label += ' · class="' + (cls.length > 24 ? cls.slice(0, 24) + '…' : cls) + '"';
+  return label;
+}
+
+/* ---------- 导入示例：示例数据常量 ---------- */
+const EXAMPLES = [
+  {
+    id: 'order',
+    title: '订单明细表',
+    tag: '智能识别',
+    desc: '带 data-field 字段，自动识别表头并跳过「操作」列',
+    data: `<table>
+  <tr>
+    <td data-field="订单号">SO-20240815-001</td>
+    <td data-field="客户名称">杭州云启科技</td>
+    <td data-field="订单金额">12800.00</td>
+    <td data-field="状态">已发货</td>
+    <td class="operation">查看</td>
+  </tr>
+  <tr>
+    <td data-field="订单号">SO-20240815-002</td>
+    <td data-field="客户名称">深圳蓝湾贸易</td>
+    <td data-field="订单金额">4650.50</td>
+    <td data-field="状态">待付款</td>
+    <td class="operation">查看</td>
+  </tr>
+  <tr>
+    <td data-field="订单号">SO-20240815-003</td>
+    <td data-field="客户名称">广州南粤实业</td>
+    <td data-field="订单金额">89600.00</td>
+    <td data-field="状态">已完成</td>
+    <td class="operation">查看</td>
+  </tr>
+</table>`
+  },
+  {
+    id: 'report',
+    title: '月度销售报表',
+    tag: '基础解析',
+    desc: '普通表头 + 数字列，数字列自动右对齐',
+    data: `<table>
+  <thead>
+    <tr><th>月份</th><th>销售额</th><th>订单量</th><th>环比</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1月</td><td>328000</td><td>1260</td><td>—</td></tr>
+    <tr><td>2月</td><td>412500</td><td>1480</td><td>+25.8%</td></tr>
+    <tr><td>3月</td><td>396200</td><td>1395</td><td>-4.0%</td></tr>
+    <tr><td>4月</td><td>485300</td><td>1732</td><td>+22.5%</td></tr>
+  </tbody>
+</table>`
+  },
+  {
+    id: 'bi',
+    title: 'BI 项目看板',
+    tag: '过滤列',
+    desc: '含复选框列与隐藏列，自动跳过非数据列',
+    data: `<table>
+  <thead>
+    <tr>
+      <th class="checkbox">选择</th>
+      <th>地区</th>
+      <th>负责人</th>
+      <th>项目数</th>
+      <th style="display:none">内部ID</th>
+      <th>完成率</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td class="checkbox"><input type="checkbox"/></td><td>华东</td><td>张伟</td><td>12</td><td>h01</td><td>85%</td></tr>
+    <tr><td class="checkbox"><input type="checkbox"/></td><td>华南</td><td>李娜</td><td>9</td><td>h02</td><td>92%</td></tr>
+    <tr><td class="checkbox"><input type="checkbox"/></td><td>华北</td><td>王强</td><td>15</td><td>h03</td><td>78%</td></tr>
+    <tr><td class="checkbox"><input type="checkbox"/></td><td>西南</td><td>赵敏</td><td>7</td><td>h04</td><td>88%</td></tr>
+  </tbody>
+</table>`
+  }
+];
+
+/* ---------- DOM 引用与状态 ---------- */
+const $ = id => document.getElementById(id);
+const inputBox = $('inputBox'), btnParse = $('btnParse'), btnReset = $('btnReset'),
+  resultCard = $('resultCard'), emptyCard = $('emptyCard'),
+  statRows = $('statRows'), statCols = $('statCols'),
+  selectWrap = $('selectWrap'), tableSelect = $('tableSelect'),
+  appendToggle = $('appendToggle'), previewTable = $('previewTable'),
+  previewNote = $('previewNote'),
+  btnDownload = $('btnDownload'), btnCopyCsv = $('btnCopyCsv'), btnCopyJson = $('btnCopyJson'),
+  tipModal = $('tipModal'), btnTips = $('btnTips'), btnCloseModal = $('btnCloseModal'),
+  exampleModal = $('exampleModal'), exampleList = $('exampleList'),
+  exampleBanner = $('exampleBanner'),
+  toastEl = $('toast');
+
+let rawTables = [];    // 最近一次粘贴解析出的原始 table（detached，安全）
+let masterData = null; // 当前展示/导出的 TableData
+let isExample = false; // 是否处于示例演示状态
+
+/* ---------- 解析流程 ---------- */
+function doParse() {
+  const input = inputBox.value;
+  if (!input.trim()) { toast('请先粘贴表格代码 / 内容', 'warn'); return; }
+
+  const type = detectSourceType(input);
+  if (type === 'json') { toast('JSON 数据源解析将于二期支持（架构已预留）', 'warn'); return; }
+
+  const tables = adapters.html.load(input);
+  if (!tables.length) { toast('未识别到表格，请检查粘贴内容', 'error'); return; }
+
+  rawTables = tables;
+  if (tables.length > 1) {
+    tableSelect.textContent = '';
+    tables.forEach((t, i) => tableSelect.add(new Option(tableMeta(t, i), String(i))));
+    tableSelect.value = '0';
+    selectWrap.hidden = false;
+  } else {
+    selectWrap.hidden = true;
+  }
+  applyExtract(0, appendToggle.checked && !!masterData);
+}
+
+function applyExtract(idx, append) {
+  const data = adapters.html.extract(rawTables[idx]);
+  if (!data.columns.length) { toast('所选表格没有可用列', 'error'); return; }
+
+  if (append && masterData) {
+    const merged = mergeData(masterData, data);
+    if (!merged) return;
+    masterData = merged;
+  } else {
+    masterData = data;
+  }
+  emptyCard.hidden = true;
+  render();
+}
+
+/* 追加合并：列名完全一致直接拼接；同名不同序按列名对齐；否则拒绝并不静默错列 */
+function mergeData(a, b) {
+  if (a.columns.length === b.columns.length && a.columns.every((c, i) => c === b.columns[i])) {
+    toast('追加成功：+' + b.rows.length + ' 行', 'ok');
+    return { source: a.source, columns: a.columns, rows: a.rows.concat(b.rows) };
+  }
+  if (a.columns.length === b.columns.length && b.columns.every(c => a.columns.includes(c))) {
+    const rows = b.rows.map(r => a.columns.map(c => r[b.columns.indexOf(c)]));
+    toast('列顺序不同，已按列名对齐追加', 'ok');
+    return { source: a.source, columns: a.columns, rows: a.rows.concat(rows) };
+  }
+  toast('列结构不一致，无法追加（已保留原数据）', 'error');
+  return null;
+}
+
+/* ---------- 预览渲染（仅 textContent，杜绝 XSS） ---------- */
+function render() {
+  resultCard.hidden = false;
+  statRows.textContent = masterData.rows.length;
+  statCols.textContent = masterData.columns.length;
+
+  previewTable.textContent = '';
+  const thead = document.createElement('thead');
+  const htr = document.createElement('tr');
+  const thIdx = document.createElement('th');
+  thIdx.textContent = '#';
+  htr.appendChild(thIdx);
+  masterData.columns.forEach(c => {
+    const th = document.createElement('th');
+    th.textContent = c;
+    htr.appendChild(th);
+  });
+  thead.appendChild(htr);
+  previewTable.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  masterData.rows.slice(0, PREVIEW_LIMIT).forEach((r, idx) => {
+    const tr = document.createElement('tr');
+    const tdIdx = document.createElement('td');
+    tdIdx.textContent = idx + 1;
+    tr.appendChild(tdIdx);
+    masterData.columns.forEach((_, i) => {
+      const td = document.createElement('td');
+      td.textContent = r[i] ?? '';
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  previewTable.appendChild(tbody);
+
+  const over = masterData.rows.length > PREVIEW_LIMIT;
+  previewNote.hidden = !over;
+  if (over) previewNote.textContent = '仅预览前 ' + PREVIEW_LIMIT + ' 行，导出包含全部 ' + masterData.rows.length + ' 行。';
+
+  alignNumericColumns();
+  exampleBanner.hidden = !isExample;
+}
+
+/* ---------- 导出：CSV 转义 + BOM ---------- */
+function csvEscape(v) { return '"' + String(v ?? '').replace(/"/g, '""') + '"'; }
+function toCSV() {
+  const lines = [['序号', ...masterData.columns].map(csvEscape).join(',')];
+  masterData.rows.forEach((r, i) => lines.push([i + 1, ...r].map(csvEscape).join(',')));
+  return lines.join('\r\n');
+}
+function toJSON() {
+  return masterData.rows.map(r => {
+    const o = {};
+    masterData.columns.forEach((c, i) => o[c] = r[i] ?? '');
+    return o;
+  });
+}
+function downloadCSV() {
+  if (!masterData) return;
+  const blob = new Blob(['\ufeff' + toCSV()], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '表格数据_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+  toast('CSV 已下载（含 BOM）', 'ok');
+}
+function copyText(text, msg) {
+  const done = () => toast(msg, 'ok');
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); }
+    catch (e) { toast('复制失败，请手动复制', 'error'); }
+    ta.remove();
+  };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done).catch(fallback);
+  else fallback();
+}
+
+/* ---------- 提示弹窗 / toast ---------- */
+let toastTimer;
+function toast(msg, type) {
+  toastEl.textContent = msg;
+  toastEl.className = 'toast show ' + (type || 'ok');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastEl.className = 'toast'; }, 2600);
+}
+
+/* ---------- 导入示例：构建列表 + 加载 ---------- */
+function buildExampleList() {
+  exampleList.textContent = '';
+  EXAMPLES.forEach(ex => {
+    const card = document.createElement('button');
+    card.className = 'example-card';
+    card.type = 'button';
+
+    const head = document.createElement('span');
+    head.className = 'ex-head';
+    const title = document.createElement('span');
+    title.className = 'ex-title';
+    title.textContent = ex.title;
+    const tag = document.createElement('span');
+    tag.className = 'ex-tag';
+    tag.textContent = ex.tag;
+    head.appendChild(title);
+    head.appendChild(tag);
+
+    const desc = document.createElement('span');
+    desc.className = 'ex-desc';
+    desc.textContent = ex.desc;
+
+    card.appendChild(head);
+    card.appendChild(desc);
+    card.addEventListener('click', () => loadExample(ex.id));
+    exampleList.appendChild(card);
+  });
+}
+
+function loadExample(id) {
+  const ex = EXAMPLES.find(e => e.id === id);
+  if (!ex) return;
+  inputBox.value = ex.data;
+  isExample = true;
+  exampleModal.hidden = true;
+  doParse();
+}
+
+function doReset() {
+  inputBox.value = ''; masterData = null; rawTables = [];
+  appendToggle.checked = false; isExample = false;
+  resultCard.hidden = true; selectWrap.hidden = true; emptyCard.hidden = false;
+  exampleBanner.hidden = true;
+  toast('已重置');
+}
+
+/* ---------- 事件绑定 ---------- */
+btnParse.addEventListener('click', () => { isExample = false; doParse(); });
+btnReset.addEventListener('click', doReset);
+btnClearExample.addEventListener('click', doReset);
+btnExample.addEventListener('click', () => { exampleModal.hidden = false; });
+btnCloseExampleX.addEventListener('click', () => { exampleModal.hidden = true; });
+exampleModal.addEventListener('click', e => { if (e.target === exampleModal) exampleModal.hidden = true; });
+
+tableSelect.addEventListener('change', () => {
+  if (!rawTables.length) return;
+  applyExtract(parseInt(tableSelect.value, 10) || 0, false);
+  toast('已切换：' + tableSelect.selectedOptions[0].text);
+});
+btnDownload.addEventListener('click', downloadCSV);
+btnCopyCsv.addEventListener('click', () => { if (masterData) copyText(toCSV(), 'CSV 已复制到剪贴板'); });
+btnCopyJson.addEventListener('click', () => { if (masterData) copyText(JSON.stringify(toJSON(), null, 2), 'JSON 已复制到剪贴板'); });
+
+btnTips.addEventListener('click', () => { tipModal.hidden = false; });
+btnCloseModal.addEventListener('click', () => { tipModal.hidden = true; });
+tipModal.addEventListener('click', e => { if (e.target === tipModal) tipModal.hidden = true; });
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); isExample = false; doParse(); }
+  if (e.key === 'Escape') {
+    if (!exampleModal.hidden) exampleModal.hidden = true;
+    if (!tipModal.hidden) tipModal.hidden = true;
+  }
+});
+
+/* ===== 数字列右对齐（纯视觉增强，不改变数据） ===== */
+function alignNumericColumns() {
+  const rows = previewTable.querySelectorAll('tbody tr');
+  if (rows.length < 2) return;
+  const colCount = masterData.columns.length;
+  for (let c = 0; c < colCount; c++) {
+    let allNum = true, hasVal = false;
+    rows.forEach(tr => {
+      const td = tr.children[c + 1];
+      if (!td) return;
+      const v = td.textContent.trim();
+      if (v === '') return;
+      hasVal = true;
+      if (!/^-?\d[\d,.\s]*%?$/.test(v)) allNum = false;
+    });
+    if (allNum && hasVal) {
+      rows.forEach(tr => { const td = tr.children[c + 1]; if (td) td.classList.add('num'); });
+      const th = previewTable.querySelectorAll('thead th')[c + 1];
+      if (th) th.classList.add('num');
+    }
+  }
+}
+
+/* ===== 明暗主题切换 ===== */
+const themeToggle = document.getElementById('themeToggle');
+if (themeToggle) {
+  themeToggle.addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme') || 'light';
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('table-helper-theme', next); } catch (e) {}
+  });
+}
+
+/* ===== 弹窗右上角关闭 ===== */
+const btnCloseX = document.getElementById('btnCloseModalX');
+if (btnCloseX) btnCloseX.addEventListener('click', () => { tipModal.hidden = true; });
+
+/* ===== 初始化：构建示例列表 ===== */
+buildExampleList();
+</script>
+</body>
+</html>

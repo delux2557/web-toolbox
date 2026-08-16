@@ -21,6 +21,10 @@ export const STORAGE_KEYS = {
   draft: (workflowId: string) => `ph:draft:${workflowId}`,
   /** 历史存档列表 */
   history: 'ph:history',
+  /** 当前草稿绑定到哪条历史（"会话模型"状态，刷新后仍保持） */
+  activeHistory: 'ph:activeHistory',
+  /** 当前激活的插件（launcher store，刷新后不丢） */
+  activePlugin: 'ph:activePlugin',
 } as const
 
 /** 读取并反序列化（解析失败返回兜底值，避免一个坏数据搞崩整个应用） */

@@ -39,6 +39,19 @@ export const useHistoryStore = defineStore('history', () => {
     return entry
   }
 
+  /**
+   * 更新一条历史的内容（"会话模型"的保存语义）：
+   * 保持原 id 与名称不变，只替换草稿快照、刷新 updatedAt。
+   * 返回是否更新成功（id 不存在时返回 false）。
+   */
+  function updateEntry(id: string, draft: WorkflowDraft): boolean {
+    const entry = entries.value.find((e) => e.id === id)
+    if (!entry) return false
+    entry.draft = cloneDraft(draft)
+    entry.updatedAt = Date.now()
+    return true
+  }
+
   /** 删除一条（可批量：传入 id 数组） */
   function removeEntries(ids: string[]) {
     const set = new Set(ids)
@@ -59,7 +72,7 @@ export const useHistoryStore = defineStore('history', () => {
     return entries.value.find((e) => e.id === id)
   }
 
-  return { entries, addEntry, removeEntries, renameEntry, getById }
+  return { entries, addEntry, updateEntry, removeEntries, renameEntry, getById }
 })
 
 function formatMonthDay(ts: number): string {

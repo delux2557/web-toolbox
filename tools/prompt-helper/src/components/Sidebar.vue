@@ -3,14 +3,17 @@
 // 左侧边栏（Sidebar）
 // ------------------------------------------------------------
 // AI 对话式布局的左侧栏：
-//   上：工作流场景列表（按分类分组，点击切换当前工作流）
+//   上：插件列表（按分类分组，点击激活；工作流型会同步切草稿）
 //   下：历史记录列表（点击载入，hover 出"重命名/删除"）
 //   底：主题切换 + 新建空白工作流
+// 底座层不认识插件内部，只按 manifest 渲染名称/分类/激活态。
 // ============================================================
 import { ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflow'
 import { useHistoryStore } from '@/stores/history'
-import { groupWorkflowsByCategory, workflowRegistry } from '@/configs'
+import { useLauncherStore } from '@/stores/launcher'
+import { groupPluginsByCategory, pluginRegistry } from '@/plugins'
+import type { PluginManifest } from '@/types/plugin'
 import { useTheme } from '@/composables/useTheme'
 import { useToast } from '@/composables/useToast'
 import { formatDateTime } from '@/utils/format'
@@ -18,10 +21,19 @@ import Modal from './Modal.vue'
 
 const workflow = useWorkflowStore()
 const history = useHistoryStore()
+const launcher = useLauncherStore()
 const { theme, toggle } = useTheme()
 const { show } = useToast()
 
-const categories = groupWorkflowsByCategory(workflowRegistry)
+const categories = groupPluginsByCategory(pluginRegistry)
+
+/** 激活插件：工作流型同步切换草稿（历史/草稿按工作流隔离），组件型直接切换 */
+function activatePlugin(p: PluginManifest) {
+  launcher.activate(p.id)
+  if (p.kind === 'workflow' && p.workflow) {
+    workflow.selectWorkflow(p.workflow.id)
+  }
+}
 
 // ---------- 重命名弹窗 ----------
 const renameTarget = ref<{ id: string; name: string } | null>(null)
@@ -53,11 +65,17 @@ function loadHistory(id: string) {
   const entry = history.getById(id)
   if (!entry) return
   workflow.applyHistoryEntry(entry)
-  show(`已载入：${entry.name}`)
+  show(`已载入「${entry.name}」· 之后点「保存历史」会更新这条`)
 }
 
 // ---------- 新建空白工作流 ----------
 function newWorkflow() {
+  // 若当前停在组件型插件（没有草稿概念），先切回第一个工作流插件
+  const active = launcher.activePlugin
+  if (active?.kind !== 'workflow') {
+    const firstWf = pluginRegistry.find((p) => p.kind === 'workflow')
+    if (firstWf) activatePlugin(firstWf)
+  }
   workflow.resetDraft()
   show('已新建空白工作流')
 }
@@ -71,19 +89,20 @@ function newWorkflow() {
     </div>
 
     <div class="sidebar-body">
-      <div class="sidebar-section-title">工作流场景</div>
+      <div class="sidebar-section-title">工作台</div>
       <template v-for="[cat, list] in categories" :key="cat">
         <div class="sidebar-section-title" style="font-size: 11.5px">{{ cat }}</div>
         <button
-          v-for="wf in list"
-          :key="wf.id"
+          v-for="p in list"
+          :key="p.id"
           type="button"
           class="sidebar-item"
-          :class="{ active: wf.id === workflow.currentWorkflowId }"
-          @click="workflow.selectWorkflow(wf.id)"
+          :class="{ active: p.id === launcher.activePluginId }"
+          @click="activatePlugin(p)"
         >
-          {{ wf.name }}
-          <span class="sidebar-item-desc">{{ wf.description }}</span>
+          {{ p.name }}
+          <span v-if="p.kind === 'component'" class="plugin-kind-tag">组件</span>
+          <span class="sidebar-item-desc">{{ p.description }}</span>
         </button>
       </template>
 
@@ -99,8 +118,18 @@ function newWorkflow() {
       >
         暂无历史，填写后点「保存历史」
       </button>
-      <div v-for="e in history.entries" :key="e.id" class="history-item" @click="loadHistory(e.id)">
-        <div class="hi-title">{{ e.name }}</div>
+      <div
+        v-for="e in history.entries"
+        :key="e.id"
+        class="history-item"
+        :class="{ editing: workflow.activeHistoryId === e.id }"
+        :title="workflow.activeHistoryId === e.id ? '正在编辑这条 · 保存历史会更新它' : '点击载入继续编辑'"
+        @click="loadHistory(e.id)"
+      >
+        <div class="hi-title">
+          {{ e.name }}
+          <span v-if="workflow.activeHistoryId === e.id" class="hi-editing-tag">编辑中</span>
+        </div>
         <div class="hi-meta">
           <span>{{ e.workflowName }} · {{ formatDateTime(e.createdAt) }}</span>
           <span class="hi-actions">

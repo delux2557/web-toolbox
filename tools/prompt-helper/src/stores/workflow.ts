@@ -53,6 +53,14 @@ export const useWorkflowStore = defineStore('workflow', () => {
   )
   /** 用户偏好：从 localStorage 恢复 */
   const prefs = ref<WorkflowPrefs>(load(STORAGE_KEYS.prefs, EMPTY_PREFS))
+  /**
+   * 当前草稿绑定的是哪条历史（"会话模型"的核心状态）。
+   * 有值：草稿是从这条历史打开的，点"保存历史"= 更新这条；
+   * 无值：草稿是全新的，点"保存历史"= 新建一条。
+   * 持久化到 localStorage，刷新页面后绑定不丢失。
+   */
+  const activeHistoryId = ref<string | null>(load<string | null>(STORAGE_KEYS.activeHistory, null))
+  watch(activeHistoryId, (v) => save(STORAGE_KEYS.activeHistory, v))
 
   // ---------- 自动持久化 ----------
   // 草稿：每次改动（deep 监听所有嵌套变化）都存到 ph:draft:{workflowId}
@@ -98,6 +106,8 @@ export const useWorkflowStore = defineStore('workflow', () => {
     if (id === currentWorkflowId.value) return
     currentWorkflowId.value = id
     draft.value = load(STORAGE_KEYS.draft(id), createEmptyDraft(id))
+    // 历史条目属于特定工作流，切走后解除绑定（防止误更新别的记录）
+    activeHistoryId.value = null
   }
 
   /** 写入某个字段的值（所有输入组件都走这里，自动保存） */
@@ -128,9 +138,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
     sd.tempFields = sd.tempFields.filter((t) => t.id !== tempId)
   }
 
-  /** 清空当前草稿（回到初始状态） */
+  /** 清空当前草稿（回到初始状态，解除历史绑定） */
   function resetDraft() {
     draft.value = createEmptyDraft(currentWorkflowId.value)
+    activeHistoryId.value = null
   }
 
   // ---------- 用户偏好操作 ----------
@@ -158,17 +169,18 @@ export const useWorkflowStore = defineStore('workflow', () => {
 
   // ---------- 历史相关 ----------
   /**
-   * 载入一条历史存档：
-   * 1. 如果当前草稿有内容，先自动备份成一条新历史（永远有后悔药）
+   * 载入一条历史存档（"打开一个会话"）：
+   * 1. 如果当前草稿有内容且不是正在编辑同一条 → 自动备份成一条新历史（永远有后悔药）
    * 2. 切换到存档所属的工作流
-   * 3. 用存档内容覆盖当前草稿
+   * 3. 用存档内容覆盖当前草稿，并把草稿绑定到这条历史（activeHistoryId）
    */
   function applyHistoryEntry(entry: HistoryEntry) {
     const history = useHistoryStore()
     const hasContent = Object.values(draft.value.stepDrafts).some(
       (sd) => Object.keys(sd.fields).length > 0 || sd.tempFields.length > 0,
     )
-    if (hasContent) {
+    // 正在编辑的就是这条历史时，不需要备份自己
+    if (hasContent && activeHistoryId.value !== entry.id) {
       history.addEntry(
         `自动备份 · ${formatNow()}`,
         draft.value.workflowId,
@@ -181,12 +193,35 @@ export const useWorkflowStore = defineStore('workflow', () => {
       selectWorkflow(entry.workflowId)
     }
     draft.value = JSON.parse(JSON.stringify(entry.draft)) as WorkflowDraft
+    // 绑定：之后点"保存历史"会更新这条，而不是新建
+    activeHistoryId.value = entry.id
+  }
+
+  /**
+   * 保存历史（"会话模型 + upsert"）：
+   * - 草稿正绑定某条历史（从历史打开过）→ 更新那一条（保持 id/名称）
+   * - 否则 → 新建一条（新建后不自动绑定，保持"每次保存=新版本"的快照心智）
+   * 返回本次是更新还是新建，供界面提示。
+   */
+  function saveToHistory(): 'updated' | 'created' {
+    const history = useHistoryStore()
+    const wf = currentWorkflow.value
+    if (!wf) return 'created'
+    if (activeHistoryId.value) {
+      const ok = history.updateEntry(activeHistoryId.value, draft.value)
+      if (ok) return 'updated'
+      // 绑定指向的历史已被删除 → 回退为新建，并解除绑定
+      activeHistoryId.value = null
+    }
+    history.addEntry('', wf.id, wf.name, draft.value)
+    return 'created'
   }
 
   return {
     currentWorkflowId,
     draft,
     prefs,
+    activeHistoryId,
     currentWorkflow,
     activeRecipes,
     progress,
@@ -200,6 +235,7 @@ export const useWorkflowStore = defineStore('workflow', () => {
     toggleHiddenField,
     setCustomDefault,
     applyHistoryEntry,
+    saveToHistory,
   }
 })
 

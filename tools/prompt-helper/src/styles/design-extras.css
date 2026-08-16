@@ -97,6 +97,21 @@
   margin-top: 2px;
   font-weight: 400;
 }
+.plugin-kind-tag {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--text-3);
+  border: 0.5px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 0 5px;
+  margin-left: 6px;
+  vertical-align: 1px;
+  line-height: 16px;
+}
+.sidebar-item.active .plugin-kind-tag {
+  color: var(--accent-strong);
+  border-color: color-mix(in oklab, var(--accent) 40%, transparent);
+}
 .sidebar-item.active .sidebar-item-desc { color: var(--text-2); }
 .sidebar-footer {
   border-top: 1px solid var(--border);
@@ -121,6 +136,17 @@
   transition: background 140ms var(--ease-out);
 }
 .history-item:hover { background: var(--surface-3); }
+.history-item.editing { background: var(--accent-soft); border-color: color-mix(in oklab, var(--accent) 35%, transparent); }
+.history-item.editing .hi-title { color: var(--accent-strong); }
+.hi-editing-tag {
+  font-size: 10.5px;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  vertical-align: 1px;
+}
 .history-item .hi-title {
   font-size: 12.5px;
   color: var(--text);

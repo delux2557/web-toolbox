@@ -7,7 +7,6 @@
 // ============================================================
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useWorkflowStore } from '@/stores/workflow'
-import { useHistoryStore } from '@/stores/history'
 import { useToast } from '@/composables/useToast'
 import type { CompileInput } from '@/types/workflow'
 import TopBar from '@/components/TopBar.vue'
@@ -16,7 +15,6 @@ import RecipeCard from '@/components/RecipeCard.vue'
 import OutputPanel from '@/components/OutputPanel.vue'
 
 const workflow = useWorkflowStore()
-const history = useHistoryStore()
 const { show } = useToast()
 
 // ---------- 锚点高亮：滚动时找出"当前正在看哪一步" ----------
@@ -58,9 +56,9 @@ const compileInput = computed<CompileInput>(() => ({
 function saveHistory() {
   const wf = workflow.currentWorkflow
   if (!wf) return
-  // 名称留空 → historyStore 自动生成"工作流名 · 日期"
-  history.addEntry('', wf.id, wf.name, workflow.draft)
-  show('已保存到历史记录')
+  // 会话模型 + upsert：从历史打开的草稿 → 更新那条；全新草稿 → 新建一条
+  const result = workflow.saveToHistory()
+  show(result === 'updated' ? '已更新该条历史记录' : '已保存到历史记录')
 }
 
 function generate() {
