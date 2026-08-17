@@ -124,10 +124,12 @@
 /* 内置兜底清单：file:// 下 fetch manifest.json 失败时使用。请与根目录 manifest.json 保持同步。 */
 var FALLBACK_MANIFEST = {
   "schemaVersion": 1,
-  "latest": "v5",
+  "latest": "v7",
   "versions": [
     { "id": "v4", "version": "4.0.0", "label": "场景化上下文（可定制 System Prompt）", "entry": "V4/index.html", "build": "scenario-aware", "buildTime": "2026-08-13 14:30" },
-    { "id": "v5", "version": "5.0.0", "label": "场景切换局部刷新", "entry": "V5/index.html", "build": "partial-update", "buildTime": "2026-08-13 17:10" }
+    { "id": "v5", "version": "5.0.0", "label": "场景切换局部刷新", "entry": "V5/index.html", "build": "partial-update", "buildTime": "2026-08-13 17:10" },
+    { "id": "v6", "version": "6.0.0", "label": "目录联动定位 + 行号记忆", "entry": "V6/index.html", "build": "tree-locate", "buildTime": "2026-08-17 19:35" },
+    { "id": "v7", "version": "7.0.0", "label": "过滤规则与引导文案配置化", "entry": "V7/index.html", "build": "config-driven", "buildTime": "2026-08-17 19:55" }
   ]
 };
 

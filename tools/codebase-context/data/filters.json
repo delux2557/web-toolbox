@@ -1,0 +1,30 @@
+{
+  "maxFileSizeMB": 5,
+  "ignoredDirs": [
+    "node_modules", ".git", ".hg", ".svn", "dist", "build", "out", "output",
+    "__pycache__", ".venv", "venv", ".env", "env", "coverage", ".next", ".nuxt",
+    ".output", ".cache", ".parcel-cache", ".idea", ".vscode", ".vs", "target",
+    "vendor", "bower_components", ".gradle", ".turbo", ".expo", ".svelte-kit",
+    ".angular", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".eggs",
+    ".docusaurus", ".astro", ".vercel", ".netlify", ".yarn", ".pnpm-store",
+    "Pods", "DerivedData", "bin", "obj", "cmake-build-debug", "__pypackages__"
+  ],
+  "ignoredNames": [
+    "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb",
+    "cargo.lock", "gemfile.lock", "poetry.lock", "composer.lock", "pipfile.lock",
+    "npm-shrinkwrap.json", ".ds_store", "thumbs.db", "desktop.ini"
+  ],
+  "textExts": [
+    "js", "mjs", "cjs", "jsx", "ts", "tsx", "py", "java", "go", "rs", "rb", "php",
+    "c", "h", "cc", "cpp", "cxx", "hpp", "hh", "cs", "sh", "bash", "zsh", "fish",
+    "ps1", "bat", "cmd", "sql", "graphql", "gql", "swift", "kt", "kts", "dart",
+    "r", "lua", "pl", "pm", "ex", "exs", "erl", "hrl", "clj", "cljs", "cljc",
+    "scala", "sc", "groovy", "gradle", "ini", "cfg", "conf", "toml", "yaml", "yml",
+    "json", "jsonc", "json5", "xml", "svg", "html", "htm", "xhtml", "css", "scss",
+    "sass", "less", "styl", "vue", "svelte", "astro", "md", "mdx", "markdown",
+    "txt", "text", "log", "csv", "tsv", "properties", "rst", "adoc", "tex", "bib",
+    "proto", "thrift", "sol", "nix", "elm", "hs", "fs", "fsx", "fsi", "zig", "nim",
+    "vb", "prisma", "edge", "liquid", "ejs", "hbs", "twig", "jinja", "pug",
+    "mustache", "handlebars", "http", "rest", "dockerfile", "makefile", "cmake"
+  ]
+}

@@ -11,7 +11,14 @@
 ├── V5/index.html    ← v5 片段（场景切换局部刷新）
 ├── V5/style.css     ← v5 样式
 ├── V5/app.js        ← v5 逻辑（局部更新引擎）
-├── data/scenarios.json ← 场景模板（纯配置，4 个场景，零硬编码）
+├── V6/index.html    ← v6 片段（目录联动定位 + 行号记忆）
+├── V6/style.css     ← v6 样式
+├── V6/app.js        ← v6 逻辑（目录树定位 + 行号持久化）
+├── V7/index.html    ← v7 片段（过滤规则与引导文案配置化）
+├── V7/style.css     ← v7 样式
+├── V7/app.js        ← v7 逻辑（加载 filters.json + 配置化文案）
+├── data/scenarios.json ← 场景模板（纯配置，12 个场景，零硬编码）
+├── data/filters.json   ← 过滤规则配置（忽略目录/文件 + 文本扩展名白名单）
 └── overview.md      ← 本文档
 ```
 
@@ -40,10 +47,12 @@
 ```json
 {
   "schemaVersion": 1,
-  "latest": "v5",
+  "latest": "v7",
   "versions": [
     { "id": "v4", "version": "4.0.0", "label": "场景化上下文（可定制 System Prompt）", "entry": "V4/index.html" },
-    { "id": "v5", "version": "5.0.0", "label": "场景切换局部刷新", "entry": "V5/index.html" }
+    { "id": "v5", "version": "5.0.0", "label": "场景切换局部刷新", "entry": "V5/index.html" },
+    { "id": "v6", "version": "6.0.0", "label": "目录联动定位 + 行号记忆", "entry": "V6/index.html" },
+    { "id": "v7", "version": "7.0.0", "label": "过滤规则与引导文案配置化", "entry": "V7/index.html" }
   ]
 }
 ```
@@ -58,6 +67,7 @@
 - 未来加新版：在 `manifest.json` 的 `versions` 增项、更新 `latest`，壳无需改动。
 
 ## 校验结果
-- `V4/app.js`、`V5/app.js` 通过 `node --check`；`data/scenarios.json` 解析通过（4 个场景，`defaultId=general`）。
-- V1/V2/V3 已移除（历史版本，见 git 历史）；当前仅保留 V4 / V5。
+- `V4/app.js`、`V5/app.js`、`V6/app.js`、`V7/app.js` 均通过 `node --check`；`data/scenarios.json` 解析通过（12 个场景，`defaultId=general`）；`data/filters.json` 解析通过（忽略目录/文件 + 文本扩展名白名单）。
+- V1/V2/V3 已移除（历史版本，见 git 历史）；当前保留 V4 / V5 / V6 / V7。
+- 本轮新增：V6（目录联动定位 + 行号记忆）、V7（过滤规则与引导文案配置化，新增 `data/filters.json`）。
 - 场景逻辑经只读核对：`buildSystemPromptBlock`（YAML frontmatter + 引用块）、`updateExportData`、`loadScenarios` 回退、`mdToHTML` 的 frontmatter/blockquote 渲染。
