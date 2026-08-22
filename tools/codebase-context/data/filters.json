@@ -25,6 +25,6 @@
     "txt", "text", "log", "csv", "tsv", "properties", "rst", "adoc", "tex", "bib",
     "proto", "thrift", "sol", "nix", "elm", "hs", "fs", "fsx", "fsi", "zig", "nim",
     "vb", "prisma", "edge", "liquid", "ejs", "hbs", "twig", "jinja", "pug",
-    "mustache", "handlebars", "http", "rest", "dockerfile", "makefile", "cmake"
+    "mustache", "handlebars", "http", "rest", "dockerfile", "makefile", "cmake","wxml","wxss"
   ]
 }
