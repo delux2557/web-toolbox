@@ -498,6 +498,27 @@
                     gap: 10px;
                 }
         
+                /* V3.6: 全局拖拽导入的视觉反馈 —— body.drag-over 时显示半透明遮罩 + 居中提示。
+                   纯 CSS(::after)实现，不引入额外 DOM；z-index 高于所有弹层(1100~1200)但低于 toast，
+                   拖拽提示不遮挡已弹出的 toast。 */
+                body.drag-over::after {
+                    content: "松开已导入试卷（支持 CSV / JSON）";
+                    position: fixed;
+                    inset: 0;
+                    z-index: 1500;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: color-mix(in srgb, var(--surface) 82%, transparent);
+                    color: var(--text-primary);
+                    font-size: 16px;
+                    font-weight: 500;
+                    letter-spacing: 0.5px;
+                    border: 3px dashed var(--primary);
+                    box-sizing: border-box;
+                    pointer-events: none;
+                }
+        
                 .btn {
                     border: none;
                     padding: 10px 22px;
@@ -1548,22 +1569,21 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
           题目导航
         </button>
-        <!-- V3.5: 交卷后「作答回顾」入口 (管理端/考生端均保留，考生端不依赖管理元素) -->
-        <button class="btn" id="reviewBtn" style="display:none;">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-          回顾
-        </button>
-        <!-- V3.5: 「错题重练」会话中常驻的返回原卷入口 (仅在 retryActive 时显示) -->
-        <button class="btn" id="reviewBackNavBtn" style="display:none;">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"></path></svg>
-          返回原卷
-        </button>
         <button class="btn" id="nextBtn">
           下一题
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </button>
       </div>
       <div class="nav-group">
+        <!-- V3.5: 交卷后「作答回顾」入口 / 错题重练「返回原卷」→ 放右侧提交组，下一题位置永远不动 -->
+        <button class="btn" id="reviewBackNavBtn" style="display:none;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"></path></svg>
+          返回原卷
+        </button>
+        <button class="btn" id="reviewBtn" style="display:none;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          回顾
+        </button>
         <button class="btn btn-success" id="submitBtn">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
           交卷判分
@@ -2577,8 +2597,8 @@
                     // 只看错题 = 非全对(含部分对与未答)，保证与过滤/重练口径一致
                     revWrongN.textContent = total - correct;
                     reviewContext.textContent = `共 ${total} 题 · ${mode === 'practice' ? '练习模式' : '考试模式'}`;
-                    // 动作按钮：练习模式可只练错题；错题重练会话中显示返回原卷
-                    if (reviewRetryBtn) reviewRetryBtn.style.display = mode === 'practice' ? 'inline-flex' : 'none';
+                    // 动作按钮：练习模式且非重练会话时可只练错题；错题重练会话中显示返回原卷
+                    if (reviewRetryBtn) reviewRetryBtn.style.display = mode === 'practice' && !retryActive ? 'inline-flex' : 'none';
                     if (reviewBackBtn) reviewBackBtn.style.display = retryActive ? 'inline-flex' : 'none';
                     reviewExpandedIdx = null; // 重新打开时收起所有详情
                     renderReviewList();
@@ -2652,8 +2672,13 @@
                 }
         
                 // 只练错题 (练习模式)：提取错题子集进入新一轮练习，可返回原卷
+                // 仅允许一层，防止嵌套重练导致重置/返回原卷行为混乱。
                 function retryWrongQuestions() {
                     if (mode !== 'practice' || !isSubmitted || !examData) return;
+                    if (retryActive) {
+                        if (typeof showToast === 'function') showToast('已在错题重练中，请先返回原卷');
+                        return;
+                    }
                     const total = examData.questions.length;
                     const wrongIndices = [];
                     examData.questions.forEach((q, idx) => {
@@ -2883,30 +2908,62 @@
         
                     // V3.1: 考生端模式不加载管理功能 (导出的 HTML 为纯净考生端)
                     if (!isClient) {
-                        // 文件上传 (bind 守卫: 考生端导出版这些元素不存在，null 时静默跳过)
-                        bind(fileInput, 'change', function(e) {
-                            const file = this.files[0];
-                            if (!file) return;
+                        // 文件导入核心(选择器 + 拖拽共用)：读取 → 解析 → 载入
+                        // V3.6: 抽取为复用函数，供 fileInput 与全局拖拽 drop 使用，避免逻辑分叉
+                        function importFile(file) {
                             const reader = new FileReader();
                             reader.onload = function(ev) {
                                 try {
                                     const text = ev.target.result;
-                                    let data;
-                                if (file.name.endsWith('.json')) {
-                                    data = parseJSON(text);
-                                } else {
-                                    data = parseCSV(text);
-                                }
-                                // V3.2: JSON/CSV 未提供标题时，用文件名作试卷名
-                                if (!data.title) data.title = file.name.replace(/\.(csv|json)$/i, '');
+                                    const data = file.name.endsWith('.json') ? parseJSON(text) : parseCSV(text);
+                                    // V3.2: JSON/CSV 未提供标题时，用文件名作试卷名
+                                    if (!data.title) data.title = file.name.replace(/\.(csv|json)$/i, '');
                                     loadExamData(data);
-                                    fileInput.value = '';
                                 } catch (err) {
-                                    alert('解析失败: ' + err.message);
-                                    fileInput.value = '';
+                                    if (typeof showToast === 'function') showToast('解析失败: ' + err.message, 'error');
+                                    else alert('解析失败: ' + err.message);
                                 }
                             };
                             reader.readAsText(file);
+                        }
+        
+                        // 文件上传 (bind 守卫: 考生端导出版这些元素不存在，null 时静默跳过)
+                        bind(fileInput, 'change', function(e) {
+                            const file = this.files[0];
+                            if (!file) return;
+                            fileInput.value = '';
+                            importFile(file);
+                        });
+        
+                        // V3.6: 全局拖拽导入 —— 把 .csv/.json 文件拖放到页面任意处即可导入。
+                        // 完美贴合"单页工具"直觉；同一动作(选择器/拖拽)共用 importFile，无逻辑分叉。
+                        // 注意：目标元素必须 preventDefault+stopPropagation，否则浏览器默认行为是"打开文件"。
+                        // 视觉反馈：dragenter 计数(避免子元素进出反复闪烁)，>0 时显示遮罩提示，离开/放下即隐藏。
+                        let dragDepth = 0;
+                        function hasFiles(e) {
+                            return e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.includes('Files');
+                        }
+                        function updateDragOverlay() {
+                            document.body.classList.toggle('drag-over', dragDepth > 0);
+                        }
+                        document.addEventListener('dragover', function(e) {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = hasFiles(e) ? 'copy' : 'none';
+                        });
+                        document.addEventListener('dragenter', function(e) {
+                            e.preventDefault();
+                            if (hasFiles(e)) { dragDepth++; updateDragOverlay(); }
+                        });
+                        document.addEventListener('dragleave', function(e) {
+                            e.preventDefault();
+                            if (dragDepth > 0) { dragDepth--; updateDragOverlay(); }
+                        });
+                        document.addEventListener('drop', function(e) {
+                            e.preventDefault();
+                            dragDepth = 0;
+                            updateDragOverlay();
+                            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+                            if (file) importFile(file);
                         });
         
                         // 载入示例
@@ -2951,7 +3008,7 @@
                             });
                             if (!ok) return;
                             clearStorage();
-                            examData = null;
+                            // 重置进度 = 保留当前试卷，仅清答案/判定/计时（重新作答本卷）；不回退到空状态。
                             userAnswers = {};
                             feedbackMap = {};
                             clearAllJudges();
@@ -2961,7 +3018,7 @@
                             currentIndex = 0;
                             resetTimerState();
                             updateSubmitLabel();
-                            renderAll();
+                            renderAll();           // 试卷仍在，直接进入可重新作答状态
                             closeResultModal();
                         });
                     }
@@ -3386,7 +3443,7 @@
                 function startWrongBookPractice(keys) {
                     const book = loadWrongBook();
                     const items = book.filter(e => keys.includes(e.key));
-                    if (!items.length) { if (typeof alert === 'function') alert('没有可练习的错题'); return; }
+                    if (!items.length) { if (typeof showToast === 'function') showToast('没有可练习的错题'); return; }
                     const data = {
                         title: '错题本练习',
                         questions: items.map(e => {
@@ -3555,7 +3612,7 @@
                 const EXPORT_SKIP_SRC = [];
         
                 async function exportSelfContained() {
-                    if (!examData) { alert('请先载入试卷数据'); return; }
+                    if (!examData) { if (typeof showToast === 'function') showToast('请先载入试卷数据'); return; }
                     // V3.5: 导出前先把「外部引用的 css/js」内联进克隆 DOM。
                     // build(dist) 模式样式/脚本本就内联，无需 fetch；源码(本地 HTTP)模式才需内联。
                     const clone = document.documentElement.cloneNode(true);
@@ -3575,7 +3632,9 @@
                                 const text = await res.text();
                                 if (el.tagName === 'LINK') {
                                     const style = clone.ownerDocument.createElement('style');
-                                    style.textContent = text;
+                                    // 与 build.mjs 的 inlineSafe 保持一致：CSS 内容里若出现字面 style 结束标签
+                                    // ( "<\\/style>" )，会提前闭合内联 <style> 块、截断后续样式 → 同样需要转义
+                                    style.textContent = text.replace(/<\/style/gi, '<\\/style');
                                     el.parentNode.replaceChild(style, el);
                                 } else {
                                     el.removeAttribute('src');
