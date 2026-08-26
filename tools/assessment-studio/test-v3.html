@@ -1331,60 +1331,6 @@
                 .rd-value.rd-answer { color: var(--success-dark); font-weight: 500; }
                 .rd-explain .rd-value { color: var(--gray-5); }
                 .rd-none { font-style: normal; color: var(--gray-3); }
-                /* V3.6: 管理菜单「错题本」角标 */
-                .menu-badge {
-                    margin-left: auto;
-                    min-width: 18px;
-                    height: 18px;
-                    padding: 0 5px;
-                    border-radius: 999px;
-                    background: var(--danger);
-                    color: #fff;
-                    font-size: 11px;
-                    font-weight: 600;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                /* V3.6: 错题本列表条目 */
-                .wb-item {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0;
-                    padding: 10px 12px;
-                    border-radius: 10px;
-                    background: var(--surface);
-                    cursor: pointer;
-                    transition: var(--transition);
-                }
-                .wb-item + .wb-item { margin-top: 6px; }
-                .wb-item:hover { background: var(--primary-light); }
-                .wb-num {
-                    flex: 0 0 auto;
-                    width: 30px;
-                    height: 30px;
-                    border-radius: 8px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 13px;
-                    font-weight: 600;
-                    background: var(--reveal-err);
-                    color: var(--danger-dark);
-                }
-                .wb-times {
-                    flex: 0 0 auto;
-                    font-size: 12px;
-                    font-weight: 600;
-                    color: var(--warning);
-                    white-space: nowrap;
-                }
-                .wb-meta {
-                    flex: 0 0 auto;
-                    font-size: 12px;
-                    color: var(--gray-4);
-                    white-space: nowrap;
-                }
                 .review-empty {
                     padding: 26px;
                     text-align: center;
@@ -1392,7 +1338,7 @@
                     font-size: 14px;
                 }
                 /* V3.6: 确认框必须始终最顶层 (高于 result-modal 1000 / review-modal 1001)，
-                  否则从任何弹层(如错题本)内点出的确认框会被其下一层的遮罩盖住而不可见 */
+                  否则从任何弹层内点出的确认框会被其下一层的遮罩盖住而不可见 */
                 #confirmModal { z-index: 1100; }
                 /* V3.6: 应用内轻量 toast —— 替代原生 alert 的提示性信息，非阻塞、风格与主题一致 */
                 .toast-zone {
@@ -1515,12 +1461,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
               下载模板
             </button>
-            <!-- V3.6: 错题本入口 (仅管理端；考生端导出时随 .manage-wrap 一并剥离) -->
-            <button id="menuWrongbookBtn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-              错题本
-              <span class="menu-badge" id="wrongbookBadge" style="display:none;"></span>
-            </button>
+            <!-- V3.7: 移除错题本入口 —— 练习平台简化为「回顾 + 只练一层错题」，不再跨会话累积错题 -->
             <button class="danger-item" id="menuResetBtn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
               重置进度
@@ -1679,38 +1620,8 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:4px;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
           只练错题
         </button>
-        <button class="btn btn-sm review-action" id="reviewBackBtn" style="display:none;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:4px;"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"></path></svg>
-          返回原卷
-        </button>
       </div>
       <div class="review-list" id="reviewList"></div>
-    </div>
-  </div>
-
-  <!-- 错题本弹层 (V3.6)：跨试卷持久化的错题集，可展开看答案与解析，一键练习/清空 -->
-  <div class="review-modal" id="wrongbookModal" role="dialog" aria-modal="true" aria-labelledby="wrongbookTitle">
-    <div class="review-panel">
-      <div class="review-header">
-        <div class="review-title">
-          <h3 id="wrongbookTitle">错题本</h3>
-          <span class="review-context" id="wrongbookContext">共 0 道</span>
-        </div>
-        <button class="drawer-close" id="wrongbookCloseBtn" aria-label="关闭">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-      </div>
-      <div class="review-toolbar">
-        <button class="btn btn-sm review-action" id="wrongbookPracticeBtn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:4px;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
-          练习错题
-        </button>
-        <button class="btn btn-sm review-action" id="wrongbookClearBtn" style="color:var(--danger);">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:4px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-          清空错题本
-        </button>
-      </div>
-      <div class="review-list" id="wrongbookList"></div>
     </div>
   </div>
 
@@ -1843,7 +1754,6 @@
                 const reviewList = $('reviewList');
                 const reviewContext = $('reviewContext');
                 const reviewRetryBtn = $('reviewRetryBtn');
-                const reviewBackBtn = $('reviewBackBtn');
                 const reviewBackNavBtn = $('reviewBackNavBtn');
                 const revCorrect = $('revCorrect');
                 const revPartial = $('revPartial');
@@ -1856,8 +1766,6 @@
                 let reviewExpandedIdx = null;  // 回顾面板当前展开复盘详情的题索引 (null=全部收起)
                 let retryActive = false;       // 是否正处于「只练错题」会话
                 let retrySnapshot = null;      // 进入重练前的原卷快照 {exam,answers,feedback,submitted}
-                // V3.6: 错题本练习会话 — 记录本次从错题本挑选练习的 key 集合 (交卷时据此做对移出/做错累积)
-                let wrongBookSessionKeys = null;
         
                 // ================================================================
                 // 2. 工具 & 辅助
@@ -2412,8 +2320,6 @@
                     }
         
                     updateGrid();
-                    // V3.6: 交卷时把错题并入持久化错题本 (练习错题本会话时对做对的题做「移出」)
-                    if (typeof mergeWrongOnSubmit === 'function') mergeWrongOnSubmit();
                     saveToStorage();
                     updateSubmitLabel();
                 }
@@ -2597,9 +2503,8 @@
                     // 只看错题 = 非全对(含部分对与未答)，保证与过滤/重练口径一致
                     revWrongN.textContent = total - correct;
                     reviewContext.textContent = `共 ${total} 题 · ${mode === 'practice' ? '练习模式' : '考试模式'}`;
-                    // 动作按钮：练习模式且非重练会话时可只练错题；错题重练会话中显示返回原卷
+                    // 动作按钮：练习模式且非重练会话时可只练错题；「返回原卷」常驻在主界面底部导航，回顾内不再重复
                     if (reviewRetryBtn) reviewRetryBtn.style.display = mode === 'practice' && !retryActive ? 'inline-flex' : 'none';
-                    if (reviewBackBtn) reviewBackBtn.style.display = retryActive ? 'inline-flex' : 'none';
                     reviewExpandedIdx = null; // 重新打开时收起所有详情
                     renderReviewList();
                     if (reviewModal) reviewModal.classList.add('open');
@@ -2703,9 +2608,8 @@
                     };
                     retryActive = true;
                     closeReview();
-                    // loadExamData 会重置答案/判定/计时并渲染错题子卷
+                    // loadExamData 会重置答案/判定/计时并渲染错题子卷 (子卷期间主界面常驻「返回原卷」)
                     loadExamData(wrongExam);
-                    if (reviewBackBtn) reviewBackBtn.style.display = 'inline-flex';
                 }
         
                 // 返回原卷：从「错题重练」会话恢复进入前的完整原卷与答题状态
@@ -2720,8 +2624,7 @@
                     lastSegHtml = '';
                     lastGridHtml = '';
                     closeReview();
-                    renderAll();
-                    if (reviewBackBtn) reviewBackBtn.style.display = 'none';
+                    renderAll();   // renderAll → updateReviewBtn 会按 retryActive=false 收起主界面「返回原卷」
                 }
         
                 // ================================================================
@@ -2794,8 +2697,6 @@
                     timerDisplay.classList.remove('hidden-timer');
         
                     examData = data;
-                    // V3.6: 新载入的卷不再被视为「错题本练习会话」
-                    wrongBookSessionKeys = null;
                     renderAll();
                     updateSubmitLabel();
                     clearStorage();
@@ -3039,8 +2940,7 @@
                         if (btn && btn.dataset.filter) switchReviewFilter(btn.dataset.filter);
                     });
                     bind(reviewRetryBtn, 'click', retryWrongQuestions);
-                    bind(reviewBackBtn, 'click', backToOriginalExam);
-                    // 底部导航「返回原卷」(错题重练会话常驻)
+                    // 底部导航「返回原卷」(错题重练会话常驻，唯一入口)
                     bind(reviewBackNavBtn, 'click', backToOriginalExam);
                     // 回顾面板内点击条目可跳题，回车/空格触达等价
                     bind(reviewList, 'keydown', (e) => {
@@ -3257,7 +3157,11 @@
                             timerStarted,
                             timerStartTs,
                             isSubmitted,
-                            mode
+                            mode,
+                            // V3.7: 持久化「只练错题」重练会话 —— 否则刷新后 retryActive=null、原卷快照丢失，
+                            // examData 仍是错题子集，会被误当成"原卷"，导致再进入只练错题后「返回原卷」回不到初始试卷。
+                            retryActive: !!retryActive,
+                            retrySnapshot: retrySnapshot && retrySnapshot.exam ? retrySnapshot : null
                         };
                         localStorage.setItem('exam_backup', JSON.stringify(backup));
                         savePending = false;
@@ -3287,16 +3191,35 @@
                         userAnswers = backup.userAnswers || {};
                         feedbackMap = backup.feedbackMap || {};
                         currentIndex = backup.currentIndex || 0;
-                        // 计时起点语义 V3.4：按「是否已开始」恢复；未开始则停在 00:00 等待首次作答
+                        // 计时起点语义 V3.4：按「是否已开始」恢复；未开始则停在 00:00 等待首次作答。
+                        // 精度修复 V3.6：仅当会话「真的已开始」才还原绝对时间戳；未开始(或旧备份)一律
+                        // 复位 timerStartTs=0/timerSeconds=0。若此时错误地锚定成 Date.now()，
+                        // 会让 beginTimer 里 `if(!timerStartTs)` 判定失败而不重置起点，导致计时基准
+                        // 回溯到历史刷新时刻 —— 表现为空答也显示累积的大秒数。修复后在首次作答时才真正计时。
                         timerStarted = !!backup.timerStarted;
-                        // 精度修复：优先还原绝对时间戳；兼容旧备份(仅 timerSeconds)则反推起点时间
-                        timerStartTs = (typeof backup.timerStartTs === 'number' && backup.timerStartTs > 0)
-                            ? backup.timerStartTs
-                            : Date.now() - (backup.timerSeconds || 0) * 1000;
-                        timerSeconds = Math.max(0, Math.floor((Date.now() - timerStartTs) / 1000));
+                        if (timerStarted) {
+                            if (typeof backup.timerStartTs === 'number' && backup.timerStartTs > 0) {
+                                timerStartTs = backup.timerStartTs;
+                            } else {
+                                // 旧备份仅存 timerSeconds 时反推起点时间，保持兼容
+                                timerStartTs = Date.now() - (backup.timerSeconds || 0) * 1000;
+                            }
+                            timerSeconds = Math.max(0, Math.floor((Date.now() - timerStartTs) / 1000));
+                        } else {
+                            // 未开始：不锚定时间戳，复位为 0，首次作答时才真正计时
+                            timerStartTs = 0;
+                            timerSeconds = 0;
+                        }
                         isSubmitted = backup.isSubmitted || false;
                         // V3.3: 恢复答题模式 (随进度备份)
                         if (backup.mode === 'exam' || backup.mode === 'practice') setMode(backup.mode, false);
+                        // V3.7: 恢复「只练错题」重练会话，刷新后仍在错题子卷并保留可返回的原始试卷快照，
+                        // 避免子卷被误当成"原卷"、再次只练错题后「返回原卷」回不到初始试卷。
+                        retryActive = !!backup.retryActive;
+                        retrySnapshot = (backup.retrySnapshot && backup.retrySnapshot.exam &&
+                            Array.isArray(backup.retrySnapshot.exam.questions))
+                            ? backup.retrySnapshot
+                            : null;
                         timerDisplay.textContent = formatTime(timerSeconds);
                         // renderAll 内部已处理 isSubmitted 分支：显示成绩 + 批改样式
                         renderAll();
@@ -3309,249 +3232,6 @@
                     }
                     return false;
                 }
-    
-    </script>
-  <!-- js/wrongbook：错题本持久化(去重累积/做对移出) + 错题本弹层 -->
-      <script>
-
-        // wrongbook.js · 职责：错题本持久化(去重累积 + 做对移出)，并提供错题本弹层 UI(仅管理端)。
-                // 学习闭环：
-                //   1) 普通卷交卷 → 把当前卷「未答/部分对/答错」题目按内容去重合并进错题本(错次+1)；
-                //   2) 从错题本「练习错题」→ 交卷后把这次做对的题目移出错题本，做错的保留并计数，
-                //      使错题本自然收敛到"仍未掌握"的缺口。
-                // 依赖 core.js 暴露的 examData/userAnswers/feedbackMap/mode/wrongBookSessionKeys/
-                // optionsToText/escapeHTML/askConfirm/bind/loadExamData 等全局；必须位于 core.js 之后加载。
-                //
-                const WB_KEY = 'exam_wrongbook';
-        
-                // 稳定主键：对题干做 djb2 哈希 → 同一题干跨试卷去重
-                function hashContent(s) {
-                    let h = 5381;
-                    const str = String(s == null ? '' : s);
-                    for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
-                    return 'w' + h.toString(36);
-                }
-        
-                function loadWrongBook() {
-                    try {
-                        const arr = JSON.parse(localStorage.getItem(WB_KEY) || '[]');
-                        return Array.isArray(arr) ? arr : [];
-                    } catch (e) { return []; }
-                }
-        
-                function saveWrongBook(arr) {
-                    try {
-                        localStorage.setItem(WB_KEY, JSON.stringify(arr));
-                    } catch (e) {
-                        console.warn('[考试系统] 错题本保存失败:', e && e.message ? e.message : e);
-                    }
-                }
-        
-                // 当前卷的错题索引 (统一口径：未答/部分对/答错)
-                function getWrongIndices() {
-                    const wrong = [];
-                    if (!examData) return wrong;
-                    examData.questions.forEach((q, idx) => {
-                        const ans = userAnswers[idx] || [];
-                        let isWrong;
-                        if (mode === 'practice') {
-                            // 练习模式：未答恒为错题；已答未判定(如快速切题) 按规则即时判定，避免误计入错题本
-                            if (ans.length === 0) {
-                                isWrong = true;
-                            } else if (feedbackMap[idx] == null) {
-                                isWrong = judgeAnswer(q, ans) !== 'correct';
-                            } else {
-                                isWrong = feedbackMap[idx] !== 'correct';
-                            }
-                        } else {
-                            // 考试模式：与正确答案不完全一致视为错题
-                            const a = q.answer || [];
-                            const exact = ans.length === a.length && a.every(v => ans.includes(v)) && ans.every(v => a.includes(v));
-                            isWrong = !exact;
-                        }
-                        if (isWrong) wrong.push(idx);
-                    });
-                    return wrong;
-                }
-        
-                // 交卷钩子 (core.js 的 submitExam 调用)：区分「练习错题本」会话与普通卷
-                function mergeWrongOnSubmit() {
-                    if (!examData) return;
-                    if (wrongBookSessionKeys && wrongBookSessionKeys.length) {
-                        applyWrongSession();       // 练习错题本 → 做对移出
-                    } else {
-                        accumulateWrongFromCurrent(); // 普通卷 → 去重累积
-                    }
-                    updateWrongBadge();
-                }
-        
-                // 把当前卷错题去重累积进错题本
-                function accumulateWrongFromCurrent() {
-                    const book = loadWrongBook();
-                    const now = Date.now();
-                    let dirty = false;
-                    getWrongIndices().forEach(idx => {
-                        const q = examData.questions[idx];
-                        const key = hashContent(q.content);
-                        const found = book.find(e => e.key === key);
-                        if (found) {
-                            found.count = (found.count || 0) + 1;
-                            found.lastAt = now;
-                            if (!found.explain && q.explain) { found.explain = q.explain; dirty = true; }
-                        } else {
-                            book.push({ key, content: q.content, type: q.type, options: q.options || [], answer: q.answer || [], explain: q.explain || '', count: 1, lastAt: now, paper: examData.title || '' });
-                        }
-                        dirty = true;
-                    });
-                    if (dirty) saveWrongBook(book);
-                }
-        
-                // 错题本练习会话交卷：本次练习中做对的题目移出，做错的保留并计数
-                function applyWrongSession() {
-                    const keys = wrongBookSessionKeys;
-                    const set = new Set(keys);
-                    const book = loadWrongBook();
-                    const now = Date.now();
-                    let dirty = false;
-                    const next = [];
-                    book.forEach(e => {
-                        if (!set.has(e.key)) { next.push(e); return; }
-                        const idx = examData.questions.findIndex(q => hashContent(q.content) === e.key);
-                        let mastered = false;
-                        if (idx > -1) {
-                            const q = examData.questions[idx];
-                            const ans = userAnswers[idx] || [];
-                            const a = q.answer || [];
-                            if (mode === 'practice') {
-                                // 练习模式做对 = 已答且判定为全对(未判定时即时判定)
-                                const judged = feedbackMap[idx] != null ? feedbackMap[idx] : judgeAnswer(q, ans);
-                                mastered = ans.length > 0 && judged === 'correct';
-                            } else {
-                                mastered = ans.length === a.length && a.every(v => ans.includes(v)) && ans.every(v => a.includes(v));
-                            }
-                        }
-                        if (mastered) { dirty = true; return; } // 做对 → 移出错题本
-                        e.count = (e.count || 0) + 1;
-                        e.lastAt = now;
-                        next.push(e);
-                        dirty = true;
-                    });
-                    if (dirty) saveWrongBook(next);
-                }
-        
-                // 从错题本挑选 keys 的题目构造一份练习卷 (以「练习」学习流程复习，非正式考试)
-                function startWrongBookPractice(keys) {
-                    const book = loadWrongBook();
-                    const items = book.filter(e => keys.includes(e.key));
-                    if (!items.length) { if (typeof showToast === 'function') showToast('没有可练习的错题'); return; }
-                    const data = {
-                        title: '错题本练习',
-                        questions: items.map(e => {
-                            const q = { id: 'W' + e.key.slice(1), type: e.type, content: e.content, options: e.options, answer: e.answer };
-                            if (e.explain) q.explain = e.explain;
-                            return q;
-                        })
-                    };
-                    loadExamData(data);                                    // 内部会重置 wrongBookSessionKeys = null
-                    wrongBookSessionKeys = items.map(e => e.key);          // 记录本次会话，交卷后据此做对移出
-                }
-        
-                function clearWrongBook() {
-                    saveWrongBook([]);
-                    updateWrongBadge();
-                }
-        
-                // ---- 错题本弹层 UI (仅管理端；考生端导出时入口随 .manage-wrap 剥离) ----
-                function openWrongBookModal() {
-                    renderWrongBook();
-                    const m = document.getElementById('wrongbookModal');
-                    if (m) m.classList.add('open');
-                }
-        
-                function closeWrongBookModal() {
-                    const m = document.getElementById('wrongbookModal');
-                    if (m) m.classList.remove('open');
-                }
-        
-                function updateWrongBadge() {
-                    const badge = document.getElementById('wrongbookBadge');
-                    if (!badge) return;
-                    const n = loadWrongBook().length;
-                    badge.textContent = n;
-                    badge.style.display = n > 0 ? '' : 'none';
-                }
-        
-                function formatWBTime(ts) {
-                    if (!ts) return '';
-                    const d = new Date(ts);
-                    const p = n => String(n).padStart(2, '0');
-                    return `${d.getMonth() + 1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-                }
-        
-                // 渲染错题本列表：条目默认折叠，点击展开「正确答案 + 解析」
-                function renderWrongBook() {
-                    const list = document.getElementById('wrongbookList');
-                    const ctx = document.getElementById('wrongbookContext');
-                    const book = loadWrongBook();
-                    if (ctx) ctx.textContent = `共 ${book.length} 道`;
-                    if (!list) return;
-                    if (!book.length) {
-                        list.innerHTML = '<div class="review-empty">暂无错题。完成答卷后，答错/未答的题目会自动收录，方便日后重练。</div>';
-                        return;
-                    }
-                    // 最近错的靠前
-                    const sorted = book.slice().sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
-                    list.innerHTML = sorted.map(e => {
-                        const q = { type: e.type, content: e.content, options: e.options, answer: e.answer };
-                        const answerTxt = optionsToText(q, e.answer || []);
-                        const explain = e.explain ? escapeHTML(e.explain) : null;
-                        return `
-                            <div class="wb-item" data-key="${escapeHTML(e.key)}" role="button" tabindex="0" aria-expanded="false" title="点击展开正确答案与解析">
-                                <div class="review-line">
-                                    <div class="wb-num">错</div>
-                                    <div class="review-text">${escapeHTML(e.content)}</div>
-                                    <span class="wb-times">错 ${e.count || 1} 次</span>
-                                    <span class="wb-meta">${formatWBTime(e.lastAt)}</span>
-                                </div>
-                                <div class="review-detail">
-                                    <div class="rd-row"><span class="rd-label">正确答案</span><span class="rd-value rd-answer">${answerTxt}</span></div>
-                                    <div class="rd-row rd-explain"><span class="rd-label">解析</span><span class="rd-value">${explain || '<em class="rd-none">本题未提供解析</em>'}</span></div>
-                                </div>
-                            </div>`;
-                    }).join('');
-                    // 点击条目展开/收起 (单开手风琴)
-                    list.querySelectorAll('.wb-item').forEach(el => {
-                        el.addEventListener('click', () => {
-                            const willOpen = !el.classList.contains('open');
-                            list.querySelectorAll('.wb-item.open').forEach(o => { o.classList.remove('open'); o.setAttribute('aria-expanded', 'false'); });
-                            el.classList.toggle('open', willOpen);
-                            el.setAttribute('aria-expanded', String(willOpen));
-                        });
-                    });
-                }
-        
-                // 页面初始化：注册错题本弹层交互 + 刷新入口角标 (元素缺失时静默跳过，兼容考生端)
-                function initWrongBookUI() {
-                    bind(document.getElementById('menuWrongbookBtn'), 'click', openWrongBookModal);
-                    bind(document.getElementById('wrongbookCloseBtn'), 'click', closeWrongBookModal);
-                    const mm = document.getElementById('wrongbookModal');
-                    if (mm) mm.addEventListener('click', (e) => { if (e.target === mm) closeWrongBookModal(); });
-                    bind(document.getElementById('wrongbookPracticeBtn'), 'click', () => {
-                        const book = loadWrongBook();
-                        if (!book.length) { if (typeof showToast === 'function') showToast('错题本为空，先去做几道题吧'); return; }
-                        startWrongBookPractice(book.map(e => e.key));
-                        closeWrongBookModal();
-                    });
-                    bind(document.getElementById('wrongbookClearBtn'), 'click', () => {
-                        if (!loadWrongBook().length) { if (typeof showToast === 'function') showToast('错题本已为空'); return; }
-                        askConfirm({ title: '清空错题本', msg: '确定清空错题本吗？此操作不可撤销。', okText: '清空', danger: true }).then(ok => {
-                            if (ok) { clearWrongBook(); renderWrongBook(); }
-                        });
-                    });
-                    updateWrongBadge();
-                }
-        
-                document.addEventListener('DOMContentLoaded', initWrongBookUI);
     
     </script>
   <!-- js/export：模板下载 + 自包含导出 -->
