@@ -572,13 +572,19 @@
   .opt-input:focus { border-color: var(--accent-strong); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent); }
   .opt-switch .switch { font-size: 13px; color: var(--text-2); }
 
-  .rules-note {
-    padding: 10px 18px; font-size: 12px; color: var(--text-3);
-    background: var(--surface-2); border-top: 1px solid var(--border);
-    display: flex; align-items: center; gap: 7px;
+  /* 过滤规则页顶部提示：改规则后需点「应用并重新聚合」才生效（仅规则页展示） */
+  .rules-info {
+    display: flex; align-items: center; gap: 8px;
+    margin: 10px 0 6px; padding: 9px 12px;
+    font-size: 12px; line-height: 1.5; color: var(--text-2);
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-s);
   }
-  .rules-note::before { content: "i"; flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 700; color: var(--accent-strong); background: color-mix(in oklab, var(--accent) 16%, transparent); }
-  .rules-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--surface); }
+  .rules-info::before {
+    content: "i"; flex-shrink: 0; width: 16px; height: 16px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 10px; font-weight: 700;
+    color: var(--accent-strong); background: color-mix(in oklab, var(--accent) 16%, transparent);
+  }
+  .rules-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--surface); min-height: 58px; box-sizing: border-box; }
   .rules-foot .spacer { flex: 1; }
   .rules-foot .btn[hidden] { display: none; }
   /* 结果概要页：底部仅留占位（无按钮、无分隔线），保持弹窗高度恒定不跳动 */
@@ -627,7 +633,7 @@
     }
     .rules-body { padding: 4px 16px; }
     .rules-head { padding: 16px 16px 14px; }
-    .rules-foot, .rules-note { padding-left: 16px; padding-right: 16px; }
+    .rules-foot { padding-left: 16px; padding-right: 16px; }
     .rules-foot { flex-wrap: wrap; }
     .rules-foot .spacer { display: none; }
     .rules-foot .btn { flex: 1; min-width: 0; }

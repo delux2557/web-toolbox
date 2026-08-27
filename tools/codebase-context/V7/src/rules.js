@@ -44,6 +44,7 @@ function buildSections(u, defaultMB) {
 
   const s = rulesSummary();
   let html = "";
+  html += '<div class="rules-info">规则即时保存到本浏览器；改动需点「应用并重新聚合」才对本次结果生效。</div>';
   html += section("忽略目录", s.dirCount, "dirs", u.ignoreDirs);
   html += section("忽略的文件名", s.nameCount, "names", u.ignoreNames);
   html += section("允许的扩展名（追加白名单）", s.extCount, "exts", u.allowExts, "扩展名，如 qmd");
@@ -143,7 +144,6 @@ export function openRulesModal(opts) {
         '<div class="rules-pane" data-pane="summary" hidden></div>' +
         '<div class="rules-pane" data-pane="rules"></div>' +
       "</div>" +
-      '<div class="rules-note">规则即时保存到本浏览器；改动需点「应用并重新聚合」才对本次结果生效。</div>' +
       '<div class="rules-foot">' +
         '<button class="btn btn-ghost btn-sm" data-rules-act="reset" type="button">恢复默认</button>' +
         '<span class="spacer"></span>' +
