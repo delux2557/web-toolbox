@@ -60,8 +60,6 @@
 
     <!-- Results -->
     <section class="results" id="resultsState" hidden>
-      <div class="summary" id="summary"></div>
-
       <div class="toolbar">
         <button class="btn btn-primary" id="copyBtn">📋 一键复制</button>
         <button class="btn btn-ghost" id="downloadBtn">⬇️ 下载 .md</button>
@@ -71,6 +69,10 @@
           行号
         </label>
         <div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm rules-toggle" id="rulesToggleBtn" type="button" title="过滤">
+          <svg class="rules-toggle-ico" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/></svg>
+          过滤
+        </button>
         <button class="btn btn-ghost btn-sm" id="reselectBtn">↺ 重新选择</button>
       </div>
 
@@ -98,6 +100,8 @@
   </main>
 
   <footer class="statusbar" id="statusbar" hidden>
+    <span class="stat stat-proj" id="stProject"></span>
+    <span class="sep-dot" aria-hidden="true">·</span>
     <span class="stat">文件 <b id="stFiles">0</b></span>
     <span class="stat">字符 <b id="stChars">0</b></span>
     <span class="stat">Token <b id="stTokens">0</b></span>
@@ -109,4 +113,4 @@
 <div class="toast-wrap" id="toastWrap"></div>
 <input type="file" id="fileInput" webkitdirectory multiple hidden />
 
-<script src="V7/app.js"></script>
+<script type="module" src="V7/src/main.js"></script>
