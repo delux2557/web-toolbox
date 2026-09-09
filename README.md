@@ -43,6 +43,19 @@ python -m http.server 8080
 
 线上访问（GitHub Pages）：`https://delux2557.github.io/web-toolbox/tools/<项目名>/`
 
+### 单文件构建（可选）
+
+声明了 `build.config.json` 的工具可拼成单文件产物（分发/归档友好，双击即用）：
+
+```bash
+node tools/_build/build-single.mjs              # 构建所有已声明配置的工具
+node tools/_build/build-single.mjs table-helper # 只构建指定工具
+```
+
+- 接入：在 `tools/<工具名>/build.config.json` 声明 `{ "entry": "index.html", "out": "dist/index.html" }`
+- 产物头部带「自动生成，勿手改」banner；仅内联相对路径本地文件，外链（CDN）会保留并在报告中告警
+- 传统多 script 工具（如 table-helper）原位内联、语义等价；ESM 源工具需在配置中加 `"esm": true` + `modules` 拓扑序清单（约定同 FVS Meta 项目）
+
 ## 拾词 · 功能说明
 
 「梦幻词栈」是一个离线英语生词识别工具：
