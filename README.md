@@ -2,14 +2,15 @@
 
 纯静态小工具集合站 + 前端探索学习实验场。零后端、零构建，可一键部署 GitHub Pages。
 
-> ⚠️ 访问方式提醒：站内项目分两类——**静态工具**（如 en-words，双击 `file://` 即可用）与 **SPA / fetch 项目**（依赖 `fetch` 动态加载，必须通过 HTTP 服务访问：codebase-context、json_test、ppt-player、workbench）。
+> ⚠️ 访问方式提醒：站内项目分两类——**静态工具**（如 en-words，双击 `file://` 即可用）与 **SPA / fetch 项目**（依赖 `fetch` 动态加载，必须通过 HTTP 服务访问：codebase-context、code-workspace、json_test、ppt-player、workbench）。后者可用 `build-snapshot.mjs` 打成可双击的单文件快照（见下方「单文件构建」）。
 
 ## 🛠 工具
 
 | 工具 | 状态 | 说明 |
 |------|------|------|
 | 📖 [梦幻词栈 · 英语生词拾取器](./tools/en-words/) | ✅ 可用 | 粘贴英文 → 智能识别 TOP 生词 → 生词本复习；离线可用，支持 `file://` 直接打开 |
-| 🔗 [Codebase Context](./tools/codebase-context/) | ✅ 可用 | 选择/拖拽项目文件夹 → 一键生成目录树 + 文件内容 Markdown，喂给 AI；纯浏览器聚合，数据不出设备。SPA 壳 + manifest 多版本注册（单文件 → 分离 → 代码高亮 → 场景化 System Prompt），**需 HTTP 服务访问** |
+| 🔗 [Codebase Context](./tools/codebase-context/) | ✅ 可用 | 选择/拖拽项目文件夹 → 一键生成目录树 + 文件内容 Markdown，喂给 AI；纯浏览器聚合，数据不出设备。SPA 壳 + manifest 多版本注册（单文件 → 分离 → 代码高亮 → 场景化 System Prompt），**需 HTTP 服务访问**；也可打成单文件快照双击使用 |
+| 🗂 [Code Workspace](./tools/code-workspace/) | ✅ 可用 | 浏览器里的文件管理器 + 代码编辑器：授权本地文件夹读写 → 目录树浏览、新建/重命名/移动/删除、离线 CodeMirror 6 改代码 `Ctrl+S` 写回磁盘；SPA 壳 + manifest 版本注册，零 CDN，**需 HTTP 服务访问**（也可打成单文件快照） |
 | 📽 [PPT Player](./tools/ppt-player/) | ✅ 可用 | 演示文稿播放器：SPA 壳 + manifest 版本注册（V1 示例 / V2 纯 CSS 极简引擎），版本切换 + 导出单文件（DOM 克隆 + 资源内联）；**需 HTTP 服务访问** |
 | 📝 [Assessment Studio](./tools/assessment-studio/test-v3.html) | ✅ 可用 | 在线考试系统 V3.3：练习/考试双模式 + 即时反馈 + 计时评分；单文件纯静态，支持 `file://` 直接打开 |
 | 📋 [表格解析工具 · Table Helper](./tools/table-helper/) | ✅ 可用 | CSV / JSON / HTML 表格解析与互转：粘贴或导入 → 预览、排序筛选、导出；纯静态多模块架构，支持 `file://` 直接打开（独立纯静态页面，表格解析互转的主体实现） |
@@ -32,10 +33,11 @@
 ```bash
 # 1) 静态工具（en-words / assessment-studio / table-helper）：直接双击 index.html（或 test-v3.html）即可
 
-# 2) SPA / fetch 项目（codebase-context / json_test / ppt-player / workbench）：需启动 HTTP 服务
+# 2) SPA / fetch 项目（codebase-context / code-workspace / json_test / ppt-player / workbench）：需启动 HTTP 服务
 python -m http.server 8080
 # 然后访问：
 #   http://localhost:8080/tools/codebase-context/
+#   http://localhost:8080/tools/code-workspace/
 #   http://localhost:8080/tools/json_test/
 #   http://localhost:8080/tools/ppt-player/
 #   http://localhost:8080/tools/workbench/
