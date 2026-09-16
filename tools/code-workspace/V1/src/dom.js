@@ -33,8 +33,8 @@ export const els = {
   trashDirName: $("trashDirName"),
 
   /* 全局 */
-  statusbar: $("statusbar"), stProject: $("stProject"), stFiles: $("stFiles"),
-  stTabs: $("stTabs"), stLog: $("stLog"), toastWrap: $("toastWrap"),
+  statusbar: $("statusbar"), stProject: $("stProject"),
+  stLog: $("stLog"), toastWrap: $("toastWrap"),
   ctxMenu: $("ctxMenu"), dialogHost: $("dialogHost"),
   themeToggle: $("themeToggle"), themeIconSun: $("themeIconSun"), themeIconMoon: $("themeIconMoon")
 };

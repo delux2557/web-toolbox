@@ -31,14 +31,15 @@ import {
   onSaveRequest, onDocChange, isReady, focusEditor
 } from "./editor.js";
 
-/* ============ 状态栏 / 顶栏 ============ */
-
-function fileCount() { return state.entries.filter((e) => e.kind === "file").length; }
+/* ============ 状态栏 / 顶栏 ============
+ * 状态栏只承载「当前上下文」与「最近一次操作」两件事。
+ * 文件 / 目录总数归侧栏的 treeCount —— 全局计数放在列表自己的头部才是权威位置，
+ * 状态栏再放一份、日志里再念一遍，就是同一条信息在同一页面出现三次。
+ * （VS Code 也是这个分工：状态栏不放全局计数，它放当前焦点文件的元信息。）
+ */
 
 function refreshStatus() {
   els.stProject.textContent = state.rootName || "—";
-  els.stFiles.textContent = num(fileCount());
-  els.stTabs.textContent = num(state.tabs.length);
 }
 
 function refreshPerm() {
@@ -166,7 +167,9 @@ async function rescan() {
     let extra = "";
     if (hidden) extra += " · 已隐藏 " + hidden + " 个噪音目录";
     if (truncated) extra += " · 已达 " + MAX_SCAN_ENTRIES + " 条上限，未列全";
-    setLog("扫描完成 · " + fileCount() + " 文件 · " + (entries.length - fileCount()) + " 目录" + extra);
+    /* 只报「发生了什么」，不复述数量 —— 文件 / 目录数的权威在侧栏 treeCount。
+       extra 里保留的是日志独有的信息（隐藏了几个噪音目录、是否触及扫描上限）。 */
+    setLog("扫描完成" + extra);
     els.trashHint.textContent = hidden ? "已隐藏 " + hidden + " 个目录" : "";
   } catch (e) {
     toast("扫描失败：" + (e && e.message ? e.message : e), "error");
@@ -226,7 +229,6 @@ function renderTabs() {
   }
 
   els.tabBar.appendChild(frag);
-  els.stTabs.textContent = num(state.tabs.length);
 
   const t = activeTab();
   els.btnSave.disabled = !t || t.readonly;
@@ -424,18 +426,21 @@ function initMdMode() {
   els.mdPreviewBtn.addEventListener("click", () => setMdPreview(true));
 }
 
-function nextAfterClose(path) {
+/* 「关掉之后该激活谁」必须在**把标签从 tabs 里移除之前**算好。
+ *
+ * 这里踩过一个必然复现的坑（现象：点 × 关不掉，只剩最后一个时也关不掉）：
+ * 旧写法是先 `state.tabs = filter(...)` 再调 nextAfterClose(path)，而后者用
+ * findIndex(path) 找位置 —— 此时该标签已经不在数组里，永远返回 -1，函数第一行
+ * 就直接 return，什么也没做。后果是连锁的：
+ *   1) 关掉**非激活**标签走另一个分支，正常刷新 → 表现为「时好时坏」；
+ *   2) 关掉**当前激活**标签（含「只剩最后一个」）→ 标签栏 DOM 完全不重建，
+ *      旧节点留在屏幕上，看着就是「点了没反应」；
+ *   3) 再点一次 × → findTab(path) 已是 undefined → 直接 return，彻底关不掉。
+ */
+function neighborOf(path) {
   const i = state.tabs.findIndex((t) => t.path === path);
-  if (i < 0) return;
-  const next = state.tabs[i + 1] || state.tabs[i - 1];
-  if (next) activateTab(next.path);
-  else {
-    state.activePath = "";
-    resetAll();
-    renderTabs();
-    renderTree();
-    updateInfo();
-  }
+  if (i < 0) return null;
+  return state.tabs[i + 1] || state.tabs[i - 1] || null;
 }
 
 async function closeTab(path, { force = false } = {}) {
@@ -451,12 +456,19 @@ async function closeTab(path, { force = false } = {}) {
     if (!go) return;
   }
 
+  const neighbor = neighborOf(path);   // ← 必须在 filter 之前算
   state.tabs = state.tabs.filter((t) => t.path !== path);
   dropTabState(path);
 
   if (state.activePath === path) {
     state.activePath = "";
-    nextAfterClose(path);
+    if (neighbor) {
+      activateTab(neighbor.path);      // 内部会 renderTabs / renderTree / updateInfo
+    } else {
+      resetAll();                      // 一个都不剩：清掉编辑器现场
+      renderTabs();
+      renderTree();
+    }
   } else {
     renderTabs();
   }
