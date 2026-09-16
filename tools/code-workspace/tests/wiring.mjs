@@ -34,6 +34,10 @@ function makeEl(id) {
       if (!listeners.has(id)) listeners.set(id, new Set());
       listeners.get(id).add(type);
       if (type === "click") clickable.set(id, fn);
+      /* 按元素对象再存一份处理器：上面两张表都以 id 为键，而 createElement 出来的
+         节点 id 全是 "(created)"，会互相覆盖 —— 想触发「第 2 个标签的关闭按钮」
+         这种按对象定位的场景就拿不到了。这里存的是对象自己的表，不受 id 同名影响。 */
+      (this._h || (this._h = {}))[type] = fn;
     },
     removeEventListener() {},
     setAttribute() {}, getAttribute() { return null; },
@@ -218,6 +222,89 @@ ok("提供了「在新标签页打开」的动作按钮（因为处于 iframe �
 
 /* 收尾：还原成非嵌入，避免影响后续 */
 globalThis.window.top = globalThis.window;
+
+/* ============================================================
+ * [7] 标签页关闭（回归）
+ * ------------------------------------------------------------
+ * 真实 bug：点 × 关不掉，只剩最后一个时也关不掉。
+ * 根因是 closeTab 先把标签从 state.tabs 里移除，再去找「关掉之后该激活谁」，
+ * 于是 findIndex 永远得到 -1、函数第一行就 return —— 标签栏 DOM 完全不重建，
+ * 旧节点留在屏幕上（看着就是「点了没反应」），再点一次连 findTab 都找不到它。
+ *
+ * 断言直接查「标签栏还剩几个节点」，不查内部状态：用户看到的就是 DOM，
+ * DOM 没变就等于没关掉。
+ * 文件用 .png —— 扩展名即判为二进制 → 只读标签不碰 CodeMirror（懒加载的 1.4MB vendor），
+ * 用例因此快而稳，也顺带说明「关得掉吗」与编辑器加载成功与否无关。
+ * ============================================================ */
+console.log("\n[7] 标签页关闭（回归：点 × 关不掉）");
+
+errors.length = 0;
+
+const notFound = (n) => Object.assign(new Error("not found: " + n), { name: "NotFoundError" });
+globalThis.window.showDirectoryPicker = async () => ({
+  name: "demo-project", kind: "directory",
+  queryPermission: async () => "granted",
+  requestPermission: async () => "granted",
+  async *values() {
+    yield { name: "a.png", kind: "file" };
+    yield { name: "b.png", kind: "file" };
+  },
+  async getDirectoryHandle(n) { throw notFound(n); },
+  async getFileHandle(n) { throw notFound(n); }
+});
+
+const dropClick = clickable.get("dropzone");
+ok("取到 dropzone handler（沿用前面的桩）", typeof dropClick === "function");
+try { await dropClick(); } catch (e) { errors.push("openRoot threw: " + e.message); }
+await new Promise((r) => setTimeout(r, 60));
+
+/* 树行要按**对象**取 click：createElement 出来的节点 id 相同，只有 _h 能区分 */
+const fragKids = byId("treeRoot").childNodes;
+const lastFrag = fragKids.length ? fragKids[fragKids.length - 1] : null;
+const fileRows = (lastFrag && Array.isArray(lastFrag.childNodes) ? lastFrag.childNodes : [])
+  .filter((n) => n && typeof n.className === "string" && n.className.includes("is-file"));
+ok("扫描后在树里找到 2 个文件行", fileRows.length === 2, "实际 " + fileRows.length);
+
+for (const row of fileRows) if (row._h && row._h.click) row._h.click();
+await new Promise((r) => setTimeout(r, 60));
+
+/* renderTabs 是「先塞进 DocumentFragment 再一次性挂上」，所以标签节点在 frag 里，
+   不在 tabBar 的直接子级 —— 跟树那边同理。 */
+const tabEls = () => {
+  const bar = byId("tabBar");
+  const frag = bar.childNodes.length ? bar.childNodes[bar.childNodes.length - 1] : null;
+  return (frag && Array.isArray(frag.childNodes) ? frag.childNodes : [])
+    .filter((n) => n && typeof n.className === "string" && n.className.startsWith("tab"));
+};
+const clickClose = (tabEl) => {
+  if (!tabEl) return false;
+  const btn = tabEl.childNodes.find((n) => n && n.className === "tab-close");
+  if (!btn || !btn._h || !btn._h.click) return false;
+  btn._h.click({ stopPropagation() {} });
+  return true;
+};
+
+ok("打开 2 个文件后标签栏有 2 个标签节点", tabEls().length === 2, "实际 " + tabEls().length);
+ok("有且只有一个标签处于激活态", tabEls().filter((t) => t.className.includes("active")).length === 1);
+
+/* ① 关掉当前**激活**标签 —— 旧实现在这里必然不重建 DOM */
+const n0 = tabEls().length;
+const closedActive = clickClose(tabEls()[tabEls().length - 1]);
+await new Promise((r) => setTimeout(r, 20));
+ok("取到了激活标签的关闭按钮 handler", closedActive);
+ok("关掉激活标签后，标签栏节点数减 1",
+   tabEls().length === n0 - 1,
+   `前 ${n0} → 后 ${tabEls().length}（不变 = 旧 bug：DOM 没重建，「点了没反应」）`);
+ok("剩下的标签被自动激活（不留「无激活标签」的僵局）",
+   tabEls().length === 1 && tabEls()[0].className.includes("active"));
+
+/* ② 关掉最后一个 —— 对应「只剩最后一个也关不掉」 */
+const closedLast = clickClose(tabEls()[0]);
+await new Promise((r) => setTimeout(r, 20));
+ok("取到了最后一个标签的关闭按钮 handler", closedLast);
+ok("关掉最后一个标签后，标签栏清空", tabEls().length === 0, `实际还剩 ${tabEls().length} 个节点`);
+
+ok("整条关闭路径无未捕获异常", realErrors().length === 0, realErrors().join(" | "));
 
 console.log("\n================================");
 console.log(`通过 ${pass} · 失败 ${fail}`);
