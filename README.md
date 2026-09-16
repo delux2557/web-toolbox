@@ -45,7 +45,14 @@ python -m http.server 8080
 
 ### 单文件构建（可选）
 
-声明了 `build.config.json` 的工具可拼成单文件产物（分发/归档友好，双击即用）：
+两个打包器分工不同，**按工具的架构选一个**即可：
+
+| 打包器 | 适用架构 | 交互方式 |
+|--------|---------|---------|
+| `build-single.mjs` | 传统单页工具（完整 HTML + 多个 `<script src>`） | 在 `tools/<工具名>/build.config.json` 显式接入 |
+| `build-snapshot.mjs` | **SPA 壳 + manifest 版本注册**（片段 entry + ESM src） | 读 `manifest.json`，**零配置**；一条命令打包任意历史版本 |
+
+#### 1) 传统单页工具 → build-single
 
 ```bash
 node tools/_build/build-single.mjs              # 构建所有已声明配置的工具
@@ -53,8 +60,54 @@ node tools/_build/build-single.mjs table-helper # 只构建指定工具
 ```
 
 - 接入：在 `tools/<工具名>/build.config.json` 声明 `{ "entry": "index.html", "out": "dist/index.html" }`
-- 产物头部带「自动生成，勿手改」banner；仅内联相对路径本地文件，外链（CDN）会保留并在报告中告警
-- 传统多 script 工具（如 table-helper）原位内联、语义等价；ESM 源工具需在配置中加 `"esm": true` + `modules` 拓扑序清单（约定同 FVS Meta 项目）
+- 传统多 script 工具（如 table-helper）原位内联、语义等价；ESM 源工具需加 `"esm": true` + `modules` 拓扑序清单
+
+#### 2) 版本快照 → build-snapshot（codebase-context / code-workspace / ppt-player）
+
+把「某个版本」打成**可 file:// 双击、可外发**的单文件 HTML —— 壳、loader、fetch 依赖全部消除：
+
+```bash
+node tools/_build/build-snapshot.mjs                     # 所有可识别工具的 latest
+node tools/_build/build-snapshot.mjs codebase-context    # 指定工具（默认 latest）
+node tools/_build/build-snapshot.mjs codebase-context@v7 # 指定版本 id（历史版本也能打）
+node tools/_build/build-snapshot.mjs --list              # 列出可打包的工具与版本
+node tools/_build/build-snapshot.mjs --release           # 输出到 tools/<name>/release/（入库分享）
+node tools/_build/build-snapshot.mjs --strict            # 存在阻塞型外链则构建失败（CI 用）
+```
+
+产物默认落在 `tools/<name>/dist/<name>-<版本id>.html`（`dist/` 已被 gitignore）。
+
+> **并行开发友好**：打包器**只读**工具目录下的源文件，唯一写入是产物本身（不生成中间文件、不改源码、不往工具目录写配置）。所以工具哪怕正在被别的分支/开发者迭代，也随时可以打包 —— 快照 = 打包那一刻的源码状态，等迭代收尾后重跑一次即自动跟随，没有任何登记步骤。
+>
+> 反过来说：`verify-snapshot.mjs` 验收的是 `dist/` 里**现存**的产物，源码改过之后要先重新构建再验收。
+
+**打进去的东西**（都是自动识别，不看配置）：
+
+1. 片段 entry（如 `V7/index.html`）→ 从壳 `index.html` 借 `<head>` 骨架（丢弃其 loader 引导脚本）
+2. 本地 `<link rel=stylesheet>` → `<style>`；图标 → data URI；其它本地 `<link>` → 移除
+3. `<script type="module" src>` → **自动解析 import 图**（拓扑序）→ 模块注册表（每个模块独立作用域，杜绝重名冲突）；传统 `<script src>` 原位内联
+4. `data/**.json` 与模块内 `fetch("...")` → 内联数据表 + fetch 垫片（**源码零改写**）
+5. `new URL(rel, import.meta.url)` / `import(url)` → 虚拟基址 + 动态导入垫片（**vendor 懒加载包照样懒加载**，如 code-workspace 的 1.4MB CodeMirror）
+6. 版本元数据（`data-version` / `window.__APP_META__`）+ 版本徽章（原壳逻辑的精简等价实现）
+
+**构建期硬自检**（失败即中止，不产出半成品）：每个模块 `new Function` 语法检查、bundle 整体语法检查、产物无残留 `import/export/import.meta`、无残留本地 `<script src>` / `<link href>`、动态导入目标必须都在注册表内。
+
+**外链分两档**：字体托管（视觉降级，功能不受影响）与**阻塞型外链**（CDN 脚本/样式，离线时功能失效 —— 例如 codebase-context 的 highlight.js CDN，离线时自动回落纯文本高亮）。想彻底离线就把它 vendor 到本地，或在 `build.snapshot.json` 的 `allowRemote` 里显式声明可接受。
+
+可选覆盖配置 `tools/<name>/build.snapshot.json`：
+
+```json
+{ "dataDirs": ["data"], "extraAssets": ["vendor/x.js"], "allowRemote": ["https://example.com/"] }
+```
+
+#### 产物验收（不开浏览器）
+
+```bash
+node tools/_build/verify-snapshot.mjs                     # 验收所有 dist/*.html
+node tools/_build/verify-snapshot.mjs tools/code-workspace/dist/code-workspace-v1.html
+```
+
+用最小 DOM 桩在 Node 里真跑一遍产物，覆盖「构建期语法通过 ≠ 运行时能跑」的盲区：脚本可执行、注册表完整、**每个模块都能实例化**（含 vendor 大包）、内联数据与 fetch 垫片命中、动态导入目标已内联。`SNAPSHOT_DEBUG=1` 会打印失败堆栈。
 
 ## 拾词 · 功能说明
 
