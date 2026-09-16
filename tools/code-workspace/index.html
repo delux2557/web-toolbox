@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Workspace — 本地代码工作区</title>
+<meta name="robots" content="noindex" />
+<!-- 页签图标：与页面左上角 .logo 完全同构（直接复用同一份 path 数据，
+     只在外面套一层 32 格画布 + 靛蓝圆角底），避免"页签是一个图标、页面里又是另一个" -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236366f1'/%3E%3Cg transform='translate(4,4)' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' fill='none'%3E%3Cpath d='M7 5h9l4 4v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z'/%3E%3Cpath d='M15 5v5h5'/%3E%3Cpath d='M9 14h6M9 17h4'/%3E%3C/g%3E%3C/svg%3E" />
+<!-- 字体：对齐 codebase-context 的排版观感。display=swap 保证字体没下完也先渲染，
+     系统字体栈（见 V1/style.css 的 --font-sans / --font-mono）作为断网兜底。
+     这是本工具唯一的外部资源，overview.md 已如实标注。 -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* 壳：骨架屏 + 主题感知基础样式（版本样式注入后会被其覆盖）
+     字体栈与 V1/style.css 保持一致：上面 <link> 拉到的 Web 字体优先，
+     拉不到就用系统字体 —— 离线场景下观感与以前一致，不会变成衬线或方块。 */
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: oklch(97.6% 0.005 240);
+    color: oklch(24% 0.02 255);
+    -webkit-font-smoothing: antialiased;
+  }
+  html[data-theme="dark"] body { background: oklch(16.5% 0.012 250); color: oklch(93% 0.008 240); }
+  #app { min-height: 100%; }
+  .loader-shell {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; gap: 16px; padding: 2rem;
+  }
+  .loader-indicator {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: oklch(0.58 0.18 265);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.6); }
+  }
+  .loader-label { font-size: 13px; opacity: 0.55; font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace; }
+  .loader-error {
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; gap: 10px; padding: 2rem; text-align: center;
+  }
+  .loader-error h1 { font-size: 18px; margin: 0; font-weight: 650; }
+  .loader-error p { margin: 0; opacity: 0.62; font-size: 14px; max-width: 480px; line-height: 1.6; }
+  .loader-error .versions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .loader-error a {
+    color: oklch(0.58 0.18 265); text-decoration: none; font-size: 14px;
+    padding: 8px 14px; border: 1px solid oklch(85% 0.01 250); border-radius: 8px;
+  }
+  html[data-theme="dark"] .loader-error a { border-color: oklch(30% 0.01 250); }
+
+  /* 版本徽章（由壳注入到版本页顶栏） */
+  .version-chip {
+    display: inline-flex; align-items: center;
+    height: 30px; padding: 0 12px; border-radius: 999px;
+    border: 1px solid var(--border, oklch(90.5% 0.009 240));
+    background: transparent; cursor: pointer;
+    font-family: var(--font-mono, ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace);
+    font-size: 12px; font-weight: 500; letter-spacing: 0.01em;
+    color: var(--text-2, oklch(45% 0.015 255));
+    transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  }
+  .version-chip:hover {
+    background: var(--surface-2, oklch(95.8% 0.007 240));
+    color: var(--text, oklch(24% 0.02 255));
+    border-color: var(--border-strong, oklch(84.5% 0.012 240));
+  }
+
+  /* 关于弹窗 */
+  .about-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    background: oklch(0 0 0 / 0.35); padding: 24px;
+  }
+  .about-modal {
+    width: 100%; max-width: 360px;
+    background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb);
+    border-radius: 12px; padding: 18px 20px 20px;
+    box-shadow: 0 16px 48px oklch(0 0 0 / 0.2);
+  }
+  .about-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .about-title { font-size: 15px; font-weight: 600; }
+  .about-close {
+    border: none; background: none; font-size: 20px; line-height: 1; cursor: pointer;
+    color: var(--text-3, #888); padding: 2px 8px; border-radius: 6px;
+  }
+  .about-close:hover { background: var(--surface-2, #f3f4f6); color: var(--text, #111); }
+  .about-row {
+    display: flex; justify-content: space-between; gap: 16px;
+    padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border, #eee);
+  }
+  .about-row .k { color: var(--text-3, #888); flex-shrink: 0; }
+  .about-row .v { font-family: var(--font-mono, monospace); color: var(--text-2, #444); text-align: right; word-break: break-all; }
+  .about-vers-title { margin-top: 14px; margin-bottom: 2px; font-size: 12px; color: var(--text-3, #888); }
+  .about-ver { font-size: 13px; padding: 6px 0; color: var(--text-2, #444); border-bottom: 1px dashed var(--border, #eee); }
+  .about-ver:last-child { border-bottom: none; }
+  .about-ver.current { color: var(--accent-strong, oklch(0.48 0.22 265)); font-weight: 600; }
+</style>
+<script>
+/* 主题前置：首帧前设置 data-theme，阻止闪烁（与 V1/theme.js 共用 cw-theme key） */
+(function () {
+  var KEY = 'cw-theme';
+  var t = null;
+  try { t = localStorage.getItem(KEY); } catch (e) {}
+  if (t !== 'dark' && t !== 'light') {
+    t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', t);
+})();
+</script>
+</head>
+<body>
+<div id="app">
+  <div class="loader-shell" id="loaderShell">
+    <div class="loader-indicator"></div>
+    <div class="loader-label">正在加载最新版本…</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* 内置兜底清单：file:// 下 fetch manifest.json 失败时使用。请与根目录 manifest.json 保持同步。 */
+var FALLBACK_MANIFEST = {
+  "schemaVersion": 1,
+  "latest": "v1",
+  "versions": [
+    { "id": "v1", "version": "1.0.2", "label": "文件管理 + 代码浏览编辑（离线编辑器）", "entry": "V1/index.html", "build": "esm-src", "buildTime": "2026-09-16 16:47" }
+  ]
+};
+
+function semverCompare(a, b) {
+  var pa = String(a).replace(/^v/i, "").split(".").map(function (n) { return parseInt(n, 10) || 0; });
+  var pb = String(b).replace(/^v/i, "").split(".").map(function (n) { return parseInt(n, 10) || 0; });
+  var len = Math.max(pa.length, pb.length);
+  for (var i = 0; i < len; i++) {
+    var x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+
+function resolveLatest(manifest) {
+  var versions = (manifest && Array.isArray(manifest.versions)) ? manifest.versions : [];
+  if (!versions.length) return null;
+  if (manifest.latest) {
+    var byId = versions.find(function (v) { return v.id === manifest.latest; });
+    if (byId) return byId;
+  }
+  return versions.slice().sort(function (a, b) {
+    return semverCompare(b.version || b.id, a.version || a.id);
+  })[0] || null;
+}
+
+/* 重新创建 <script> 以执行注入的内联 / 外链脚本 */
+function executeScripts(container) {
+  var scripts = container.querySelectorAll('script');
+  scripts.forEach(function (oldScript) {
+    var newScript = document.createElement('script');
+    for (var i = 0; i < oldScript.attributes.length; i++) {
+      newScript.setAttribute(oldScript.attributes[i].name, oldScript.attributes[i].value);
+    }
+    newScript.textContent = oldScript.textContent;
+    oldScript.parentNode.replaceChild(newScript, oldScript);
+  });
+}
+
+/* 加载版本片段：先注入 <link> 等样式就绪，再注入标记并执行脚本，避免 FOUC */
+async function loadVersion(entry, container) {
+  var resp = await fetch(entry, { cache: 'no-store' });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  var html = await resp.text();
+
+  var linkTags = html.match(/<link[^>]*>/gi) || [];
+  var remaining = html.replace(/<link[^>]*>/gi, '');
+  for (var i = 0; i < linkTags.length; i++) {
+    await injectLink(linkTags[i]);
+  }
+  container.innerHTML = remaining;
+  executeScripts(container);
+}
+
+function injectLink(tagHtml) {
+  return new Promise(function (resolve) {
+    var div = document.createElement('div');
+    div.innerHTML = tagHtml;
+    var link = div.firstChild;
+    if (!link || link.tagName !== 'LINK') { resolve(); return; }
+    link.onload = resolve;
+    link.onerror = resolve;
+    document.head.appendChild(link);
+    setTimeout(resolve, 2000); // 兜底：防止 onload 未触发
+  });
+}
+
+function showError(title, msg, manifest) {
+  var app = document.getElementById('app');
+  var versionsHtml = '';
+  var versions = (manifest && Array.isArray(manifest.versions)) ? manifest.versions : [];
+  if (versions.length) {
+    versionsHtml = '<div class="versions">' + versions.map(function (v) {
+      return '<a href="' + (v.entry || '#') + '">' + (v.id || '') + ' · ' + (v.label || '') + '</a>';
+    }).join('') + '</div>';
+  }
+  app.innerHTML = '<div class="loader-error" style="display:flex;">' +
+    '<h1>' + title + '</h1>' +
+    '<p>' + msg + '</p>' + versionsHtml +
+    '</div>';
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/* 注入版本元数据：机器可读（data-version / __APP_META__）+ 开发者可读（console） */
+function injectMeta(version) {
+  var meta = {
+    id: version.id || '',
+    version: version.version || version.id || '',
+    label: version.label || '',
+    build: version.build || '',
+    buildTime: version.buildTime || ''
+  };
+  window.__APP_META__ = meta;
+  document.documentElement.setAttribute('data-version', meta.version);
+  console.info('[Workspace] 版本 v' + meta.version +
+    (meta.build ? ' · build ' + meta.build : '') +
+    (meta.buildTime ? ' · ' + meta.buildTime : ''));
+  return meta;
+}
+
+/* 在版本页顶栏注入版本徽章（单一数据源：由壳统一填充） */
+function mountVersionUI(meta, manifest) {
+  var brand = document.querySelector('.brand');
+  if (!brand) return;
+  if (document.getElementById('versionChip')) return;
+
+  var chip = document.createElement('button');
+  chip.id = 'versionChip';
+  chip.className = 'version-chip';
+  chip.type = 'button';
+  chip.title = '关于版本';
+  chip.setAttribute('aria-label', '关于版本');
+  chip.textContent = 'v' + meta.version;
+  chip.addEventListener('click', function () { showAbout(meta, manifest); });
+  brand.appendChild(chip);
+}
+
+/* 关于弹窗：版本 + 构建 + 时间 + 版本列表 */
+function showAbout(meta, manifest) {
+  var old = document.getElementById('aboutOverlay');
+  if (old) old.remove();
+
+  var rows = [
+    ['版本', 'v' + meta.version],
+    ['名称', meta.label || ''],
+    ['构建', meta.build || ''],
+    ['构建时间', meta.buildTime || '']
+  ].filter(function (r) { return r[1]; })
+   .map(function (r) {
+     return '<div class="about-row"><span class="k">' + escapeHtml(r[0]) + '</span>' +
+       '<span class="v">' + escapeHtml(r[1]) + '</span></div>';
+   }).join('');
+
+  var versions = (manifest && Array.isArray(manifest.versions)) ? manifest.versions : [];
+  var list = versions.map(function (v) {
+    var cur = (v.id === meta.id) ? ' current' : '';
+    return '<div class="about-ver' + cur + '">v' + escapeHtml(v.version || v.id) +
+      ' · ' + escapeHtml(v.label || '') + (cur ? ' · 当前' : '') + '</div>';
+  }).join('');
+
+  var overlay = document.createElement('div');
+  overlay.id = 'aboutOverlay';
+  overlay.className = 'about-overlay';
+  overlay.innerHTML =
+    '<div class="about-modal" role="dialog" aria-modal="true" aria-label="关于版本">' +
+      '<div class="about-head"><span class="about-title">关于</span>' +
+        '<button class="about-close" id="aboutClose" aria-label="关闭">&times;</button></div>' +
+      rows +
+      (list ? '<div class="about-vers-title">版本列表</div>' + list : '') +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+  var closeBtn = document.getElementById('aboutClose');
+  if (closeBtn) closeBtn.addEventListener('click', function () { overlay.remove(); });
+  document.addEventListener('keydown', function onEsc(e) {
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onEsc); }
+  });
+}
+
+(async function boot() {
+  var container = document.getElementById('app');
+
+  var manifest = null;
+  try {
+    var r = await fetch('manifest.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    manifest = await r.json();
+  } catch (e) {
+    console.warn('[shell] 读取 manifest.json 失败，改用内置兜底清单：', e);
+    manifest = FALLBACK_MANIFEST;
+  }
+
+  var latest = resolveLatest(manifest);
+  if (!latest || !latest.entry) {
+    showError('未找到可用版本', 'manifest.json 中没有可用的版本条目。', manifest);
+    return;
+  }
+
+  injectMeta(latest);
+
+  try {
+    await loadVersion(latest.entry, container);
+    mountVersionUI(window.__APP_META__, manifest);
+    console.log('[shell] 版本 ' + (latest.id || latest.entry) + ' 已加载');
+  } catch (err) {
+    console.error('[shell] 版本加载失败:', err);
+    var msg = (location.protocol === 'file:')
+      ? '当前为 file:// 打开，浏览器会拦截 fetch 本地文件，且文件系统读写 API 在 file:// 下不可用。请用本地服务器访问（例如在项目根目录运行 python -m http.server 后打开 http://localhost:8000）。'
+      : '版本入口加载失败：' + (err && err.message ? err.message : err);
+    showError('版本加载失败', msg, manifest);
+  }
+})();
+</script>
+</body>
+</html>
