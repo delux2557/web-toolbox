@@ -27,6 +27,13 @@
       max-width: 480px;
       margin: 0 auto;
     }
+    .hub-hero .hub-hint {
+      margin-top: var(--space-sm);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      max-width: 580px;
+      line-height: 1.7;
+    }
     .tools-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -101,6 +108,7 @@
     <section class="hub-hero">
       <h1>🧰 Web Toolbox</h1>
       <p>实用纯静态小工具集合站。零依赖、零后端，双击就能用。</p>
+      <p class="hub-hint">标注「需 HTTP 服务」的项目依赖 <code>fetch</code> 动态加载，本地请用 <code>python -m http.server</code> 起服务后访问（线上 GitHub Pages 直接可用）；标注「双击可用」的项目可直接打开 <code>index.html</code>。</p>
     </section>
 
     <div class="tools-grid">
@@ -109,7 +117,55 @@
         <div class="tool-icon">📖</div>
         <div class="tool-name">梦幻词栈 · 英语生词拾取器</div>
         <div class="tool-desc">粘贴一段英文，智能识别你需要掌握的 TOP 生词，支持生词本复习</div>
-        <span class="tool-status">可用</span>
+        <span class="tool-status">可用 · 双击可用</span>
+      </a>
+
+      <!-- 工具 2：Codebase Context -->
+      <a href="tools/codebase-context/" class="tool-card">
+        <div class="tool-icon">🔗</div>
+        <div class="tool-name">Codebase Context</div>
+        <div class="tool-desc">选择项目文件夹 → 生成目录树 + 文件内容 Markdown 喂给 AI；纯浏览器聚合，数据不出设备</div>
+        <span class="tool-status">可用 · 需 HTTP 服务</span>
+      </a>
+
+      <!-- 工具 3：Code Workspace -->
+      <a href="tools/code-workspace/" class="tool-card">
+        <div class="tool-icon">🗂</div>
+        <div class="tool-name">Code Workspace</div>
+        <div class="tool-desc">浏览器里的文件管理器 + 代码编辑器：授权本地文件夹读写，离线改代码 <code>Ctrl+S</code> 写回磁盘</div>
+        <span class="tool-status">可用 · 需 HTTP 服务</span>
+      </a>
+
+      <!-- 工具 4：PPT Player -->
+      <a href="tools/ppt-player/" class="tool-card">
+        <div class="tool-icon">📽</div>
+        <div class="tool-name">PPT Player</div>
+        <div class="tool-desc">演示文稿播放器：manifest 版本注册、版本切换，并支持导出单文件</div>
+        <span class="tool-status">可用 · 需 HTTP 服务</span>
+      </a>
+
+      <!-- 工具 5：Assessment Studio -->
+      <a href="tools/assessment-studio/test-v3.html" class="tool-card">
+        <div class="tool-icon">📝</div>
+        <div class="tool-name">Assessment Studio</div>
+        <div class="tool-desc">在线考试系统：练习 / 考试双模式 + 即时反馈 + 计时评分</div>
+        <span class="tool-status">可用 · 双击可用</span>
+      </a>
+
+      <!-- 工具 6：Table Helper -->
+      <a href="tools/table-helper/" class="tool-card">
+        <div class="tool-icon">📋</div>
+        <div class="tool-name">表格解析工具 · Table Helper</div>
+        <div class="tool-desc">CSV / JSON / HTML 表格解析与互转：粘贴或导入 → 预览、排序筛选、导出</div>
+        <span class="tool-status">可用 · 双击可用</span>
+      </a>
+
+      <!-- 工具 7：Prompt Helper -->
+      <a href="tools/prompt-helper/release/latest.html" class="tool-card">
+        <div class="tool-icon">✨</div>
+        <div class="tool-name">Prompt Helper</div>
+        <div class="tool-desc">AI 提示词工作台：配置驱动模板 + 插件化架构 + 多主题（单文件在线版）</div>
+        <span class="tool-status">可用 · 双击可用</span>
       </a>
 
       <!-- 占位卡片 -->

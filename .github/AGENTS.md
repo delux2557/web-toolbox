@@ -6,7 +6,7 @@
 ## 1. 仓库是什么
 
 - `delux2557/web-toolbox`：个人工具集聚合仓库，GitHub Pages 部署，**根目录直接发布**（https://delux2557.github.io/web-toolbox/）。
-- 结构：`tools/<project>/` 下是 8 个互相独立的子项目；根 `index.html` + `README.md` 是总入口。
+- 结构：`tools/<project>/` 下是 9 个互相独立的子项目；根 `index.html` + `README.md` 是总入口。
 - 无 CI、无测试链；main 有分支保护（禁止直推，须走 PR）。
 
 ## 2. 你的边界（最重要）
