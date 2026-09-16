@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "latest": "v1",
+  "versions": [
+    {
+      "id": "v1",
+      "version": "1.0.2",
+      "label": "文件管理 + 代码浏览编辑（离线编辑器）",
+      "entry": "V1/index.html",
+      "build": "esm-src",
+      "buildTime": "2026-09-16 16:47"
+    }
+  ]
+}
