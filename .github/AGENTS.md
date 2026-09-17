@@ -7,9 +7,11 @@
 
 - `delux2557/web-toolbox`：个人工具集聚合仓库，GitHub Pages 部署，**根目录直接发布**（https://delux2557.github.io/web-toolbox/）。
 - 结构：`tools/<project>/` 下是 9 个互相独立的子项目；根 `index.html` + `README.md` 是总入口。
-- **有 CI**：`.github/workflows/ci.yml` 在 PR 与 main push 上跑 6 道闸门（门户一致性 → code-workspace 全量校验
-  → json-format 全量校验 → 单文件构建 → 快照构建 → 快照验收）。**推 PR 后请等 CI 绿**；红了先看日志自己修，
-  别把红的 PR 丢给 ops。仓库零依赖，CI 里没有 npm install，所以本地能跑通的命令 CI 里必然也能跑通。
+- **有 CI，且是硬门禁**：`.github/workflows/ci.yml` 在 PR 与 main push 上跑 6 道闸门（门户一致性
+  → code-workspace 全量校验 → json-format 全量校验 → 单文件构建 → 快照构建 → 快照验收）。
+  `checks` 已设为 main 的 **required status check** —— 红了 PR 会被 GitHub 判成 `blocked`，按不动合并按钮。
+  **推 PR 后请等 CI 绿**；红了先看日志自己修，别把红的 PR 丢给 ops。
+  仓库零依赖，CI 里没有 npm install，所以本地能跑通的命令 CI 里必然也能跑通。
 - main 有分支保护（禁止直推，须走 PR）。
 
 ## 2. 你的边界（最重要）

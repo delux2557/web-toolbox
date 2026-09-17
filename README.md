@@ -143,13 +143,17 @@ node tools/_build/check-portal-sync.mjs    # 退出码 0 = 一致，1 = 有漂�
 
 几个刻意的选择：
 
+- **`checks` 是 main 的 required status check**，不是「只会跑」的摆设：红了 PR 会被 GitHub 判成
+  `blocked`，合并按钮按不动（实测 `mergeable_state: blocked`）。注意分支保护里
+  `enforce_admins = false` —— 仓库 owner 仍可显式绕过（也正因如此，ops 才能直推 main 做收尾），
+  这道规则对协作者 / 机器人是硬拦。
 - **没有 `npm install`，没有 cache**。仓库零依赖，全是零构建的静态工具 + 零依赖 Node 脚本；加安装步骤只是噪音。
 - **构建只读已提交的源文件**（`vendor/codemirror` 是入库的），产物落进 gitignore 的 `dist/`，
   所以 CI 里能从零复现。构建是**确定性**的 —— 同一份源码重建出的快照与本地逐字节一致（`md5` 已验证），
   否则「CI 绿」就没有意义。
 - **`build-snapshot` 不加 `--strict`**：codebase-context 有一处阻塞型外链（highlight.js CDN，离线时回落纯文本高亮），
   `--strict` 会把它判成失败。
-- Node 锁 **22**（脚本用到 `import.meta.dirname`，需 ≥ 20.11）。
+- Node 锁 **22**（脚本用到 `import.meta.dirname`，需 ≥ 20.11）；`actions/checkout` 与 `actions/setup-node` 用 **v7**。
 
 ## 拾词 · 功能说明
 
