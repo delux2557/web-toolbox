@@ -2,7 +2,7 @@
 
 纯静态小工具集合站 + 前端探索学习实验场。零后端、零构建，可一键部署 GitHub Pages。
 
-> ⚠️ 访问方式提醒：站内项目分两类——**静态工具**（如 en-words，双击 `file://` 即可用）与 **SPA / fetch 项目**（依赖 `fetch` 动态加载，必须通过 HTTP 服务访问：codebase-context、code-workspace、json_test、ppt-player、workbench）。后者可用 `build-snapshot.mjs` 打成可双击的单文件快照（见下方「单文件构建」）。
+> ⚠️ 访问方式提醒：站内项目分两类——**静态工具**（如 en-words，双击 `file://` 即可用）与 **SPA / fetch 项目**（依赖 `fetch` 动态加载，必须通过 HTTP 服务访问：codebase-context、code-workspace、ppt-player、workbench）。后者可用 `build-snapshot.mjs` 打成可双击的单文件快照（见下方「单文件构建」）。
 
 ## 🛠 工具
 
@@ -14,31 +14,29 @@
 | 📽 [PPT Player](./tools/ppt-player/) | ✅ 可用 | 演示文稿播放器：SPA 壳 + manifest 版本注册（V1 示例 / V2 纯 CSS 极简引擎），版本切换 + 导出单文件（DOM 克隆 + 资源内联）；**需 HTTP 服务访问** |
 | 📝 [Assessment Studio](./tools/assessment-studio/test-v3.html) | ✅ 可用 | 在线考试系统 V3.3：练习/考试双模式 + 即时反馈 + 计时评分；单文件纯静态，支持 `file://` 直接打开 |
 | 📋 [表格解析工具 · Table Helper](./tools/table-helper/) | ✅ 可用 | CSV / JSON / HTML 表格解析与互转：粘贴或导入 → 预览、排序筛选、导出；纯静态多模块架构，支持 `file://` 直接打开（独立纯静态页面，表格解析互转的主体实现） |
+| { } [JSON 格式化](./tools/json-format/) | ✅ 可用 | 粘贴 JSON 或**把文件拖进来** → 格式化（2/4/Tab 缩进）/ 压缩 / **递归排序键名**（数组保序）/ 校验；结果可**一键复制**（带降级方案）或**下载成 .json**。报错带行号列号 + 中文解释 + 截断提示，超 15 位整数告警精度可能被改写；零依赖单文件，**支持 `file://` 双击直接用**（无需 HTTP、无需构建） |
 | ✨ [Prompt Helper](./tools/prompt-helper/) | ✅ 可用 | AI 提示词工作台：把提问变成按最佳实践填空（配置驱动模板）；插件化架构（PluginHost 宿主 + 可插拔插件）+ 多主题系统；Vite + Vue 构建，[在线版 release/latest.html](./tools/prompt-helper/release/latest.html)（单文件，可下载后双击使用） |
 | ⏱ 番茄时钟 | 🔜 占位 | 简洁番茄工作法计时器（规划中，后续继续做） |
-| { } JSON 格式化 | 🔜 占位 | JSON 格式化、校验、树形浏览（规划中，后续继续做） |
 | 🎨 调色板工具 | 🔜 占位 | 颜色拾取、渐变生成（规划中，后续继续做） |
 
 ## 🧪 前端探索学习项目
 
-> 非正式工具，是我练习前端架构/数据驱动渲染的实验项目。二者都通过 `fetch` 加载数据与模块，**不能双击 `file://` 直接打开**，需通过 HTTP 服务访问（本地或 GitHub Pages）。
+> 非正式工具，是我练习前端架构的实验项目。依赖 `fetch` 加载数据与模块，**不能双击 `file://` 直接打开**，需通过 HTTP 服务访问（本地或 GitHub Pages）。
 
 | 项目 | 探索方向 | 说明 |
 |------|---------|------|
-| [json_test](./tools/json_test/) | JSON 数据驱动渲染 | 数据与视图完全分离：`fetch('data.json?t=' + Date.now())` 动态加载新闻数据渲染卡片，含缓存绕过与加载/错误状态处理 |
 | [workbench](./tools/workbench/) | 插件化应用架构 | manifest 声明式配置 + 核心加载器（core/loader.js 按 `activeVersion` 注入版本）+ 独立插件（todo / weather，`data-mount` 自动挂载）+ 数据驾驶舱（echarts + KPI/趋势/日志）+ 全局主题系统 |
 
 ## 本地使用
 
 ```bash
-# 1) 静态工具（en-words / assessment-studio / table-helper）：直接双击 index.html（或 test-v3.html）即可
+# 1) 静态工具（en-words / assessment-studio / table-helper / json-format）：直接双击 index.html（或 test-v3.html）即可
 
-# 2) SPA / fetch 项目（codebase-context / code-workspace / json_test / ppt-player / workbench）：需启动 HTTP 服务
+# 2) SPA / fetch 项目（codebase-context / code-workspace / ppt-player / workbench）：需启动 HTTP 服务
 python -m http.server 8080
 # 然后访问：
 #   http://localhost:8080/tools/codebase-context/
 #   http://localhost:8080/tools/code-workspace/
-#   http://localhost:8080/tools/json_test/
 #   http://localhost:8080/tools/ppt-player/
 #   http://localhost:8080/tools/workbench/
 ```
@@ -135,5 +133,6 @@ node tools/_build/verify-snapshot.mjs tools/code-workspace/dist/code-workspace-v
 
 ## 后续计划
 
--   继续开发占位工具：⏱ 番茄时钟、{ } JSON 格式化、🎨 调色板工具
--   继续迭代学习项目：json_test（更多渲染模式）、workbench（更多插件与版本演进）
+-   继续开发占位工具：⏱ 番茄时钟、🎨 调色板工具
+-   继续迭代学习项目：workbench（更多插件与版本演进）
+-   JSON 格式化后续可加：**输出区语法高亮 + 缩进参考线**（需先把输出区从 `<textarea>` 换成 `<pre>`，并引入通用 `tokenize` 词法器）、**重复键检测**（`JSON.parse` 会静默丢掉前面的重复键，只能在原始文本上扫）、树形折叠浏览、JSONPath 过滤、与 code-workspace 打通（选中文件直接格式化）

@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JSON 格式化 — web-toolbox</title>
+<meta name="description" content="粘贴 JSON → 格式化 / 压缩 / 校验。纯静态单文件，零依赖零后端，数据不出浏览器。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='15' font-weight='700' fill='%23fff' text-anchor='middle'%3E%7B%7D%3C/text%3E%3C/svg%3E">
+<style>
+/* ============================================================
+ * 设计令牌。亮色为默认，暗色走 [data-theme="dark"]。
+ * 颜色一律用 oklch（感知均匀，调色不会出现脏灰）。
+ * 刻意不引 Google Fonts：本工具要能 file:// 双击离线用，
+ * 字体全部走系统字体栈。
+ * ============================================================ */
+:root {
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --bg: oklch(98.4% 0.003 250);
+  --surface: oklch(100% 0 0);
+  --surface-2: oklch(96.8% 0.006 250);
+  --text: oklch(26% 0.02 255);
+  --text-2: oklch(47% 0.016 255);
+  --text-3: oklch(62% 0.012 255);
+  --border: oklch(90.5% 0.007 250);
+  --border-strong: oklch(84% 0.011 250);
+  --accent: oklch(56% 0.19 268);
+  --accent-strong: oklch(48% 0.20 268);
+  --accent-soft: oklch(94.5% 0.04 268);
+  --ok: oklch(52% 0.13 155);
+  --ok-soft: oklch(95% 0.045 155);
+  --warn: oklch(58% 0.12 70);
+  --warn-soft: oklch(96% 0.05 85);
+  --danger: oklch(54% 0.19 25);
+  --danger-soft: oklch(95.5% 0.042 25);
+  --radius-l: 12px;
+  --radius: 9px;
+  --radius-s: 7px;
+  --shadow-1: 0 1px 2px oklch(0% 0 0 / .05), 0 1px 3px oklch(0% 0 0 / .04);
+  --shadow-2: 0 10px 32px oklch(0% 0 0 / .10);
+}
+[data-theme="dark"] {
+  --bg: oklch(21.5% 0.012 252);
+  --surface: oklch(25.5% 0.014 252);
+  --surface-2: oklch(29.5% 0.016 252);
+  --text: oklch(94% 0.008 240);
+  --text-2: oklch(78% 0.012 245);
+  --text-3: oklch(62% 0.012 248);
+  --border: oklch(33.5% 0.014 252);
+  --border-strong: oklch(41% 0.016 252);
+  --accent: oklch(72% 0.15 268);
+  --accent-strong: oklch(80% 0.13 268);
+  --accent-soft: oklch(33% 0.06 268);
+  --ok: oklch(74% 0.14 155);
+  --ok-soft: oklch(30% 0.055 155);
+  --warn: oklch(80% 0.12 80);
+  --warn-soft: oklch(31% 0.055 80);
+  --danger: oklch(70% 0.16 25);
+  --danger-soft: oklch(31% 0.065 25);
+  --shadow-1: 0 1px 2px oklch(0% 0 0 / .3);
+  --shadow-2: 0 10px 32px oklch(0% 0 0 / .4);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  display: flex; flex-direction: column;
+  background: var(--bg); color: var(--text);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+button, select, textarea { font: inherit; color: inherit; }
+
+/* ---------- 顶栏 ---------- */
+header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 18px; height: 56px; flex: 0 0 auto;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 600; letter-spacing: .01em; }
+.brand svg { display: block; }
+.brand small { font-weight: 400; font-size: 12px; color: var(--text-3); margin-left: 2px; }
+.spacer { flex: 1 1 auto; }
+.icon-btn {
+  display: grid; place-items: center; width: 30px; height: 30px; padding: 0;
+  border: 1px solid transparent; border-radius: var(--radius-s);
+  background: transparent; color: var(--text-2); cursor: pointer;
+  transition: background 130ms ease, color 130ms ease;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text); }
+.icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.icon-btn:disabled { opacity: .38; cursor: default; }
+.icon-btn:disabled:hover { background: transparent; color: var(--text-2); }
+
+/* 面板头部右侧的小动作区：复制 / 下载 / 打开文件。
+   放在各自面板的头部，是因为它们分别只作用于那一侧的内容 ——
+   塞进底部操作条会和「格式化」这类输入侧动作混在一起。 */
+.pane-head .tools { display: flex; align-items: center; gap: 2px; }
+
+/* 拖入文件时盖住整页的提示层。
+   纯提示、不吃事件（pointer-events: none），否则会把 drop 事件自己挡掉。 */
+.drop-hint {
+  position: fixed; inset: 0; z-index: 9;
+  display: none; place-items: center;
+  background: var(--accent-soft); color: var(--accent-strong);
+  box-shadow: inset 0 0 0 3px var(--accent);
+  font-size: 15px; font-weight: 600;
+  pointer-events: none;
+}
+body.dropping .drop-hint { display: grid; }
+
+/* ---------- 主体：左右两栏（窄屏上下） ---------- */
+main { flex: 1 1 auto; min-height: 0; display: flex; gap: 1px; background: var(--border); }
+.pane { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+.pane-head {
+  display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
+  padding: 8px 14px; font-size: 12px; color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+}
+.pane-head b { font-weight: 600; color: var(--text-2); font-size: 12px; letter-spacing: .02em; }
+.pane-head .meta { margin-left: auto; font-family: var(--font-mono); font-size: 11.5px; }
+textarea {
+  flex: 1 1 auto; min-height: 0; width: 100%;
+  padding: 12px 14px; border: 0; background: transparent; resize: none;
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.65;
+  tab-size: 2; white-space: pre; overflow: auto;
+}
+textarea:focus { outline: none; }
+#input::placeholder { color: var(--text-3); }
+#output { background: var(--surface); }
+/* 输入改过之后结果就"过期"了：降透明度提示需要重新点一次，比直接清空更不伤数据 */
+#output.is-stale { opacity: .5; }
+
+/* ---------- 底部操作条 ---------- */
+footer {
+  flex: 0 0 auto; background: var(--surface); border-top: 1px solid var(--border);
+}
+.bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  padding: 10px 18px;
+}
+.bar label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); }
+select {
+  height: 30px; padding: 0 8px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-s);
+  background: var(--surface-2); cursor: pointer; font-size: 12.5px;
+}
+select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn {
+  height: 32px; padding: 0 14px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-s);
+  background: var(--surface); color: var(--text-2);
+  cursor: pointer; font-size: 13px; font-weight: 500;
+  transition: background 130ms ease, color 130ms ease, border-color 130ms ease;
+}
+.btn:hover { background: var(--surface-2); color: var(--text); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn-primary {
+  background: var(--accent); border-color: transparent; color: #fff;
+}
+.btn-primary:hover { background: var(--accent-strong); color: #fff; }
+[data-theme="dark"] .btn-primary { color: oklch(20% 0.02 268); }
+
+/* ---------- 状态条：只管「当前输入是什么状态」 ----------
+   常驻、带语义色。**成功反馈不在这里** —— 那类是一次性动作的结果，走下方的 toast。
+   这里留的是需要人盯着看的东西：报错（要照着行号列号去改、要复制引擎原文排查）、
+   以及「没坏但得留意」的警告（超长整数精度、文件超限）。 */
+.status {
+  display: flex; align-items: baseline; gap: 8px; flex: 1 1 auto; min-width: 0;
+  padding: 8px 18px; font-size: 12.5px;
+  border-top: 1px solid var(--border);
+  color: var(--text-3);
+}
+.status .mark { font-weight: 700; flex: 0 0 auto; }
+.status .body { min-width: 0; word-break: break-word; }
+.status .raw { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); }
+.status.is-warn { color: var(--warn); background: var(--warn-soft); }
+.status.is-error { color: var(--danger); background: var(--danger-soft); }
+.status.is-error .raw { color: var(--danger); opacity: .78; }
+
+/* ---------- 浮动提示：一次性动作的反馈，浮上来、停一会儿、自己退掉 ----------
+   刻意**不做整块变色**：用中性的浮层卡片 + 一个语义色圆点表达结果，
+   比把整条提示染成绿色克制，也不会和状态栏的警告色混淆。
+   `aria-live` 容器必须常驻 DOM（display:none 会停掉播报），所以显隐走
+   opacity / visibility 而不是 display。 */
+.toast {
+  position: fixed; left: 50%; bottom: 96px; z-index: 20;
+  display: flex; align-items: center; gap: 9px;
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 9px 16px;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 999px;
+  box-shadow: var(--shadow-2);
+  font-size: 13px; line-height: 1.5;
+  pointer-events: none;                  /* 不吃点击：它只是通知，不该挡住底下的按钮 */
+  opacity: 0; visibility: hidden;
+  transform: translate(-50%, 10px);      /* 从下方 10px 浮上来 */
+  transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
+}
+.toast.show { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+.toast .dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; background: var(--ok); }
+.toast.is-warn .dot { background: var(--warn); }
+.toast.is-error .dot { background: var(--danger); }
+
+/* 用户要求减少动态效果时，只保留淡出，不做位移 */
+@media (prefers-reduced-motion: reduce) {
+  .toast { transform: translate(-50%, 0); transition: opacity 180ms ease, visibility 180ms ease; }
+  .toast.show { transform: translate(-50%, 0); }
+}
+
+/* ---------- 窄屏：改上下两栏 ---------- */
+@media (max-width: 860px) {
+  main { flex-direction: column; }
+  .pane { flex: 1 1 50%; }
+  .pane + .pane { border-top: 1px solid var(--border); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="8" fill="oklch(56% 0.19 268)"/>
+      <text x="16" y="23" font-family="monospace" font-size="15" font-weight="700" fill="#fff" text-anchor="middle">{}</text>
+    </svg>
+    JSON 格式化<small>零依赖 · 数据不出浏览器</small>
+  </div>
+  <div class="spacer"></div>
+  <button class="icon-btn" id="btnTheme" type="button" title="切换明暗主题" aria-label="切换明暗主题">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+      <circle cx="12" cy="12" r="4.2"/>
+      <path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/>
+    </svg>
+  </button>
+</header>
+
+<main>
+  <section class="pane">
+    <div class="pane-head">
+      <b>输入</b><span class="meta" id="inMeta">—</span>
+      <span class="tools">
+        <button class="icon-btn" id="btnOpenFile" type="button" title="打开本地文件（也可以直接把文件拖到页面上）" aria-label="打开本地文件">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3.5 7.2A1.7 1.7 0 0 1 5.2 5.5h3.6l1.8 2.2h8.2a1.7 1.7 0 0 1 1.7 1.7v7.4a1.7 1.7 0 0 1-1.7 1.7H5.2a1.7 1.7 0 0 1-1.7-1.7z"/>
+          </svg>
+        </button>
+      </span>
+    </div>
+    <textarea id="input" spellcheck="false" autocomplete="off" autocapitalize="off"
+      placeholder="把 JSON 粘到这里，或把 .json 文件拖进来，然后按 Ctrl + Enter 或点「格式化」。"></textarea>
+  </section>
+  <section class="pane">
+    <div class="pane-head">
+      <b>结果</b><span class="meta" id="outMeta">—</span>
+      <span class="tools">
+        <button class="icon-btn" id="btnCopy" type="button" title="复制结果到剪贴板" aria-label="复制结果" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="8.6" y="8.6" width="11.4" height="11.4" rx="2.2"/>
+            <path d="M15.4 8.6V6.2A1.7 1.7 0 0 0 13.7 4.5H6.2A1.7 1.7 0 0 0 4.5 6.2v7.5a1.7 1.7 0 0 0 1.7 1.7h2.4"/>
+          </svg>
+        </button>
+        <button class="icon-btn" id="btnDownload" type="button" title="下载结果为 .json 文件" aria-label="下载结果" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 4.2v10.4M7.8 10.4 12 14.6l4.2-4.2M4.6 18.4h14.8"/>
+          </svg>
+        </button>
+      </span>
+    </div>
+    <textarea id="output" readonly spellcheck="false"
+      placeholder="结果会出现在这里（可直接 Ctrl + A 全选复制）。"></textarea>
+  </section>
+</main>
+
+<div class="drop-hint" aria-hidden="true">松开鼠标 —— 读入这个文件</div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+<input type="file" id="fileInput" hidden>
+
+<footer>
+  <div class="bar">
+    <label for="indent">缩进
+      <select id="indent">
+        <option value="2" selected>2 空格</option>
+        <option value="4">4 空格</option>
+        <option value="tab">Tab</option>
+      </select>
+    </label>
+    <button class="btn btn-primary" id="btnFormat" type="button">格式化</button>
+    <button class="btn" id="btnMinify" type="button">压缩成一行</button>
+    <button class="btn" id="btnSort" type="button" title="递归按键名排序（数组顺序保持不变）">排序键名</button>
+    <button class="btn" id="btnValidate" type="button">只校验</button>
+    <button class="btn" id="btnClear" type="button">清空</button>
+  </div>
+  <div class="status" id="status" role="status" aria-live="polite">
+    <span class="mark">·</span>
+    <span class="body">就绪。粘贴 JSON 后按 <b>Ctrl + Enter</b> 直接格式化。</span>
+  </div>
+</footer>
+
+<script>
+/* ============================================================
+ * 一、核心：纯函数（零依赖，与宿主无关）
+ * ------------------------------------------------------------
+ * 这一段是**可搬运**的部分。想把它搬进 code-workspace 的编辑器命令、
+ * 或者包一层 CLI，复制这一段就够了 —— 下面的 UI 代码一行都不用带。
+ * tests/format.test.mjs 直接从本文件里把这一段抠出来跑，
+ * 所以被测的就是真正交付的这份代码，不存在"测试版 / 生产版"两份。
+ * ============================================================ */
+(function () {
+  "use strict";
+
+  /* 超过这个体量先提示一下：JSON.parse 本身是 O(n)，但把 10MB 塞进
+     textarea 再全量重绘会让页面明显卡住 —— 与其偷偷卡死，不如先说清楚。 */
+  var MAX_BYTES = 2 * 1024 * 1024;
+  var BIGINT_DIGITS = 16;      // 超过 15 位有效数字就可能被 IEEE-754 改写
+
+  /* 引擎报错文本 → 中文解释。
+     键是**稳定的英文前缀**；一个都匹配不上就返回空串，界面只显示引擎原文。
+     原则：宁可只给原文，也不硬套一句可能错的中文。 */
+  var ERROR_HINTS = [
+    ["Expected double-quoted property name", "属性名必须用双引号包起来 —— 不能是单引号，也不能是裸词。"],
+    ["Expected property name or '}'", "这里应该是一个属性名（双引号）或右花括号。"],
+    ["Expected ':' after property name", "属性名后面少了冒号。"],
+    ["Expected ',' or '}' after property value", "属性值后面少了逗号或右花括号。"],
+    ["Expected ',' or ']' after array element", "数组元素后面少了逗号或右方括号。"],
+    ["Unexpected end of JSON input", "JSON 不完整 —— 结尾像是被截断了。"],
+    ["Unexpected non-whitespace character after JSON", "JSON 已经结束，后面还有多余内容。"],
+    ["Bad escaped character", "字符串里有非法的反斜杠转义。"],
+    ["Bad control character", "字符串里有未转义的控制字符（比如直接敲了换行或 Tab）。"],
+    ["is not valid JSON", "这不是一个合法的 JSON 值。顶层只能是对象、数组、字符串、数字、true、false 或 null。"],
+    ["Unexpected token", "这里有无法识别的字符。"]
+  ];
+
+  function explain(message) {
+    for (var i = 0; i < ERROR_HINTS.length; i++) {
+      if (message.indexOf(ERROR_HINTS[i][0]) >= 0) return ERROR_HINTS[i][1];
+    }
+    return "";
+  }
+
+  /* 从引擎报错里抠出位置。报错格式各引擎不一样，实测过的三种：
+       V8（Chrome / Edge / Node）：… at position 12 (line 3 column 1)
+       SpiderMonkey（Firefox）：… at line 3 column 1 of the JSON data
+       部分场景根本没有位置：Unexpected end of JSON input
+     拿不到就返回 null —— 宁可不给位置，也绝不编一个错的出来。 */
+  function errorPosition(message, text) {
+    var m = message.match(/line\s+(\d+)\s+column\s+(\d+)/i);
+    if (m) return { line: Number(m[1]), column: Number(m[2]) };
+
+    m = message.match(/position\s+(\d+)/i);
+    if (m) {
+      var pos = Math.min(Number(m[1]), text.length);
+      var before = text.slice(0, pos);
+      var nl = before.lastIndexOf("\n");
+      return { line: before.split("\n").length, column: pos - nl };
+    }
+    return null;
+  }
+
+  /* 「内容被截断」的判定：报错位置正好落在最后一个非空白字符之后。
+     实测（V8）这个信号能干净地分开两类错误，不会误报：
+       截断   {"a": [1, 2    → position 11 = 长度 11 → 落在末尾 ✓
+       语法错 {"a": 1,}      → position  8 < 长度  9 → 不在末尾 ✗（那是多余的尾逗号）
+     注意：拿不到 position 的报错（Unexpected end of JSON input）不用这条 ——
+     它的原文本身已经说了「不完整」，再叠一句就重复了。 */
+  function isTruncated(message, text) {
+    var m = message.match(/position\s+(\d+)/i);
+    if (!m) return false;
+    return Number(m[1]) >= text.replace(/\s+$/, "").length;
+  }
+
+  /* 去掉 UTF-8 BOM。从记事本 / 某些导出工具粘过来会带，JSON.parse 会当场失败，
+     而且报错信息（"Unexpected token"）完全不提示是 BOM 的锅。 */
+  function stripBOM(s) {
+    return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s;
+  }
+
+  /* 统一入口：校验 / 格式化 / 压缩都走它 —— 保证三者对「合法」的判定完全一致，
+     不会出现"校验说合法、格式化却报错"。 */
+  function parseJson(text) {
+    var src = stripBOM(text == null ? "" : String(text));
+    if (!src.trim()) {
+      return {
+        ok: false,
+        error: { message: "输入为空", hint: "请先粘贴一段 JSON。", line: null, column: null, empty: true }
+      };
+    }
+    try {
+      return { ok: true, value: JSON.parse(src), source: src };
+    } catch (e) {
+      var message = String((e && e.message) || e);
+      var pos = errorPosition(message, src);
+      return {
+        ok: false,
+        error: {
+          message: message,
+          hint: explain(message),
+          line: pos ? pos.line : null,
+          column: pos ? pos.column : null,
+          truncated: isTruncated(message, src)
+        }
+      };
+    }
+  }
+
+  /* 缩进档位 → JSON.stringify 的第三参。非法值一律回落 2 空格。
+     抽出来是因为格式化与排序都要用 —— 两处各写一遍迟早会漂移。 */
+  function indentOf(v) {
+    return (v === "tab" || v === "\t") ? "\t" : (Number(v) || 2);
+  }
+
+  /* 递归按键名排序。
+     两条不能动的：
+     ① **数组必须保序** —— 数组顺序本身是语义（`[1,2]` 和 `[2,1]` 不是一个东西），排了就错；
+     ② 赋值必须走 `Object.defineProperty`。
+        实测：`{"__proto__":{"a":1},"b":2}` 用朴素的 `out[k] = v` 建新对象，
+        `__proto__` 那个键会**静默消失**（输出只剩 `{"b":2}`，不报错也不警告）——
+        因为普通赋值命中的是原型 setter。defineProperty 才能建出真正的自有属性。
+        对一个「防止数据被悄悄改动」的工具来说，这是必须绕开的坑。 */
+  function sortKeysDeep(value, compare) {
+    if (Array.isArray(value)) return value.map(function (v) { return sortKeysDeep(v, compare); });
+    if (value && typeof value === "object") {
+      var out = {};
+      Object.keys(value).sort(compare).forEach(function (k) {
+        Object.defineProperty(out, k, {
+          value: sortKeysDeep(value[k], compare),
+          enumerable: true, writable: true, configurable: true
+        });
+      });
+      return out;
+    }
+    return value;
+  }
+
+  /* 键名默认比较器。用 localeCompare 而不是码点比较：
+     中文键名（"订单号" / "物料"）按码点排出来是乱序，按语言习惯排才符合直觉。
+     代价是结果依赖运行环境的 locale —— 对「给人看」的工具这个取舍是对的。 */
+  function compareKeys(a, b) { return a.localeCompare(b); }
+
+  function formatJson(text, indent) {
+    var r = parseJson(text);
+    if (!r.ok) return r;
+    return { ok: true, value: JSON.stringify(r.value, null, indentOf(indent)) };
+  }
+
+  function minifyJson(text) {
+    var r = parseJson(text);
+    if (!r.ok) return r;
+    return { ok: true, value: JSON.stringify(r.value) };
+  }
+
+  function validateJson(text) {
+    var r = parseJson(text);
+    return r.ok ? { ok: true, value: r.value } : r;
+  }
+
+  /* 大整数精度告警。
+     JSON.parse 把数字变成 IEEE-754 双精度，**整数超过 15 位就可能被悄悄改写**
+     （1234567890123456789 → 1234567890123456800），而且不报错。
+     对工单号 / 物料号 / 19 位 ID 这类标识符是灾难 —— 复制出去就错了。
+     这里**只告警、不改数据**：真要保住这些值，得让上游把它们当字符串传。
+
+     实现要点：必须**跳过字符串内部**，否则 `"orderId": "1234…789"` 会误报。
+     所以这里用一个小状态机而不是正则 —— 正则没法可靠地区分"引号内"与"引号外"。 */
+  function findLongIntegers(text) {
+    var hits = [];
+    var inStr = false, esc = false, start = -1, buf = "";
+
+    function flush() {
+      if (start < 0) return;
+      /* 只看整数部分的位数：1.2e30 的整数部分只有 1 位，是可精确表示的 */
+      var intPart = buf.split(/[.eE]/)[0].replace(/^[-+]/, "");
+      if (intPart.length >= BIGINT_DIGITS) {
+        var before = text.slice(0, start);
+        hits.push({
+          text: buf,
+          line: before.split("\n").length,
+          column: start - before.lastIndexOf("\n")
+        });
+      }
+      start = -1; buf = "";
+    }
+
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === "\\") esc = true;
+        else if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') { flush(); inStr = true; continue; }
+      if (c >= "0" && c <= "9") { if (start < 0) start = i; buf += c; continue; }
+      /* 小数点 / 指数继续吃进来，免得把 1.2345678901234568e2 当整数 */
+      if (start >= 0 && (c === "." || c === "e" || c === "E" || c === "+" || c === "-")) { buf += c; continue; }
+      flush();
+    }
+    flush();
+    return hits;
+  }
+
+  /* 行数 / 字节数：状态栏与 meta 用 */
+  function countLines(s) { return s ? s.split("\n").length : 0; }
+  function byteSize(s) {
+    /* 用 TextEncoder 而不是 s.length：中文是 3 字节，length 会给出一半的数 */
+    try { return new TextEncoder().encode(s).length; } catch (_) { return s.length; }
+  }
+
+  /* 把核心挂到一个命名空间上，供测试取用。
+     浏览器里它就是 window.JSONFMT；测试在 Node 里用同一个对象。 */
+  var API = {
+    MAX_BYTES: MAX_BYTES,
+    BIGINT_DIGITS: BIGINT_DIGITS,
+    ERROR_HINTS: ERROR_HINTS,
+    explain: explain,
+    errorPosition: errorPosition,
+    isTruncated: isTruncated,
+    stripBOM: stripBOM,
+    parseJson: parseJson,
+    indentOf: indentOf,
+    sortKeysDeep: sortKeysDeep,
+    compareKeys: compareKeys,
+    formatJson: formatJson,
+    minifyJson: minifyJson,
+    validateJson: validateJson,
+    findLongIntegers: findLongIntegers,
+    countLines: countLines,
+    byteSize: byteSize
+  };
+  if (typeof window !== "undefined") window.JSONFMT = API;
+  if (typeof module !== "undefined" && module.exports) module.exports = API;
+
+  /* ============================================================
+   * 二、界面（只是上面那组函数的壳）
+   * ============================================================ */
+  if (typeof document === "undefined") return;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    input: $("input"), output: $("output"), indent: $("indent"),
+    inMeta: $("inMeta"), outMeta: $("outMeta"), status: $("status"),
+    btnFormat: $("btnFormat"), btnMinify: $("btnMinify"), btnSort: $("btnSort"),
+    btnValidate: $("btnValidate"), btnClear: $("btnClear"), btnTheme: $("btnTheme"),
+    btnCopy: $("btnCopy"), btnDownload: $("btnDownload"),
+    btnOpenFile: $("btnOpenFile"), fileInput: $("fileInput"), toast: $("toast")
+  };
+
+  /* 局部存储一律 try/catch：file:// 下或隐私模式里 localStorage 可能直接抛，
+     不能因为存不了偏好就让整个页面报错。 */
+  var THEME_KEY = "jf-theme";      // 前缀 jf- 是为了避开同域其它工具（如 code-workspace 的 cw-）
+  /* 从文件读进来时记住原文件名，下载结果时沿用它 —— 免得每次都要手动改名。 */
+  var sourceName = "";
+  function readTheme() {
+    try { return localStorage.getItem(THEME_KEY); } catch (_) { return null; }
+  }
+  function writeTheme(v) {
+    try { localStorage.setItem(THEME_KEY, v); } catch (_) { /* 存不了就算了，本次会话内仍有效 */ }
+  }
+
+  function applyTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+    els.btnTheme.title = t === "dark" ? "切换到亮色主题" : "切换到暗色主题";
+  }
+  function initTheme() {
+    var saved = readTheme();
+    if (saved === "dark" || saved === "light") { applyTheme(saved); return; }
+    var dark = false;
+    try { dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches; } catch (_) {}
+    applyTheme(dark ? "dark" : "light");
+  }
+
+  /* 状态条三种态：ok / warn / error —— 一次只显示一条，不叠信息 */
+  function setStatus(kind, mark, body, raw) {
+    els.status.className = "status" + (kind ? " is-" + kind : "");
+    els.status.textContent = "";        // 清子节点；一律走 textContent，不拼 HTML
+    var m = document.createElement("span");
+    m.className = "mark"; m.textContent = mark;
+    var b = document.createElement("span");
+    b.className = "body"; b.textContent = body;
+    els.status.appendChild(m);
+    els.status.appendChild(b);
+    if (raw) {
+      var r = document.createElement("span");
+      r.className = "raw"; r.textContent = raw;
+      b.appendChild(r);
+    }
+  }
+
+  /* 状态栏回到「就绪」。一次操作做成了之后用它把上一条残留清掉 ——
+     注意这不是「报成功」，成功反馈一律走 toast。 */
+  function clearStatus() {
+    setStatus("", "·", "就绪。粘贴 JSON 后按 Ctrl + Enter 直接格式化。");
+  }
+
+  /* ---------- 浮动提示 ----------
+     分工一句话：**会自己消失的只放"做成了"**。
+     报错和警告一律留在状态栏 —— 那类信息用户要盯着看（照着行列号改），
+     甚至要复制引擎原文去排查，三秒后自动消失等于把工具最要紧的能力毁掉。
+     同一时刻只留一条：新的直接顶掉旧的，并重置计时，避免叠成一摞。 */
+  var TOAST_MS = 2600;
+  var toastTimer = 0;
+  function toast(text, kind) {
+    var base = "toast" + (kind ? " is-" + kind : "");
+    els.toast.className = base;       // 先摘掉 show
+    els.toast.textContent = "";
+    var dot = document.createElement("span");
+    dot.className = "dot";
+    var body = document.createElement("span");
+    body.className = "body";
+    body.textContent = text;
+    els.toast.appendChild(dot);
+    els.toast.appendChild(body);
+    void els.toast.offsetWidth;       // 强制一帧：连续两次操作时动画才会重播而不是原地不动
+    els.toast.className = base + " show";
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      toastTimer = 0;
+      els.toast.className = base;
+    }, TOAST_MS);
+  }
+
+  /* 输入变了就把结果标成「已过期」，而不是清空它 ——
+     清空会让「格式化完想再改一个字对比一下」的人白丢结果；
+     不清空又会出现「左边已经改过、右边还是旧结果」的误解。
+     标一下，两边的代价都避开。 */
+  function markStale() {
+    if (!els.output.value) return;
+    els.output.classList.add("is-stale");
+    els.outMeta.textContent = "已过期";
+  }
+  function unmarkStale() {
+    els.output.classList.remove("is-stale");
+  }
+
+  function syncMeta() {
+    var t = els.input.value;
+    els.inMeta.textContent = t ? countLines(t) + " 行 · " + byteSize(t) + " 字节" : "—";
+  }
+
+  /* 位置前缀：能拿到位置就给「第 N 行第 M 列」，拿不到就只说错误本身 */
+  function where(e) {
+    if (e.line == null) return "";
+    return "第 " + e.line + " 行第 " + e.column + " 列：";
+  }
+
+  function showError(e) {
+    if (e.empty) { setStatus("", "·", "还没有内容 —— 先把 JSON 贴到左边。"); return; }
+    var body = where(e) + (e.hint || "JSON 解析失败。");
+    if (e.truncated) body += "报错点正好落在输入末尾 —— 检查一下是不是没粘完。";
+    setStatus("error", "✗", body, e.message);
+  }
+
+  /* 大整数告警统一在这里出，三处调用点共用 */
+  function bigintWarning() {
+    var hits = findLongIntegers(stripBOM(els.input.value));
+    if (!hits.length) return null;
+    var first = hits[0];
+    return "检测到 " + hits.length + " 个超过 " + (BIGINT_DIGITS - 1) + " 位的整数（第 " +
+      first.line + " 行：…" + first.text.slice(-8) + "）—— JSON 数字是双精度，" +
+      "这类长 ID 的末尾几位可能已被悄悄改写。建议让上游把它们当字符串传。";
+  }
+
+  /* 统一的「产出结果」收尾：写输出、更新 meta、出状态（有告警优先显示告警） */
+  function deliver(out, label) {
+    els.output.value = out;
+    unmarkStale();
+    syncOutputActions();
+    els.outMeta.textContent = countLines(out) + " 行 · " + byteSize(out) + " 字节";
+    var warn = bigintWarning();
+    if (warn) {
+      /* 有警告时**不**弹 toast —— 这条信息要留着让人看完，不能自己消失 */
+      setStatus("warn", "⚠", "已" + label + "，但请注意：" + warn);
+    } else {
+      clearStatus();
+      toast("已" + label + " · " + countLines(out) + " 行 · " + byteSize(out) + " 字节");
+    }
+  }
+
+  function guardSize() {
+    var n = byteSize(els.input.value);
+    if (n <= MAX_BYTES) return false;
+    setStatus("warn", "⚠", "这段内容有 " + Math.round(n / 1048576 * 10) / 10 + " MB，超过 " +
+      (MAX_BYTES / 1048576) + " MB 的处理上限。浏览器里全量重排会明显卡顿 —— " +
+      "建议先在本地切小，或改用命令行（jq）处理。");
+    return true;
+  }
+
+  function doFormat() {
+    if (guardSize()) return;
+    var r = formatJson(els.input.value, els.indent.value);
+    if (!r.ok) { showError(r.error); return; }
+    deliver(r.value, "格式化");
+  }
+
+  function doMinify() {
+    if (guardSize()) return;
+    var r = minifyJson(els.input.value);
+    if (!r.ok) { showError(r.error); return; }
+    deliver(r.value, "压缩");
+  }
+
+  /* 「只校验」不碰输出区 —— 用户可能刚格式化过、正想核对一下，
+     把结果清掉是帮倒忙。这里只回报结论。 */
+  function doValidate() {
+    if (guardSize()) return;
+    var r = validateJson(els.input.value);
+    if (!r.ok) { showError(r.error); return; }
+    var t = els.input.value;
+    var warn = bigintWarning();
+    if (warn) setStatus("warn", "⚠", "是合法的 JSON，但请注意：" + warn);
+    else { clearStatus(); toast("是合法的 JSON · " + countLines(t) + " 行 · " + byteSize(t) + " 字节"); }
+  }
+
+  function doClear() {
+    els.input.value = "";
+    els.output.value = "";
+    els.inMeta.textContent = "—";
+    els.outMeta.textContent = "—";
+    sourceName = "";
+    unmarkStale();
+    syncOutputActions();
+    setStatus("", "·", "已清空。粘贴 JSON 后按 Ctrl + Enter 直接格式化。");
+    els.input.focus();
+  }
+
+  /* 排序：**只重排对象的键，数组顺序原样保留**（数组顺序是语义，排了就错）。
+     和格式化/压缩一样，结果进结果区、不覆盖输入区 —— 用户随时能改回去。 */
+  function doSort() {
+    if (guardSize()) return;
+    var r = parseJson(els.input.value);
+    if (!r.ok) { showError(r.error); return; }
+    var sorted = sortKeysDeep(r.value, compareKeys);
+    deliver(JSON.stringify(sorted, null, indentOf(els.indent.value)), "排序");
+  }
+
+  /* ---------- 复制 ---------- */
+  /* 老路子：造一个离屏 textarea、选中它、再 execCommand('copy')。
+     刻意**不复用结果区**：一是改了它的选区会动到用户自己选中的内容，
+     二是结果区以后要换成 <pre>（没有 select()）。所以自己造一个临时的用完就撤。 */
+  function legacyCopy(text) {
+    if (typeof document.execCommand !== "function") return false;
+    var ta = null;
+    try {
+      ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      return !!document.execCommand("copy");
+    } catch (_) {
+      return false;
+    } finally {
+      if (ta && ta.parentNode) ta.parentNode.removeChild(ta);
+    }
+  }
+
+  /* 复制到剪贴板，两条路都留着：
+     ① `navigator.clipboard`（需要 secure context。`file://` 在 Chrome 里算 secure，
+        但 Firefox / 企业策略 / CSP 都可能让它不可用或直接抛，所以不能当作必然成功）
+     ② 上面的离屏 textarea 老路 —— 几乎所有环境都能用。
+     必须在**用户点击的同步回调**里调用，否则拿不到 user activation。 */
+  function copyText(text) {
+    var yes = function (how) { return { ok: true, how: how }; };
+    var no = function (why) { return { ok: false, why: why }; };
+    var nav = (typeof navigator !== "undefined") ? navigator : null;
+    if (nav && nav.clipboard && typeof nav.clipboard.writeText === "function") {
+      try {
+        return nav.clipboard.writeText(text).then(
+          function () { return yes("clipboard"); },
+          function () { return legacyCopy(text) ? yes("legacy") : no("浏览器拒绝了剪贴板写入"); }
+        );
+      } catch (_) { /* 同步抛就落到老路 */ }
+    }
+    return Promise.resolve(legacyCopy(text) ? yes("legacy") : no("这个环境不支持剪贴板 API"));
+  }
+
+  /* ---------- 下载 ---------- */
+  /* Blob + 一个临时 <a download>。file:// 下可用，但有两条硬约束：
+     必须由用户点击触发（不能在 load 里自动下），文件只能落到浏览器下载目录
+     （不能选位置、不能覆盖同名）。所以用完就把 object URL 撤掉，别漏内存。 */
+  function downloadText(text, filename) {
+    try {
+      var blob = new Blob([text], { type: "application/json;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return { ok: true, name: filename };
+    } catch (e) {
+      return { ok: false, why: String((e && e.message) || e) };
+    }
+  }
+
+  /* 下载文件名的默认值：读进来过文件就用它的主干名，粘贴进来的就用默认名。 */
+  function outputFilename() {
+    if (!sourceName) return "formatted.json";
+    var base = sourceName.replace(/\.[^.]+$/, "");
+    return (base || "formatted") + ".json";
+  }
+
+  /* ---------- 读文件 ---------- */
+  /* 优先 File.text()；老浏览器回落到 FileReader。
+     刻意**不做扩展名白名单** —— 实际拿到的常是 .txt、甚至没有扩展名，
+     卡白名单只会把人挡在外面。真正的把关交给后面的 JSON 校验。 */
+  function readFileAsText(file) {
+    if (file && typeof file.text === "function") return file.text();
+    return new Promise(function (res, rej) {
+      try {
+        var fr = new FileReader();
+        fr.onload = function () { res(String(fr.result)); };
+        fr.onerror = function () { rej(fr.error || new Error("读取失败")); };
+        fr.readAsText(file);
+      } catch (e) { rej(e); }
+    });
+  }
+
+  /* 统一入口：拖入 / 选文件都走这里 —— BOM 剥离、meta 刷新、超限劝退只写一遍。 */
+  function loadText(text, name) {
+    var s = stripBOM(String(text == null ? "" : text));
+    els.input.value = s;
+    sourceName = name || "";
+    syncMeta();
+    markStale();
+    if (guardSize()) return;        // 超限时 guardSize 自己已经出了提示
+    if (!s.trim()) {
+      setStatus("warn", "⚠", "这个文件是空的（或者只有空白）。");
+      return;
+    }
+    clearStatus();
+    toast("已读入 " + (name || "内容") + " · " + countLines(s) + " 行 · " + byteSize(s) + " 字节");
+  }
+
+  function loadFile(file) {
+    if (!file) return;
+    readFileAsText(file).then(
+      function (t) { loadText(t, file.name || ""); },
+      function (e) {
+        setStatus("error", "✗", "读不了这个文件：" + String((e && e.message) || e) +
+          "。它可能不是纯文本（.xlsx / .docx / .zip 这些本质是压缩包）。");
+      }
+    );
+  }
+
+  /* ---------- 拖入文件 ---------- */
+  function dragHasFiles(e) {
+    var dt = e && e.dataTransfer;
+    if (!dt) return false;
+    if (dt.files && dt.files.length) return true;
+    var types = dt.types;
+    if (!types) return false;
+    for (var i = 0; i < types.length; i++) if (types[i] === "Files") return true;
+    return false;
+  }
+  function setDropping(on) {
+    document.body.classList[on ? "add" : "remove"]("dropping");
+  }
+
+  /* 最容易漏的一步：**必须拦 dragover**。
+     不拦的话浏览器会认为这个页面不接受拖放，于是把文件当成导航目标**直接打开** ——
+     页面被顶掉，输入区里还没保存的内容一起没了。这类功能最常见的翻车点就是它。 */
+  document.addEventListener("dragover", function (e) {
+    if (!dragHasFiles(e)) return;     // 拖的是选中的文字就别管
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    setDropping(true);
+  });
+  document.addEventListener("dragleave", function (e) {
+    /* relatedTarget 为 null 才是真的离开了窗口。拖过页面内的子元素时它不为 null，
+       那时收起提示会一闪一闪。 */
+    if (!e.relatedTarget) setDropping(false);
+  });
+  document.addEventListener("drop", function (e) {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();               // 同上：不拦的话浏览器会自己"打开"这个文件
+    setDropping(false);
+    var files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files.length) loadFile(files[0]);   // 一次只读一个，取第一个
+  });
+
+  /* 输出区空的时候复制/下载没有意义 —— 直接置灰，比"点了没反应"清楚 */
+  function syncOutputActions() {
+    var empty = !els.output.value;
+    els.btnCopy.disabled = empty;
+    els.btnDownload.disabled = empty;
+  }
+
+  function doCopy() {
+    var text = els.output.value;
+    if (!text) { setStatus("", "·", "还没有结果可复制。"); return; }
+    copyText(text).then(function (r) {
+      if (r.ok) { clearStatus(); toast("已复制 " + byteSize(text) + " 字节到剪贴板"); }
+      else setStatus("error", "✗", "自动复制没成功（" + r.why +
+        "）—— 点一下结果区按 Ctrl + A 再 Ctrl + C 一样能拿到。");
+    });
+  }
+
+  function doDownload() {
+    var text = els.output.value;
+    if (!text) { setStatus("", "·", "还没有结果可下载。"); return; }
+    var r = downloadText(text, outputFilename());
+    if (r.ok) { clearStatus(); toast("已下载 " + r.name + " · 在浏览器的下载目录里"); }
+    else setStatus("error", "✗", "下载没成功（" + r.why + "）—— 可以改用「复制」自己存。");
+  }
+
+  /* ---------- 事件 ---------- */
+  els.btnFormat.addEventListener("click", doFormat);
+  els.btnMinify.addEventListener("click", doMinify);
+  els.btnSort.addEventListener("click", doSort);
+  els.btnValidate.addEventListener("click", doValidate);
+  els.btnClear.addEventListener("click", doClear);
+  els.btnCopy.addEventListener("click", doCopy);
+  els.btnDownload.addEventListener("click", doDownload);
+  els.btnOpenFile.addEventListener("click", function () { els.fileInput.click(); });
+  els.fileInput.addEventListener("change", function () {
+    var f = els.fileInput.files && els.fileInput.files[0];
+    loadFile(f);                      // 先启动读取
+    /* 再清 value：不清的话连续选同一个文件不会再触发 change。
+       放在启动读取之后，是为了让 File 对象的生命周期万无一失。 */
+    try { els.fileInput.value = ""; } catch (_) {}
+  });
+  els.btnTheme.addEventListener("click", function () {
+    var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    applyTheme(next);
+    writeTheme(next);
+  });
+
+  els.input.addEventListener("input", function () { syncMeta(); markStale(); });
+  els.input.addEventListener("keydown", function (e) {
+    /* Ctrl / Cmd + Enter：不用离开键盘就能格式化 */
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      doFormat();
+    }
+  });
+
+  /* Tab 在 textarea 里默认会跳走焦点。这里让它在输入框内插入缩进，
+     更符合「往这儿贴代码」的直觉；但只有在输入框聚焦时才拦。 */
+  els.input.addEventListener("keydown", function (e) {
+    if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    var el = els.input, s = el.selectionStart, t = el.value;
+    el.value = t.slice(0, s) + "  " + t.slice(el.selectionEnd);
+    el.selectionStart = el.selectionEnd = s + 2;
+    syncMeta();
+    markStale();
+  });
+
+  /* 把 UI 层里值得单测的动作挂到同一个命名空间上，供测试直接驱动。
+     浏览器里的正常流程不依赖它们 —— 但这样测试才能覆盖
+     「复制走哪条路 / 下载的文件名与回收 / 拖入能不能读进来」这些真实行为。 */
+  API.copyText = copyText;
+  API.legacyCopy = legacyCopy;
+  API.downloadText = downloadText;
+  API.readFileAsText = readFileAsText;
+  API.sortKeysDeep = sortKeysDeep;
+
+  initTheme();
+  syncMeta();
+  syncOutputActions();
+  els.input.focus();
+})();
+</script>
+</body>
+</html>
