@@ -7,7 +7,7 @@
 
 - `delux2557/web-toolbox`：个人工具集聚合仓库，GitHub Pages 部署，**根目录直接发布**（https://delux2557.github.io/web-toolbox/）。
 - 结构：`tools/<project>/` 下是 9 个互相独立的子项目；根 `index.html` + `README.md` 是总入口。
-- 无 CI、无测试链；main 有分支保护（禁止直推，须走 PR）。
+- 无 CI、无测试链（`tools/_build/` 下有构建与自检脚本，按需手动跑）；main 有分支保护（禁止直推，须走 PR）。
 
 ## 2. 你的边界（最重要）
 
@@ -64,6 +64,12 @@ PR 描述必须包含：
 - 与别的 agent 撞车：你只改自己目录，理论上零冲突；万一共享文件冲突，**停手**，在 PR 里说明，由 ops 裁决。
 - prompt-helper 是唯一有 npm 构建链的项目：改完跑 `npm run build`，产物同步规则遵循 `tools/prompt-helper/README.md` 的 Plan A 流程（本地构建 → 同步 → 提交），不要把 node_modules/dist 提交（已在 .gitignore）。
 - 纯静态项目（其余 7 个）：改完本地浏览器打开 `tools/<你的项目>/index.html` 目测通过即可，无需构建。
+- **新增 / 删除 / 重命名工具后，总入口 `README.md` 与根 `index.html` 必须同步** —— 但这两个文件只有 ops 能改，
+  你**不要动**。可以先自查还缺什么（退出码 1 即有漂移、会列出具体缺哪张卡）：
+  ```bash
+  node tools/_build/check-portal-sync.mjs
+  ```
+  然后在 PR 的「需要 ops」里写明「请把 <工具名> 加进门户/README」，别只在 PR 标题里提。
 
 ## 7. 不知道就问
 

@@ -109,6 +109,25 @@ node tools/_build/verify-snapshot.mjs tools/code-workspace/dist/code-workspace-v
 
 用最小 DOM 桩在 Node 里真跑一遍产物，覆盖「构建期语法通过 ≠ 运行时能跑」的盲区：脚本可执行、注册表完整、**每个模块都能实例化**（含 vendor 大包）、内联数据与 fetch 垫片命中、动态导入目标已内联。`SNAPSHOT_DEBUG=1` 会打印失败堆栈。
 
+### 仓库自检：门户一致性
+
+同一份「工具清单」在仓库里存了两份 —— 本 README 的「🛠 工具」表与根 `index.html` 的卡片网格，
+两边没有任何机制强制同步，于是必然漂移。历史上已真实发生过两回：code-workspace 上线了门户里没有卡片；
+json-format 上线了，那张「JSON 格式化」还挂着 `disabled` 占位卡。
+
+```bash
+node tools/_build/check-portal-sync.mjs    # 退出码 0 = 一致，1 = 有漂移
+```
+
+比对 10 项：可用/占位条目数、**双向集合差**（README 有门户缺 / 门户有 README 缺）、显示名一致、
+链接目标真实存在（防「删了目录忘删卡片」）、**状态交叉**（README 标 ✅ 可用但门户仍是「敬请期待」占位卡，以及反向）。
+
+两点设计取舍：
+
+- **按语义条目比对，不用 slug 关键字 grep**。卡片标题是中文显示名（「JSON 格式化」），既不含 slug `json-format`
+  也不含被删的 `json_test` —— `grep -rn` 会显示"无残留"而卡还挂在那儿，这次就是这么踩的。
+- **只比「🛠 工具」一节**。下方「🧪 前端探索学习项目」是 README 里明确声明过的非正式实验项目，按设计不进门户。
+
 ## 拾词 · 功能说明
 
 「梦幻词栈」是一个离线英语生词识别工具：
