@@ -7,7 +7,10 @@
 
 - `delux2557/web-toolbox`：个人工具集聚合仓库，GitHub Pages 部署，**根目录直接发布**（https://delux2557.github.io/web-toolbox/）。
 - 结构：`tools/<project>/` 下是 9 个互相独立的子项目；根 `index.html` + `README.md` 是总入口。
-- 无 CI、无测试链（`tools/_build/` 下有构建与自检脚本，按需手动跑）；main 有分支保护（禁止直推，须走 PR）。
+- **有 CI**：`.github/workflows/ci.yml` 在 PR 与 main push 上跑 6 道闸门（门户一致性 → code-workspace 全量校验
+  → json-format 全量校验 → 单文件构建 → 快照构建 → 快照验收）。**推 PR 后请等 CI 绿**；红了先看日志自己修，
+  别把红的 PR 丢给 ops。仓库零依赖，CI 里没有 npm install，所以本地能跑通的命令 CI 里必然也能跑通。
+- main 有分支保护（禁止直推，须走 PR）。
 
 ## 2. 你的边界（最重要）
 
@@ -61,6 +64,10 @@ PR 描述必须包含：
 ## 6. 规则
 
 - main 不能直推；合并由 ops 执行（squash）。若 PR 落后 main（conflict/behind），用 `git fetch && git rebase origin/main` 后 force-push 自己的分支。
+- **合并前 CI 必须是绿的**。若 CI 挂在「门户一致性」：这是**预期拦阻** —— 你新增/删除/重命名了工具，
+  但总入口 `README.md` / `index.html` 没同步（那两个文件只有 ops 能改）。**在 PR 的「需要 ops」里写明**
+  工具名与一句话定位，ops 会**直接往你这个 PR 分支上补一个 commit** 把总入口改好，CI 随即转绿。
+  你不需要动那两个文件，也不需要等 main 前进。
 - 与别的 agent 撞车：你只改自己目录，理论上零冲突；万一共享文件冲突，**停手**，在 PR 里说明，由 ops 裁决。
 - prompt-helper 是唯一有 npm 构建链的项目：改完跑 `npm run build`，产物同步规则遵循 `tools/prompt-helper/README.md` 的 Plan A 流程（本地构建 → 同步 → 提交），不要把 node_modules/dist 提交（已在 .gitignore）。
 - 纯静态项目（其余 7 个）：改完本地浏览器打开 `tools/<你的项目>/index.html` 目测通过即可，无需构建。

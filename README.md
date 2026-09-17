@@ -128,6 +128,29 @@ node tools/_build/check-portal-sync.mjs    # 退出码 0 = 一致，1 = 有漂�
   也不含被删的 `json_test` —— `grep -rn` 会显示"无残留"而卡还挂在那儿，这次就是这么踩的。
 - **只比「🛠 工具」一节**。下方「🧪 前端探索学习项目」是 README 里明确声明过的非正式实验项目，按设计不进门户。
 
+### 持续集成
+
+`.github/workflows/ci.yml` 在 **PR** 与 **push 到 main** 上跑同样 6 道闸门（也是本地一条条能跑通的命令）：
+
+| 闸门 | 断言 |
+|------|------|
+| `check-portal-sync.mjs` | 10 · 门户一致性 |
+| `code-workspace/tests/run-all.mjs` | 253 · 悬空引用 / 逻辑 / 接线 / 文档防过期 |
+| `json-format/tests/format.test.mjs` | 187 · 形态契约 / 报错定位 / UI 冒烟 |
+| `build-single.mjs` | 传统单页内联产物 |
+| `build-snapshot.mjs` | SPA 快照（codebase-context / code-workspace / ppt-player） |
+| `verify-snapshot.mjs` | 19 · 快照产物在 vm 里真跑一遍 |
+
+几个刻意的选择：
+
+- **没有 `npm install`，没有 cache**。仓库零依赖，全是零构建的静态工具 + 零依赖 Node 脚本；加安装步骤只是噪音。
+- **构建只读已提交的源文件**（`vendor/codemirror` 是入库的），产物落进 gitignore 的 `dist/`，
+  所以 CI 里能从零复现。构建是**确定性**的 —— 同一份源码重建出的快照与本地逐字节一致（`md5` 已验证），
+  否则「CI 绿」就没有意义。
+- **`build-snapshot` 不加 `--strict`**：codebase-context 有一处阻塞型外链（highlight.js CDN，离线时回落纯文本高亮），
+  `--strict` 会把它判成失败。
+- Node 锁 **22**（脚本用到 `import.meta.dirname`，需 ≥ 20.11）。
+
 ## 拾词 · 功能说明
 
 「梦幻词栈」是一个离线英语生词识别工具：

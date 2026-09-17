@@ -1,0 +1,59 @@
+name: CI
+
+# 什么时候跑：
+#   pull_request —— dev agent 提 PR 时的门禁（本仓库 dev 都在 PR 上交付）
+#   push main    —— 合入后的兜底（main 根目录直接发布到 GitHub Pages，坏了会影响线上）
+#   workflow_dispatch —— 需要时手动重跑
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一分支连续 push 时，取消上一轮还在跑的 PR 检查；main 的 push 跑完留档，不取消
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # 仓库脚本用到 import.meta.dirname，需要 Node >= 20.11；本地开发用的就是 22
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # 注意：本仓库**零依赖** —— 全是零构建的静态工具 + 零依赖 Node 脚本，
+      # 所以下面没有任何 npm install / cache 步骤，加了反而是噪音。
+
+      - name: 门户一致性（README 工具表 ↔ index.html 卡片）
+        run: node tools/_build/check-portal-sync.mjs
+
+      - name: code-workspace 全量校验（悬空引用 / 逻辑 / 接线 / 文档防过期）
+        run: node tools/code-workspace/tests/run-all.mjs
+
+      - name: json-format 全量校验
+        run: node tools/json-format/tests/format.test.mjs
+
+      # 打包链路也是共享基础设施，它坏了会静默产出坏快照，所以一并纳入门禁。
+      # 构建只读已提交的源文件（含 vendor/codemirror），产物落进 gitignore 的 dist/，
+      # 因此这步在 CI 里能从零复现（已验证：重建产物与本地逐字节一致）。
+      - name: 构建单文件产物（传统单页）
+        run: node tools/_build/build-single.mjs
+
+      - name: 构建单文件快照（SPA / manifest 版本注册）
+        run: node tools/_build/build-snapshot.mjs
+        # 故意不加 --strict：codebase-context 有一处阻塞型外链（highlight.js CDN，
+        # 离线时自动回落纯文本高亮），--strict 会把它判成失败。想彻底离线就把它
+        # vendor 到本地，或在 build.snapshot.json 的 allowRemote 里显式声明。
+
+      - name: 验收单文件快照产物（vm 里真跑一遍）
+        run: node tools/_build/verify-snapshot.mjs
