@@ -680,6 +680,35 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;
 }
 
+/* ---------- 一览表弹层（快捷键一览） ---------- */
+.dlg-sheet { max-width: 640px; }
+.sc-body {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px 26px;
+  max-height: 54vh; overflow: auto;
+  /* 滚动时不被父容器的圆角裁掉描边 */
+  margin: 0 -4px; padding: 2px 4px;
+}
+.sc-group-title {
+  font-size: 11px; font-weight: 600; letter-spacing: .06em;
+  color: var(--accent-strong); text-transform: uppercase;
+  margin-bottom: 7px;
+}
+/* 每组一张两列表：左列键位（按该组最宽的键位对齐），右列说明 */
+.sc-group-body {
+  display: grid; grid-template-columns: auto 1fr;
+  gap: 5px 12px; align-items: baseline;
+}
+.sc-keys { white-space: nowrap; }
+.sc-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+.sc-chords { display: inline-flex; align-items: center; gap: 2px; }
+.sc-plus, .sc-or { font-size: 10.5px; color: var(--text-3); }
+.sc-or { margin: 0 3px; }
+/* 一览表里的 kbd 比正文里的紧凑一点 */
+.dlg-sheet kbd { padding: 1px 4px; font-size: 11px; }
+@media (max-width: 640px) {
+  .sc-body { grid-template-columns: 1fr; max-height: 46vh; }
+}
+
 /* ============ 响应式 ============ */
 @media (max-width: 1080px) {
   .pane-info { display: none; }

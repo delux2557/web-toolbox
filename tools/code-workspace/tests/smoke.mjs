@@ -7,6 +7,7 @@
  *   3) 编辑器单包能否 import 且语言可构造
  * ============================================================ */
 
+import { readFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -405,6 +406,196 @@ globalThis.localStorage = {
 };
 ok("存储抛异常时 getPref 不冒泡", prefs.getPref("x", "fb") === "fb");
 ok("存储抛异常时 setPref 返回 false 而不冒泡", prefs.setPref("x", 1) === false);
+
+/* ============================================================
+ * [12] writeFileText —— 一次保存只应解析一轮路径
+ * ------------------------------------------------------------
+ * 背景：保存完原本还要再调一次 getMeta() 去拿 size / mtime，而 getFileHandle()
+ * 是「逐级目录各一次 IPC」—— 于是同一轮路径解析被走了两遍。
+ * 这里用一个**会记账的假句柄**把「一次保存要跑几轮」钉死：数字一旦回涨
+ * （比如有人又在保存后补了一次元信息查询），这条会立刻红。
+ *
+ * 说明：假句柄测不出真实耗时（没有进程间通信），但能精确测出**往返次数** ——
+ * 而往返次数正是我们唯一能靠改代码左右的那部分开销（close() 的落盘开销改不掉）。
+ * ============================================================ */
+console.log("\n[12] writeFileText — 保存只应解析一轮路径");
+
+const SAVED_SIZE = 128;
+const SAVED_MTIME = 1700000000000;
+
+function countingRoot({ size = SAVED_SIZE, mtime = SAVED_MTIME, writeThrows = false } = {}) {
+  const counts = { dir: 0, file: 0, getFile: 0, writable: 0, write: 0, close: 0, abort: 0 };
+  const mkDir = () => ({
+    async getDirectoryHandle() { counts.dir++; return mkDir(); },
+    async getFileHandle() {
+      counts.file++;
+      return {
+        async getFile() { counts.getFile++; return { size, lastModified: mtime }; },
+        async createWritable() {
+          counts.writable++;
+          return {
+            async write() { counts.write++; if (writeThrows) throw new Error("disk full"); },
+            async close() { counts.close++; },
+            async abort() { counts.abort++; }
+          };
+        }
+      };
+    }
+  });
+  return { handle: mkDir(), counts };
+}
+
+{
+  const { handle, counts } = countingRoot();
+  state.rootHandle = handle;
+  const r = await fsrepo.writeFileText("a/b/c.txt", "hello", false);
+
+  ok("写盘走到 createWritable", counts.writable === 1);
+  ok("以 close() 收尾（原子落盘）", counts.close === 1 && counts.abort === 0);
+  ok("路径深度 2 就只解析 2 次目录（不是 4 次 —— 4 次=多跑了一轮）",
+     counts.dir === 2, `实际 ${counts.dir} 次 getDirectoryHandle`);
+  ok("只取 1 次文件句柄", counts.file === 1, `实际 ${counts.file} 次`);
+  ok("只读 1 次元信息（复用同一个句柄，不再走 getMeta）",
+     counts.getFile === 1, `实际 ${counts.getFile} 次`);
+  ok("返回值带回落盘后的 size", r.size === SAVED_SIZE, "实际 " + r.size);
+  ok("返回值带回落盘后的 mtime", r.mtime === SAVED_MTIME, "实际 " + r.mtime);
+}
+
+{
+  const { handle, counts } = countingRoot();
+  state.rootHandle = handle;
+  await fsrepo.writeFileText("p.txt", "带 BOM 的正文", true);
+  ok("保留 BOM 时先写 3 字节 BOM、再写正文（共 2 次 write）",
+     counts.write === 2, `实际 ${counts.write} 次 write`);
+}
+
+{
+  const { handle, counts } = countingRoot({ writeThrows: true });
+  state.rootHandle = handle;
+  let threw = false;
+  try { await fsrepo.writeFileText("x.txt", "hi", false); } catch (_) { threw = true; }
+  ok("写盘失败时异常照常抛出（不被吞成 success）", threw);
+  ok("失败时走 abort 而非 close", counts.abort === 1 && counts.close === 0,
+     `abort=${counts.abort} close=${counts.close}`);
+  ok("失败时不再多发一次元信息读取", counts.getFile === 0, `实际 ${counts.getFile} 次`);
+}
+
+/* 契约断言：保存路径本身不得再引入第二轮元信息查询。
+   上面测的是 fsrepo 层的往返次数，这里守住调用侧 —— 若有人觉得「保存后补一次
+   getMeta 更保险」，每次保存就会重新多跑一轮逐级目录解析，往返次数悄悄翻倍。
+   （结构变了就报「找不到函数体」，提醒维护者同步更新本断言，而不是静默假绿。） */
+{
+  const mainSrc = readFileSync(join(ROOT, "V1/src/main.js"), "utf8");
+  const head = mainSrc.indexOf("async function saveTab");
+  const tail = mainSrc.indexOf("function saveActive");
+  const body = (head >= 0 && tail > head) ? mainSrc.slice(head, tail) : "";
+  ok("定位到 saveTab 函数体（若函数改名请同步更新本断言）", body.length > 0);
+
+  /* 只认**真实代码**：注释里提到 getMeta 不算数 —— saveTab 上方就有一段解释
+     「为什么不需要它」，不剥注释会假红。（saveTab 体内没有正则字面量，简单剥离即可。） */
+  const code = body
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+  ok("saveTab 不再调用 getMeta()（写入返回值已带回 size/mtime）",
+     !/\bgetMeta\s*\(/.test(code),
+     "saveTab 里又出现了 getMeta() —— 每次保存会多跑一轮路径解析");
+}
+
+/* ============================================================
+ * [13] 自动换行 —— 离线包契约与热切换能力
+ * ------------------------------------------------------------
+ * 这一段守的是一类**静默失效**：离线包是 1.4MB 的单包，导出面是手工白名单
+ * （34 个符号）。EditorView.lineWrapping 并不在白名单里 —— 它是
+ * 「挂在导出类上的静态属性赋值」（D.lineWrapping = ...）才侥幸没被 tree-shaking
+ * 摇掉。一旦有人换一个 entry.js 重新打包，它可能**无声消失**：
+ * 工具照样能跑、编辑器照样能用，只有用户按 Alt+Z 时才发现没反应。
+ * 所以这里不止查导出名，还直接断言它可用、且能对已有 state 热替换。
+ * ============================================================ */
+console.log("\n[13] 自动换行 —— 离线包契约与热切换能力");
+
+ok("EditorView.lineWrapping 存在（换行扩展本身在包里，无需重打包）",
+   !!bundle.EditorView.lineWrapping);
+ok("Compartment 可构造（热替换的前提）", typeof bundle.Compartment === "function");
+
+/* 热替换的关键性质：换行开关**不重建 EditorState**。
+   重建会清空撤销历史 / 光标 / 滚动位置 —— 那是比横向滚动条严重得多的问题。 */
+const wrapComp = new bundle.Compartment();
+const st0 = bundle.EditorState.create({ doc: "keep me", extensions: [wrapComp.of([])] });
+const st1 = st0.update({ effects: wrapComp.reconfigure(bundle.EditorView.lineWrapping) }).state;
+ok("对已存在的 state 热切换换行（不重建 —— 撤销历史 / 光标 / 滚动都保住）",
+   st1 !== st0 && st1.doc.toString() === "keep me");
+const st2 = st1.update({ effects: wrapComp.reconfigure([]) }).state;
+ok("也能切回关闭", st2 !== st1 && st2.doc.toString() === "keep me");
+
+/* 再进一步，别只验「符号在不在」——要验**打开换行真的挂上了那个类**。
+   EditorView.lineWrapping 的实际内容就是 contentAttributes 里加一个 cm-lineWrapping，
+   而 baseTheme 的 `&.cm-lineWrapping { white-space: break-spaces; … }` 才是让长行折行的开关。
+   所以这两个断言一旦红了，说明换行即使「没报错」也是不生效的。 */
+const clsOf = (state) => state.facet(bundle.EditorView.contentAttributes)
+  .map((a) => (a && a.class) || "").join(" ").trim();
+ok("关闭换行时内容区不带 cm-lineWrapping", !clsOf(st0).includes("cm-lineWrapping"),
+   "实际：" + JSON.stringify(clsOf(st0)));
+ok("打开换行后内容区被加上 cm-lineWrapping（否则只是不报错、并不折行）",
+   clsOf(st1).includes("cm-lineWrapping"),
+   "实际：" + JSON.stringify(clsOf(st1)));
+ok("切回关闭后类被摘掉（不是单向开关）", !clsOf(st2).includes("cm-lineWrapping"),
+   "实际：" + JSON.stringify(clsOf(st2)));
+
+/* Alt+Z 必须是**空键位**：被 CodeMirror 抢走的话，全局兜底就永远收不到事件。
+   把一个不剩地扫一遍 —— 而不是只查 defaultKeymap（searchKeymap 等也在生效）。 */
+const flattenKeys = (kb, out) => {
+  if (!kb) return out;
+  if (Array.isArray(kb)) { for (const k of kb) flattenKeys(k, out); return out; }
+  if (typeof kb === "object" && kb.key) out.push(String(kb.key).toLowerCase());
+  return out;
+};
+const allBindings = [
+  bundle.closeBracketsKeymap, bundle.defaultKeymap, bundle.searchKeymap,
+  bundle.historyKeymap, bundle.foldKeymap, bundle.completionKeymap,
+  bundle.lintKeymap, bundle.indentWithTab
+].flatMap((kb) => flattenKeys(kb, []));
+ok("离线包键位绑定数 = 64（离线包升级后请同步更新本节与 overview.md 的数字）",
+   allBindings.length === 64,
+   "实际 " + allBindings.length + " 条");
+ok("Alt+Z 未被离线包占用（不会被 CodeMirror 抢键）",
+   !allBindings.includes("alt-z"),
+   "被占用：" + allBindings.filter((k) => k.includes("z")).join(", "));
+
+/* 契约断言：applyWrap 必须同时改写「已缓存的标签现场」。
+   只 reconfigure 当前视图的话，切回别的标签又变回旧设置 —— 用户只会觉得开关失灵。
+
+   ⚠️ **剥掉注释再断言**，否则「注释里提到 stash」就会让断言恒真。
+   这个坑在本文件里踩过两次（saveTab/getMeta 那次也是）：写反向实验时把代码删干净、
+   却留下"同步回 stash"的注释，测试照样绿 —— 假信号。 */
+const stripComments = (s) => s
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/\/\/.*$/gm, "");
+
+const editorSrc = readFileSync(join(ROOT, "V1/src/editor.js"), "utf8");
+const editorCode = stripComments(editorSrc);
+const wrapHead = editorSrc.indexOf("export function applyWrap");
+const wrapTail = editorSrc.indexOf("export function focusEditor");
+const wrapBody = stripComments(
+  (wrapHead >= 0 && wrapTail > wrapHead) ? editorSrc.slice(wrapHead, wrapTail) : ""
+);
+ok("定位到 applyWrap 函数体（若函数改名请同步更新本断言）", wrapBody.trim().length > 0);
+ok("applyWrap 用 Compartment 热替换，而不是重建 EditorState",
+   /reconfigure\s*\(/.test(wrapBody) && !/EditorState\.create/.test(wrapBody));
+ok("applyWrap 会遍历 stash，把所有标签的现场一起改（否则切标签后设置回退）",
+   /\bstash\b/.test(wrapBody),
+   "applyWrap 里没有 stash —— 切回别的标签，换行设置会退回旧值");
+ok("applyWrap 把 dispatch 后的新 state 同步回 stash（不留旧对象在缓存里）",
+   /stash\.set\s*\(/.test(wrapBody));
+ok("新建标签现场也读 state.wrap（单一事实来源，不是各处各存一份）",
+   /wrapComp\.of\(state\.wrap\s*\?/.test(editorCode),
+   "baseExtensions 里没有 wrapComp.of(state.wrap ? …)");
+
+/* 快捷键一览是手写清单 —— 这里钉住最容易被漏改的一条：新加的 Alt+Z 必须在表里。 */
+const scCode = stripComments(readFileSync(join(ROOT, "V1/src/shortcuts.js"), "utf8"));
+ok("快捷键一览里登记了 Alt+Z（新增快捷键不能只写代码不写进一览）",
+   /"Alt",\s*"Z"/.test(scCode));
+ok("快捷键一览分「工作区 / 编辑器」两组且都非空",
+   /label:\s*"工作区"/.test(scCode) && /label:\s*"编辑器"/.test(scCode));
 
 console.log("\n================================");
 console.log(`通过 ${pass} · 失败 ${fail}`);

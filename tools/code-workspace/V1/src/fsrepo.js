@@ -225,9 +225,20 @@ export async function readFileText(path) {
 
 /**
  * 写回文本（原路径覆盖写）。
+ *
  * @param {string} path
  * @param {string} content
  * @param {boolean} bom 是否保留 UTF-8 BOM（读时记录，写时还原）
+ * @returns {Promise<{size: number|null, mtime: number|null}>} 落盘后的真实元信息
+ *
+ * 【为什么把 size / mtime 一起回报】
+ * getFileHandle() 是**逐级目录各一次 IPC**：`a/b/c/d.txt` = 3 次 getDirectoryHandle
+ * + 1 次 getFileHandle。原先保存完还要再调 getMeta() 拿 size/mtime，等于把同一轮
+ * 路径解析**再走一遍** —— 而 close() 之后用**手上已有的** fh.getFile() 就能读到这两个值，
+ * 路径解析一次都不用做。
+ *
+ * 元信息只是给标签页展示用的，读不到也不该让「已保存」变成失败，所以这里吞掉并回 null；
+ * 真正的写盘错误仍然照常抛出。
  */
 export async function writeFileText(path, content, bom = false) {
   const fh = await getFileHandle(path, { create: true });
@@ -240,6 +251,12 @@ export async function writeFileText(path, content, bom = false) {
     throw e;
   }
   await w.close();
+  try {
+    const f = await fh.getFile();
+    return { size: f.size, mtime: f.lastModified };
+  } catch (_) {
+    return { size: null, mtime: null };
+  }
 }
 
 /* ============ 新建 ============ */

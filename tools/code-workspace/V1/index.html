@@ -97,8 +97,14 @@
             </div>
             <span class="dirty-chip" id="dirtyChip" hidden>未保存</span>
             <button class="btn btn-primary btn-sm" id="btnSave" disabled>保存</button>
+            <button class="icon-mini" id="btnWrap" type="button" aria-pressed="false" title="自动换行：关（Alt+Z 开启）" aria-label="切换自动换行">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M3 12h14a3 3 0 1 1 0 6h-4"/><path d="M16 15l-3 3 3 3"/></svg>
+            </button>
             <button class="icon-mini" id="btnToggleInfo" title="显示 / 隐藏信息栏" aria-label="切换信息栏">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <button class="icon-mini" id="btnShortcuts" type="button" title="快捷键一览" aria-label="快捷键一览">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.4a2.6 2.6 0 1 1 3.3 3c-.5.2-.7.6-.7 1.1v.6"/><circle cx="12" cy="17.2" r="0.7" fill="currentColor" stroke="none"/></svg>
             </button>
           </div>
           <div class="editor-wrap">
@@ -109,6 +115,7 @@
                 <ul class="ew-list">
                   <li><kbd>Ctrl</kbd> + <kbd>S</kbd> 保存当前文件</li>
                   <li><kbd>Ctrl</kbd> + <kbd>W</kbd> 关闭当前标签</li>
+                  <li><kbd>Alt</kbd> + <kbd>Z</kbd> 切换自动换行（长行不用横向拖）</li>
                   <li>右键文件树可新建 / 重命名 / 移动 / 删除</li>
                 </ul>
               </div>

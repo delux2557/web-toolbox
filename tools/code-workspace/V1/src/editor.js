@@ -6,6 +6,7 @@
  *   2) **单 EditorView 实例 + 多 EditorState**：切标签时 setState 换文档，
  *      每个标签的撤销历史 / 光标位置 / 滚动位置都各自保留；
  *   3) 外观主题全部走 CSS 变量 + Compartment，明暗切换无需重建实例；
+ *      自动换行同样走 Compartment（applyWrap），所以按 Alt+Z 不会丢撤销历史；
  *   4) 只读文件（二进制 / 超限 / 非 UTF-8）根本不进编辑器，
  *      由上层渲染提示卡片，避免解码出错后一存盘就把文件写坏。
  * ============================================================ */
@@ -13,6 +14,7 @@
 import { els } from "./dom.js";
 import { langKeyFor } from "./utils.js";
 import { currentTheme, onThemeChange } from "./theme.js";
+import { state } from "./state.js";
 
 let CM = null;                       // vendor 包命名空间
 let view = null;                     // 唯一 EditorView 实例
@@ -23,6 +25,7 @@ let changeHandler = null;
 const stash = new Map();             // path → EditorState（切标签时保存现场）
 let langComp = null;                 // 语言 Compartment（CM 就绪后创建）
 let hlComp = null;                   // 高亮配色 Compartment
+let wrapComp = null;                 // 自动换行 Compartment
 
 export function isReady() { return !!view; }
 
@@ -46,6 +49,7 @@ export function ensureEditor() {
       CM = mod;
       langComp = new CM.Compartment();
       hlComp = new CM.Compartment();
+      wrapComp = new CM.Compartment();
       createView();
       return CM;
     })
@@ -86,6 +90,8 @@ function baseExtensions() {
     CM.highlightActiveLine(),
     CM.highlightSelectionMatches(),
     CM.foldGutter(),
+    /* 自动换行：读 state.wrap（单一事实来源）。新建的标签现场由此自然带上当前设置。 */
+    wrapComp.of(state.wrap ? CM.EditorView.lineWrapping : []),
     hlComp.of(highlightFor(currentTheme())),
     CM.keymap.of([
       { key: "Mod-s", run: () => { if (saveHandler) saveHandler(); return true; } },
@@ -176,6 +182,39 @@ export function reapplyLanguage(tab) {
   if (!CM || !view || !tab || view.__path !== tab.path) return;
   const ext = langKeyFor(tab.path);
   view.dispatch({ effects: langComp.reconfigure(CM.getLanguage(ext) || []) });
+}
+
+/* ============ 自动换行（Alt+Z） ============ */
+
+/**
+ * 把 state.wrap 的当前值应用到编辑器。调用前应先改 state.wrap。
+ *
+ * 两个容易踩的点：
+ *   1) **不能重建 EditorState** —— 重建会清空撤销历史、光标与滚动位置，
+ *      那比「横向滚动条拉得远」严重得多。这里用 Compartment 热替换，
+ *      走的是和明暗主题切换同一条通路。
+ *   2) **已缓存的标签现场要一起改**。CodeMirror 的 Compartment 是「每个 state 各自
+ *      持有一份值」，只 reconfigure 当前视图的话，切回别的标签又变回旧设置，
+ *      用户会以为开关失灵。stash 里的每个 state 都要单独 update 一次。
+ *      用 state.update() 而不是重建，同样是为了保住各标签的撤销历史。
+ */
+export function applyWrap() {
+  /* 编辑器还没加载：什么都不用做。state.wrap 已经是新值，
+     之后 createView() / stateFor() 会通过 baseExtensions() 读到它。 */
+  if (!CM || !view || !wrapComp) return;
+
+  const mkEffect = () => wrapComp.reconfigure(state.wrap ? CM.EditorView.lineWrapping : []);
+
+  for (const [path, st] of stash) {
+    if (path === view.__path) continue;     // 当前标签交给下面的 dispatch，避免重复套用
+    stash.set(path, st.update({ effects: mkEffect() }).state);
+  }
+  view.dispatch({ effects: mkEffect() });
+  /* dispatch 之后 view.state 是新对象，把现场同步回 stash，不留旧 state 在缓存里 */
+  if (view.__path) stash.set(view.__path, view.state);
+
+  /* 换行会改变每行的显示高度，必须让 CodeMirror 重新量一遍，否则滚动条长度是旧的 */
+  requestAnimationFrame(() => { if (view) view.requestMeasure(); });
 }
 
 export function focusEditor() {

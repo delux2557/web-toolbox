@@ -15,12 +15,13 @@ import {
 import { initTheme } from "./theme.js";
 import { getBoolPref, setPref } from "./prefs.js";
 import { mdToHTML, isMarkdown } from "./mdview.js";
-import { promptDialog, confirmDialog, dangerConfirm, selectDialog, alertDialog } from "./dialog.js";
+import { promptDialog, confirmDialog, dangerConfirm, selectDialog, alertDialog, sheetDialog } from "./dialog.js";
 import { showMenu, hideMenu } from "./menu.js";
+import { SHORTCUT_GROUPS, SHORTCUT_NOTE } from "./shortcuts.js";
 import {
   hasFSAccess, pickRoot, ensurePermission, walk,
   readFileText, writeFileText, createFile, createFolder, moveEntry,
-  deleteEntry, loadTrash, restoreFromTrash, purgeTrashEntry, getMeta,
+  deleteEntry, loadTrash, restoreFromTrash, purgeTrashEntry,
   DELETE_MODE, CAPABILITIES
 } from "./fsrepo.js";
 import {
@@ -28,7 +29,7 @@ import {
 } from "./treeview.js";
 import {
   ensureEditor, showTab, pullContent, dropTabState, resetAll,
-  onSaveRequest, onDocChange, isReady, focusEditor
+  onSaveRequest, onDocChange, isReady, focusEditor, applyWrap
 } from "./editor.js";
 
 /* ============ 状态栏 / 顶栏 ============
@@ -234,6 +235,8 @@ function renderTabs() {
   els.btnSave.disabled = !t || t.readonly;
   els.btnSave.textContent = t && t.dirty ? "保存 *" : "保存";
   els.dirtyChip.hidden = !(t && t.dirty);
+  /* 只读标签（二进制 / 超限 / 非 UTF-8）根本不进编辑器，换行开关对它没有意义 */
+  els.btnWrap.disabled = !t || t.readonly;
 }
 
 function reasonText(reason, size) {
@@ -502,14 +505,17 @@ async function saveTab(tab) {
 
   state.saving = true;
   els.btnSave.disabled = true;
+  const t0 = performance.now();
   try {
-    await writeFileText(tab.path, content, tab.bom);
+    /* writeFileText 已经把落盘后的 size / mtime 一起回报了，
+       不必再调 getMeta() 把整条路径解析走第二遍（见 fsrepo.js 里的说明）。 */
+    const meta = await writeFileText(tab.path, content, tab.bom);
+    const ms = Math.round(performance.now() - t0);
     tab.content = content;
     tab.dirty = false;
-    const meta = await getMeta(tab.path);
-    tab.size = meta.size;
-    tab.mtime = meta.mtime;
-    setLog("已保存 " + tab.path + " · " + new Date().toLocaleTimeString("zh-CN"));
+    if (meta && meta.size != null) { tab.size = meta.size; tab.mtime = meta.mtime; }
+    /* 耗时写进状态栏：慢不慢由数据说话（落盘本身的开销取决于文件大小与磁盘） */
+    setLog("已保存 " + tab.path + " · " + ms + " ms · " + new Date().toLocaleTimeString("zh-CN"));
     toast("已保存 " + tab.name, "ok");
     return true;
   } catch (e) {
@@ -943,6 +949,31 @@ function toggleInfo() { setInfoVisible(!state.showInfo); }
 
 els.btnToggleInfo.addEventListener("click", toggleInfo);
 
+/* 自动换行（Alt+Z）：与上面信息栏同一套写法 —— 状态、按钮外观、偏好落盘收敛在一处。
+   state.wrap 是**单一事实来源**（editor.js 建新标签现场时直接读它），
+   editor.applyWrap() 负责把它热替换到已有现场上。 */
+function setWrapMode(on, { persist = true } = {}) {
+  state.wrap = !!on;
+  els.btnWrap.classList.toggle("is-active", state.wrap);
+  els.btnWrap.setAttribute("aria-pressed", state.wrap ? "true" : "false");
+  els.btnWrap.title = state.wrap ? "自动换行：开（Alt+Z 关闭）" : "自动换行：关（Alt+Z 开启）";
+  applyWrap();
+  if (persist) setPref("wrap", state.wrap);
+}
+function toggleWrapMode() { setWrapMode(!state.wrap); }
+
+els.btnWrap.addEventListener("click", () => toggleWrapMode());
+
+/* 快捷键一览 */
+els.btnShortcuts.addEventListener("click", () => {
+  sheetDialog({
+    title: "快捷键一览",
+    message: "工作区里常用的键位都在这里。",
+    groups: SHORTCUT_GROUPS,
+    note: SHORTCUT_NOTE
+  });
+});
+
 /* 信息栏动作 */
 els.btnRename.addEventListener("click", () => actionRename(null));
 els.btnMove.addEventListener("click", () => actionMove(null));
@@ -961,6 +992,19 @@ onDocChange(() => {
 /* 全局快捷键（编辑器聚焦时由 CodeMirror 自己处理，这里只兜底） */
 window.addEventListener("keydown", (e) => {
   const inEditor = els.editorHost.contains(document.activeElement);
+
+  /* Alt+Z：切换自动换行。这里**故意不排除编辑器聚焦**（与下面的 Ctrl+S 相反）——
+     Alt+Z 在 CodeMirror 自带的 keymap 里没有任何绑定（离线包里 64 条键位都没有它），
+     不会被抢；只挂这一处，也就不存在「两边都处理 → 切两次 → 等于没切」的问题。
+     macOS 上 Option 是组合键，event.key 会变成「Ω」之类的字符，
+     所以同时比对 event.code（物理键位）保证跨平台可用。 */
+  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey &&
+      (e.key === "z" || e.key === "Z" || e.code === "KeyZ")) {
+    e.preventDefault();
+    toggleWrapMode();
+    return;
+  }
+
   const mod = e.ctrlKey || e.metaKey;
   if (!mod) return;
 
@@ -1027,6 +1071,9 @@ els.trashDirName.textContent = TRASH_DIR;
 /* 恢复用户上次的信息栏偏好（首次访问默认显示）。这里的赋值不写回存储，
    避免「只是读了默认值」也被当成用户显式选择。 */
 setInfoVisible(getBoolPref("info-visible", true), { persist: false });
+/* 自动换行同理：默认关（与 VS Code 的 editor.wordWrap 一致），
+   用户按过 Alt+Z 之后才记住。 */
+setWrapMode(getBoolPref("wrap", false), { persist: false });
 els.infoBody.hidden = true;
 initMdMode();
 renderTabs();

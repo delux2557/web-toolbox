@@ -33,6 +33,9 @@ export const state = {
   truncated: false,          // 扫描是否因条目上限被截断
   showInfo: true,
   mdPreview: false,          // Markdown 是「预览」还是「编辑」（用户偏好，见 prefs.js）
+  /* 自动换行（Alt+Z）。**单一事实来源**：editor.js 的 baseExtensions() 直接读它，
+     新建标签现场时自然带上；已有现场由 editor.applyWrap() 热替换。 */
+  wrap: false,
   logLine: ""
 };
 

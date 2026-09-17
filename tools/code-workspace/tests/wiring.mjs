@@ -40,7 +40,9 @@ function makeEl(id) {
       (this._h || (this._h = {}))[type] = fn;
     },
     removeEventListener() {},
-    setAttribute() {}, getAttribute() { return null; },
+    /* 属性要**记下来**：否则 getAttribute 恒为 null，任何 aria-* 断言都会变成恒真 */
+    setAttribute(k, v) { (this._a || (this._a = {}))[k] = String(v); },
+    getAttribute(k) { return (this._a && this._a[k] != null) ? this._a[k] : null; },
     /* 语义等价于 DOM：设置 textContent 会清空子节点 */
     appendChild(n) {
       this.childNodes.push(n);
@@ -83,9 +85,18 @@ let pickerCalls = 0;
 let pickerBehavior = "ok";       // 'ok' | 'security' | 'abort'
 const toasts = [];
 
+/* window 级监听器要**收下来**：main.js 的全局快捷键兜底（Ctrl+S / Ctrl+W / Ctrl+B /
+   Alt+Z）就挂在 window 的 keydown 上。以前这里是个空实现，于是这条路径一直没被测到 ——
+   新快捷键恰恰走的就是它，所以先把这个能力补上。 */
+const winListeners = new Map();
+
 globalThis.window = {
   isSecureContext: true,
-  addEventListener() {}, removeEventListener() {},
+  addEventListener(type, fn) {
+    if (!winListeners.has(type)) winListeners.set(type, new Set());
+    winListeners.get(type).add(fn);
+  },
+  removeEventListener() {},
   /* 默认：顶层页面（self === top）。测试 iframe 场景时再改写 top */
   self: null, top: null,
   matchMedia: () => ({ matches: false }),
@@ -112,7 +123,14 @@ globalThis.location = {
   origin: "http://127.0.0.1:8777", protocol: "http:", host: "127.0.0.1:8777"
 };
 
-globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+globalThis.localStorage = {
+  /* **真存**的桩：偏好有没有真的落盘是 Alt+Z 的核心行为之一，
+     用空实现（getItem 恒 null / setItem 丢掉）就测不出「记住设置」这件事。 */
+  _s: new Map(),
+  getItem(k) { return this._s.has(k) ? this._s.get(k) : null; },
+  setItem(k, v) { this._s.set(k, String(v)); },
+  removeItem(k) { this._s.delete(k); }
+};
 globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 globalThis.KeyboardEvent = class {};
 
@@ -155,7 +173,7 @@ ok("main.js 模块加载无异常", !loadError, loadError && loadError.stack);
 ok("加载期没有 console.error", realErrors().length === 0, realErrors().join(" | "));
 
 console.log("\n[2] 关键事件是否真的挂上了");
-const expectClick = ["dropzone", "openBtn", "btnReload", "btnNewFile", "btnNewFolder", "btnTrash", "btnSave", "btnRename", "btnMove", "btnNewFileHere", "btnSoftDelete", "themeToggle", "btnToggleInfo"];
+const expectClick = ["dropzone", "openBtn", "btnReload", "btnNewFile", "btnNewFolder", "btnTrash", "btnSave", "btnRename", "btnMove", "btnNewFileHere", "btnSoftDelete", "themeToggle", "btnToggleInfo", "btnWrap", "btnShortcuts"];
 const missing = expectClick.filter((id) => !(listeners.get(id) || new Set()).has("click"));
 ok(`${expectClick.length} 个关键元素都挂了 click`, missing.length === 0, "未挂：" + missing.join(", "));
 
@@ -305,6 +323,81 @@ ok("取到了最后一个标签的关闭按钮 handler", closedLast);
 ok("关掉最后一个标签后，标签栏清空", tabEls().length === 0, `实际还剩 ${tabEls().length} 个节点`);
 
 ok("整条关闭路径无未捕获异常", realErrors().length === 0, realErrors().join(" | "));
+
+console.log("\n[8] 自动换行（Alt+Z）—— 全局快捷键兜底的真实行为");
+
+const { state } = await import(`${BASE}/V1/src/state.js`);
+const wrapBtn = byId("btnWrap");
+
+/* 触发全局 keydown。main.js 的兜底处理器就注册在 window 上（桩见文件开头）。 */
+const fireKey = (spec) => {
+  const e = Object.assign({
+    key: "", code: "", altKey: false, ctrlKey: false, metaKey: false, shiftKey: false,
+    prevented: false, preventDefault() { this.prevented = true; }
+  }, spec);
+  for (const fn of (winListeners.get("keydown") || [])) fn(e);
+  return e;
+};
+const isOn = () => wrapBtn.classList.contains("is-active");
+const storedWrap = () => {
+  const raw = localStorage.getItem("cw-wrap");
+  return raw == null ? undefined : JSON.parse(raw);
+};
+
+/* 先把状态归零：前面的段落没碰过它，但依赖「测试起点干净」比依赖巧合好 */
+state.wrap = false;
+wrapBtn.classList.remove("is-active");
+localStorage.removeItem("cw-wrap");
+
+const host = byId("editorHost");
+const origContains = host.contains;
+const setEditorFocused = (v) => { host.contains = () => v; };
+
+/* ① 无标签时按钮应禁用（没文件可换行） */
+setEditorFocused(false);
+ok("没有打开任何标签时，「自动换行」按钮处于禁用态", wrapBtn.disabled === true);
+
+/* ② 编辑器**未**聚焦：全局兜底生效 */
+const e1 = fireKey({ key: "z", code: "KeyZ", altKey: true });
+ok("Alt+Z 触发了 state.wrap", state.wrap === true, "实际 " + state.wrap);
+ok("按钮进入高亮态（is-active）", isOn());
+ok("按钮写了 aria-pressed=true（无障碍状态跟着走）", wrapBtn.getAttribute("aria-pressed") === "true",
+   "实际 " + String(wrapBtn.getAttribute("aria-pressed")));
+ok("默认动作被拦下（不再往页面里传）", e1.prevented === true);
+ok("偏好已落盘 cw-wrap=true（刷新后仍生效）", storedWrap() === true, "实际 " + String(storedWrap()));
+
+/* ③ 编辑器**聚焦**时也必须生效 —— 这是与 Ctrl+S 相反的刻意设计。
+      Alt+Z 在 CodeMirror 的 64 条绑定里不存在，不会被抢；只挂这一处，
+      也就不存在「两边都处理 → 切两次 → 等于没切」。 */
+setEditorFocused(true);
+const e2 = fireKey({ key: "z", code: "KeyZ", altKey: true });
+ok("编辑器聚焦时 Alt+Z 同样生效（不会切两次，也不会不切）", state.wrap === false, "实际 " + state.wrap);
+
+/* ④ macOS：Option 是组合键，event.key 会变成别的字符，靠 event.code 兜住 */
+setEditorFocused(false);
+fireKey({ key: "Ω", code: "KeyZ", altKey: true });
+ok("macOS 上 Option+Z（key 已被组合成其他字符）仍能用 code 命中", state.wrap === true, "实际 " + state.wrap);
+
+/* ⑤ 边界：Ctrl+Z 是撤销，绝不能被 Alt+Z 分支吞掉 */
+fireKey({ key: "z", code: "KeyZ", ctrlKey: true });
+ok("Ctrl+Z（撤销）不触发换行切换", state.wrap === true, "实际 " + state.wrap);
+
+/* ⑥ 边界：Shift+Alt+Z 不触发（少一个修饰键就是另一个键位） */
+fireKey({ key: "z", code: "KeyZ", altKey: true, shiftKey: true });
+ok("Shift+Alt+Z 不触发换行切换", state.wrap === true, "实际 " + state.wrap);
+
+/* ⑦ 工具条按钮走同一条路径 */
+const wrapClick = clickable.get("btnWrap");
+ok("取到 btnWrap 的 click handler", typeof wrapClick === "function");
+if (typeof wrapClick === "function") wrapClick();
+ok("点按钮能把换行关回去", state.wrap === false, "实际 " + state.wrap);
+ok("关掉后偏好也跟着落盘 cw-wrap=false", storedWrap() === false, "实际 " + String(storedWrap()));
+ok("关掉后按钮不再高亮", !isOn());
+
+/* 恢复编辑器聚焦的判定，不给后面的段落留副作用 */
+host.contains = origContains;
+
+ok("整段换行路径无未捕获异常", realErrors().length === 0, realErrors().join(" | "));
 
 console.log("\n================================");
 console.log(`通过 ${pass} · 失败 ${fail}`);

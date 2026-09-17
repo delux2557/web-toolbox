@@ -23,6 +23,7 @@ export const els = {
   editorNotice: $("editorNotice"), mdPreviewPane: $("mdPreviewPane"),
   mdSeg: $("mdSeg"), mdEditBtn: $("mdEditBtn"), mdPreviewBtn: $("mdPreviewBtn"),
   btnSave: $("btnSave"), dirtyChip: $("dirtyChip"), btnToggleInfo: $("btnToggleInfo"),
+  btnWrap: $("btnWrap"), btnShortcuts: $("btnShortcuts"),
   paneInfo: $("paneInfo"),
 
   /* 信息栏 */
