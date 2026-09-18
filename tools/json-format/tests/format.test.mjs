@@ -413,9 +413,15 @@ const FAKE_DOC = {
      永远走不到，等于那段降级提示从来没被测过。留一个开关来制造真实失败。 */
   execOk: true
 };
+/* window 上的监听器**必须真收下来**：全局快捷键（Alt+Z 换行）就挂在 window 上。
+   桩做成空实现的话，那条功能一辈子测不到 —— code-workspace 那边就踩过这个坑：
+   wiring 桩收不下 window 监听器，整条快捷键长期失测，直到有人真去按才发现。 */
+const winEvents = {};
 const FAKE_WIN = {
   matchMedia: () => ({ matches: false }),
   isSecureContext: true,
+  addEventListener(type, fn) { (winEvents[type] || (winEvents[type] = [])).push(fn); },
+  dispatch(type, ev) { (winEvents[type] || []).forEach((fn) => fn(ev || {})); },
   getSelection: () => ({
     removeAllRanges() { selLog.ranges = []; },
     addRange(r) { selLog.ranges.push(r); }
@@ -1412,6 +1418,121 @@ ok("★ 有 Firefox 兜底：@supports not selector(::-webkit-scrollbar) 里给�
    supportsBlock.replace(/\s+/g, " ").slice(0, 170));
 ok("滚动条规则里没有 transition（有的话就必须同步改 prefers-reduced-motion 那个块）",
    !/transition/.test(sbAllText));
+
+/* ============================================================
+ * [17] 自动换行开关（Alt+Z）
+ * ------------------------------------------------------------
+ * 这个功能的失败模式几乎全是**静默**的，所以每条都要有断言钉住：
+ *   · 只折了一个面板 —— 看着"能用"，但左右对照时两边参考系不一致；
+ *   · 只写 pre-wrap、忘了 overflow-wrap —— 现实里最长的行恰恰是**不含空格的字符串**
+ *     （base64 / 长 URL），于是用户最想解决的场景一点没变，还会以为是自己按错了；
+ *   · Alt+Z 挂了两处 —— 按一次切两次，表现是"按了没反应"；
+ *   · macOS 上只比 event.key —— Option+Z 送上来的 key 是 "Ω"，功能在 Mac 上直接不存在；
+ *   · 把开关写成行内样式 —— 重新渲染一次（只重写 textContent）就漂掉了。
+ * 还有一条是**反向**的：`<html>` 上不许**静态**写死 data-wrap。
+ * 写死的话「默认关」那条断言就恒真（静态 off 也算 off，哪怕 initWrap 从没跑过）——
+ * 这正是「桩的空实现让断言恒真」的同类坑。
+ * ============================================================ */
+console.log("\n[17] 自动换行开关（Alt+Z）");
+
+const wrapRule = (css.match(/[^{}]*data-wrap[^{}]*\{[^{}]*\}/g) || [])
+  .map((s) => s.trim().replace(/\s+/g, " "));
+const wrapBody = wrapRule.join(" | ");
+
+/* 只看 <html> 的**起始标签**，不做全文搜索：注释里就写着 `data-wrap` 这个字样
+   （"状态落在 <html data-wrap> 上"），全文搜会把注释算成命中 —— 假阳。
+   顺带一提，这里的措辞被"反向验证"过：把 data-wrap 真写进起始标签，这条必须变红。 */
+const htmlStartTag = (HTML.match(/<html[^>]*>/) || [""])[0];
+ok("★ <html> 起始标签上没有静态写死 data-wrap（写死的话「默认关」那条断言会恒真）",
+   !/\bdata-wrap\b/.test(htmlStartTag), htmlStartTag);
+ok("★ 换行规则同时覆盖 textarea 与 #output 两个面板（最容易只改输出区、忘输入区）",
+   wrapRule.some((r) => /data-wrap/.test(r) && /textarea/.test(r) && /#output/.test(r)),
+   wrapBody.slice(0, 200));
+ok("★ 折行用 pre-wrap（pre-line 会吃掉缩进，normal 会吃掉换行）",
+   /white-space\s*:\s*pre-wrap/.test(wrapBody), wrapBody.slice(0, 160));
+ok("★ 同时给了 overflow-wrap —— pre-wrap 只在空白处折，超长无空格串才是真正的痛点",
+   /overflow-wrap\s*:\s*anywhere/.test(wrapBody), wrapBody.slice(0, 160));
+ok("用 anywhere 而不是 break-all / break-word 单独登场（后者会把正常单词从中间劈开）",
+   !/word-break\s*:\s*break-all/.test(wrapBody));
+ok("换行规则里没有 transition（有的话就多一处要同步 prefers-reduced-motion 的义务）",
+   !/transition/.test(wrapBody));
+
+/* --- 默认态：没存过偏好 → 关 --- */
+ok("★ 初始化后默认不折行（data-wrap=off，对齐 VS Code editor.wordWrap 的默认值）",
+   FAKE_DOC.documentElement.getAttribute("data-wrap") === "off",
+   String(FAKE_DOC.documentElement.getAttribute("data-wrap")));
+ok("★ 开关按钮的 aria-pressed 与默认态一致，title 里写明快捷键",
+   el("btnWrap").getAttribute("aria-pressed") === "false" && /Alt\+Z/.test(el("btnWrap").title),
+   el("btnWrap").getAttribute("aria-pressed") + " | " + el("btnWrap").title);
+
+/* --- 点按钮开启 --- */
+store.clear();
+el("btnWrap").dispatch("click");
+ok("★ 点按钮 → 折行开启（data-wrap=on）",
+   FAKE_DOC.documentElement.getAttribute("data-wrap") === "on",
+   String(FAKE_DOC.documentElement.getAttribute("data-wrap")));
+ok("★ 点按钮 → 偏好写进 localStorage 的 jf-wrap（前缀必须 jf-，别串到 cw-）",
+   store.get("jf-wrap") === "on", JSON.stringify([...store.entries()]));
+ok("★ 切换有反馈：弹一条会自己消失的提示（内容本来没长行时画面零变化，会让人以为没生效）",
+   toastShown() && /自动换行/.test(toastText()), toastCls() + " | " + toastText());
+
+/* --- 再点一次切回 --- */
+el("btnWrap").dispatch("click");
+ok("再点一次 → 切回不折行，且偏好同步改回 off",
+   FAKE_DOC.documentElement.getAttribute("data-wrap") === "off" && store.get("jf-wrap") === "off",
+   String(FAKE_DOC.documentElement.getAttribute("data-wrap")) + " | " + store.get("jf-wrap"));
+
+/* --- Alt+Z 快捷键 --- */
+ok("★ Alt+Z 只挂在 window 上一处（挂两处 = 按一次切两次 = 等于没切）",
+   (winEvents.keydown || []).length === 1,
+   "window 上的 keydown 监听器数 = " + (winEvents.keydown || []).length);
+
+const altZ = (extra) => Object.assign({ altKey: true, code: "KeyZ", key: "z", preventDefault() {} }, extra);
+
+FAKE_WIN.dispatch("keydown", altZ({}));
+ok("★ Alt+Z → 开启折行", FAKE_DOC.documentElement.getAttribute("data-wrap") === "on",
+   String(FAKE_DOC.documentElement.getAttribute("data-wrap")));
+FAKE_WIN.dispatch("keydown", altZ({}));
+ok("再按 Alt+Z → 切回不折行（一次按键只切一次）",
+   FAKE_DOC.documentElement.getAttribute("data-wrap") === "off",
+   String(FAKE_DOC.documentElement.getAttribute("data-wrap")));
+
+FAKE_WIN.dispatch("keydown", altZ({ ctrlKey: true }));
+ok("Ctrl+Alt+Z 不被劫走（留给系统 / 输入法）", FAKE_DOC.documentElement.getAttribute("data-wrap") === "off");
+FAKE_WIN.dispatch("keydown", altZ({ shiftKey: true }));
+ok("Shift+Alt+Z 不被劫走", FAKE_DOC.documentElement.getAttribute("data-wrap") === "off");
+
+/* macOS：Option 是组合键，event.key 会变成 "Ω"，只有 event.code 还认得出这是 Z */
+FAKE_WIN.dispatch("keydown", { altKey: true, code: "KeyZ", key: "Ω", preventDefault() {} });
+ok("★ macOS 形态（key 已变成 Ω，只有 code 还是 KeyZ）也能切换 —— 只比 key 的话 Mac 上没这功能",
+   FAKE_DOC.documentElement.getAttribute("data-wrap") === "on",
+   String(FAKE_DOC.documentElement.getAttribute("data-wrap")));
+
+FAKE_WIN.dispatch("keydown", altZ({ repeat: true }));
+ok("长按产生的重复事件被丢掉（否则按住不放会疯狂来回切）",
+   FAKE_DOC.documentElement.getAttribute("data-wrap") === "on");
+
+/* --- 开关不依赖行内样式：重新渲染一次不会把它弄丢 --- */
+el("input").value = '{"long":"' + "x".repeat(40) + '"}';
+const wrapBefore = FAKE_DOC.documentElement.getAttribute("data-wrap");
+el("btnFormat").dispatch("click");
+ok("★ 重新渲染后折行状态不变（开关在 <html> 属性上，不靠会被重写的行内样式）",
+   FAKE_DOC.documentElement.getAttribute("data-wrap") === wrapBefore &&
+   el("output").style.whiteSpace === undefined,
+   wrapBefore + " → " + FAKE_DOC.documentElement.getAttribute("data-wrap"));
+
+/* --- 偏好能读回来（真走一遍初始化，而不是只断言那个属性） --- */
+store.clear();
+store.set("jf-wrap", "on");
+UI.initWrap();
+ok("★ 重新初始化能读回存过的偏好 jf-wrap=on",
+   FAKE_DOC.documentElement.getAttribute("data-wrap") === "on" && UI.readWrap() === true,
+   String(FAKE_DOC.documentElement.getAttribute("data-wrap")));
+store.set("jf-wrap", "off");
+UI.initWrap();
+ok("存的是 off 时读回来就是关（不把任意非空值都当成开）",
+   FAKE_DOC.documentElement.getAttribute("data-wrap") === "off" && UI.readWrap() === false,
+   String(FAKE_DOC.documentElement.getAttribute("data-wrap")));
 
 console.log("\n================================");
 console.log(`通过 ${pass} · 失败 ${fail}`);

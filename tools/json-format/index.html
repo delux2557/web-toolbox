@@ -216,6 +216,27 @@ textarea:focus::-webkit-scrollbar-thumb { background: var(--text-3); }
   #output, textarea { scrollbar-width: thin; scrollbar-color: var(--text-3) transparent; }
 }
 
+/* ---------- 自动换行（Alt+Z）----------
+   开关**只**写在 <html> 的一个属性上（data-wrap），两个面板由同一条规则一起接住 ——
+   与 [data-theme] 同款做法：**开关与样式解耦**，JS 只改一个属性，不碰任何元素的行内样式。
+   为什么不给 #output 加个 .wrap 类：那个元素的 class 已经被 is-stale（结果过期）占着语义，
+   把"怎么看"和"结果新不新"混进同一个 class 列表后，将来任何一处 removeClass
+   都可能顺手把换行也关掉 —— 这类耦合出问题时很难查。
+   两个不能省的细节：
+   ① **overflow-wrap 必须给**。white-space: pre-wrap 只在**空白处**折行，而现实里
+      最长的行恰恰是**不含空格的超长字符串**（base64、长 URL、压缩过的 id 串）——
+      只写 pre-wrap 的话，用户最想解决的场景正好折不动，等于功能没做。
+      用 anywhere 而不用 break-all：前者只在"这一行确实放不下"时才断，后者会把
+      正常单词从中间劈开，属于过度处理。
+   ② 折行后不再有横向溢出，B4 那条 ::-webkit-scrollbar 的 height 不再出现；
+      纵向滚动条不受影响（照旧是"淡 → 进片区提亮"）。 */
+html[data-wrap="on"] textarea,
+html[data-wrap="on"] #output {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;   /* 老引擎兜底：Safari < 15.4 不认 anywhere */
+  overflow-wrap: anywhere;
+}
+
 /* ---------- 大输出着色中的反馈 ----------
    刻意**不用**居中转圈或遮罩：主线程正忙着建节点时动画自己也会顿，
    而遮罩更容易让人以为界面卡死。改成顶部 2px 细条 + 标题栏一行静默文字，
@@ -356,6 +377,19 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
       <circle cx="12" cy="12" r="4.2"/>
       <path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/>
+    </svg>
+  </button>
+  <!-- 自动换行开关。**放在顶栏**而不是「结果」栏的工具条里，因为它管的是**两个面板**：
+       放进任一栏的工具条，都会让人以为它只作用于那一栏。
+       与主题按钮同类（整页级的"怎么看"偏好），所以它俩挨着。
+       aria-pressed 表达"这是个可切换的开关"，初始态由 JS 按 localStorage 覆写 ——
+       HTML 里写 false 只是给"脚本没跑起来"时的兜底值。 -->
+  <button class="icon-btn" id="btnWrap" type="button" title="开启自动换行（Alt+Z）" aria-label="自动换行" aria-pressed="false">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.6 6.4h16.8"/>
+      <path d="M3.6 11.6h11.2a3.4 3.4 0 0 1 0 6.8H9.6"/>
+      <path d="M12.2 16.2 9.6 18.4l2.6 2.2"/>
+      <path d="M3.6 18.4h3.2"/>
     </svg>
   </button>
 </header>
@@ -814,6 +848,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     inMeta: $("inMeta"), outMeta: $("outMeta"), status: $("status"),
     btnFormat: $("btnFormat"), btnMinify: $("btnMinify"), btnSort: $("btnSort"),
     btnValidate: $("btnValidate"), btnClear: $("btnClear"), btnTheme: $("btnTheme"),
+    btnWrap: $("btnWrap"),
     btnCopy: $("btnCopy"), btnDownload: $("btnDownload"),
     btnOpenFile: $("btnOpenFile"), fileInput: $("fileInput"), toast: $("toast"),
     hlTrack: $("hlTrack"), hlFill: $("hlFill"), outBusy: $("outBusy")
@@ -841,6 +876,45 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     var dark = false;
     try { dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches; } catch (_) {}
     applyTheme(dark ? "dark" : "light");
+  }
+
+  /* ---------- 自动换行（Alt+Z）----------
+     规格与 code-workspace 那边的换行开关对齐（它的偏好键是 cw-wrap），三个决定都别推翻：
+
+     ① **全局一个开关、默认关**。默认值对齐 VS Code 的 editor.wordWrap（off）——
+        "默认改行为"比"默认不变"更容易得罪人；想要的人第一次按完 Alt+Z 就永久生效了。
+     ② **两个面板同开同关**。只折一边会让人以为哪边渲染坏了：同一份 JSON，
+        一边折行一边横向滚，对照时眼睛得来回换参考系。
+     ③ Alt+Z 在**全局只挂一处**。再给 #output 或 textarea 各挂一份，
+       一次按键就会切两次 —— 表现是"按了没反应"，比没有这个功能还难查。
+
+     状态落在 <html data-wrap> 上，样式由 CSS 那条规则负责（见上面"自动换行"块）：
+     于是重新渲染（只重写 textContent）、切主题都不会碰到换行状态。 */
+  var WRAP_KEY = "jf-wrap";        // 同样 jf- 前缀：同域多工具共用 localStorage
+  var wrapOn = false;
+  function readWrap() {
+    try { return localStorage.getItem(WRAP_KEY) === "on"; } catch (_) { return false; }
+  }
+  function writeWrap(on) {
+    try { localStorage.setItem(WRAP_KEY, on ? "on" : "off"); } catch (_) { /* 存不了就算了，本次会话内仍有效 */ }
+  }
+  function applyWrap(on) {
+    document.documentElement.setAttribute("data-wrap", on ? "on" : "off");
+    els.btnWrap.setAttribute("aria-pressed", on ? "true" : "false");
+    els.btnWrap.title = (on ? "关闭" : "开启") + "自动换行（Alt+Z）";
+  }
+  function initWrap() {
+    wrapOn = readWrap();
+    applyWrap(wrapOn);
+  }
+  function toggleWrap() {
+    wrapOn = !wrapOn;
+    applyWrap(wrapOn);
+    writeWrap(wrapOn);
+    /* 这里**必须**给反馈：如果当前内容本来就没有长行，切换后画面一点变化都没有，
+       用户会以为快捷键没生效，然后反复按 —— 一条会自己消失的提示正好解决这个歧义。
+       （按 B1 定下的分工，这类"操作做成了"才走浮动提示，状态栏留给警告与报错。） */
+    toast("已" + (wrapOn ? "开启" : "关闭") + "自动换行 · 按 Alt+Z 可随时切回");
   }
 
   /* 状态条三种态：ok / warn / error —— 一次只显示一条，不叠信息 */
@@ -1425,6 +1499,22 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     applyTheme(next);
     writeTheme(next);
   });
+  els.btnWrap.addEventListener("click", toggleWrap);
+
+  /* Alt+Z 切换自动换行（VS Code 同款键位）。挂在 window 上，**全局只此一处**。
+     三条判断都不能省：
+     ① 先排除 Ctrl / Cmd / Shift —— 否则 Ctrl+Alt+Z 之类会被顺手劫走；
+     ② 排除 e.repeat —— 按住不放会自动重复触发，手一抖就来回切了七八次；
+     ③ macOS 上 Option 是**组合键**：按住 Option 再按 Z，event.key 不是 "z"
+        而是 "Ω"（Option+Z 的字符）。只比 key 的话 Mac 上这个功能等于不存在，
+        所以必须同时比 event.code === "KeyZ"。 */
+  window.addEventListener("keydown", function (e) {
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.code !== "KeyZ" && e.key !== "z" && e.key !== "Z") return;
+    if (e.repeat) return;
+    e.preventDefault();
+    toggleWrap();
+  });
 
   els.input.addEventListener("input", function () { syncMeta(); markStale(); });
   els.input.addEventListener("keydown", function (e) {
@@ -1468,6 +1558,11 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
      「复制走哪条路 / 下载的文件名与回收 / 拖入能不能读进来」这些真实行为。 */
   API.copyText = copyText;
   API.legacyCopy = legacyCopy;
+  /* 换行开关：测试要验的是"偏好能不能读回来"，就必须能重新走一次初始化 ——
+     否则只有 html 上那个属性可断言，而"读偏好"这段永远测不到。 */
+  API.initWrap = initWrap;
+  API.toggleWrap = toggleWrap;
+  API.readWrap = readWrap;
   API.downloadText = downloadText;
   API.readFileAsText = readFileAsText;
   API.sortKeysDeep = sortKeysDeep;
@@ -1487,6 +1582,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   API.fragClass = fragClass;
 
   initTheme();
+  initWrap();
   syncMeta();
   syncOutputActions();
   els.input.focus();
