@@ -14,6 +14,12 @@
  * 字体全部走系统字体栈。
  * ============================================================ */
 :root {
+  /* 告诉浏览器"本页支持亮/暗两种渲染"。这条**专管原生控件**（滚动条、select 下拉、
+     默认底色）：只换我们自己的 CSS 变量是换不动它们的。
+     缺了它，[data-theme="dark"] 只把面板改暗，滚动条仍按亮色画 —— 「面板是暗的、
+     滚动条是亮的」就是这么来的。暗色侧对应声明在下面 [data-theme="dark"] 里。 */
+  color-scheme: light;
+
   --font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 
@@ -52,6 +58,8 @@
   --shadow-2: 0 10px 32px oklch(0% 0 0 / .10);
 }
 [data-theme="dark"] {
+  color-scheme: dark;   /* 见 :root 处的说明：这条才是"滚动条变暗"的开关 */
+
   --bg: oklch(21.5% 0.012 252);
   --surface: oklch(25.5% 0.014 252);
   --surface-2: oklch(29.5% 0.016 252);
@@ -172,6 +180,42 @@ textarea:focus { outline: none; }
 #output:empty::before { content: attr(data-placeholder); color: var(--text-3); }
 /* 输入改过之后结果就"过期"了：降透明度提示需要重新点一次，比直接清空更不伤数据 */
 #output.is-stale { opacity: .5; }
+
+/* ---------- 滚动条 ----------
+   两个问题一起解：
+   ① 暗色下滚动条仍是亮色 —— 根因不在滚动条本身，而是页面从未声明 color-scheme
+      （修复在 :root / [data-theme="dark"] 那两行，这里只是把颜色接管过来）。
+   ② 默认别那么抢眼 —— 默认 --border-strong（低存在感，但看得见、拖得动），
+      鼠标进了**滚动条起作用的这个片区**（也就是滚动容器本身）才提亮到 --text-3。
+      刻意不用"默认完全透明"：那样会把"这里能滚"的唯一视觉线索藏掉。
+      令牌直接用现成的 --border-strong / --text-3，与 code-workspace 同款语义，
+      **不新增令牌、不引 JS**。
+   引擎分流：Chromium / Safari 走 ::-webkit-scrollbar（能精确控宽度 / 圆角 / 内缩 / hover）；
+   Firefox 只有标准属性、且**没有 hover 态**，用 @supports 兜底成"提亮色常驻 + thin"。
+   代价（有意接受）：接管样式后滚动条不再浮在内容上，10px 沟槽是常驻的 —— 与 VS Code 同款取舍。
+   这里刻意**不加 transition**：滚动条伪元素上的过渡跨引擎不可靠，而且不加就不用再去动
+   prefers-reduced-motion 那个块（少一处将来会腐烂的地方）。 */
+#output::-webkit-scrollbar,
+textarea::-webkit-scrollbar { width: 10px; height: 10px; }
+#output::-webkit-scrollbar-track,
+textarea::-webkit-scrollbar-track { background: transparent; }
+#output::-webkit-scrollbar-thumb,
+textarea::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 6px;
+  /* 透明边框 + background-clip: padding-box = 拇指视觉上变细并内缩 2px。
+     不加这两行的话，10px 的拇指会顶满整条沟槽，看着比实际更笨重。 */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+/* 鼠标进滚动片区（容器本身）/ 键盘聚焦到容器上时提亮 —— 后者是给不用鼠标的人留的线索 */
+#output:hover::-webkit-scrollbar-thumb,
+#output:focus-visible::-webkit-scrollbar-thumb,
+textarea:hover::-webkit-scrollbar-thumb,
+textarea:focus::-webkit-scrollbar-thumb { background: var(--text-3); }
+@supports not selector(::-webkit-scrollbar) {
+  #output, textarea { scrollbar-width: thin; scrollbar-color: var(--text-3) transparent; }
+}
 
 /* ---------- 大输出着色中的反馈 ----------
    刻意**不用**居中转圈或遮罩：主线程正忙着建节点时动画自己也会顿，

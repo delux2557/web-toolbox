@@ -1339,6 +1339,73 @@ ok("★ 被顶掉的分帧任务不会再改输出（否则旧结果会把新结
 ok("★ 顶掉之后进度条是收起的、isRendering() 归 false（不会卡在「正在着色」）",
    el("hlTrack").hidden === true && UI.isRendering() === false);
 
+/* ============================================================
+ * [16] 主题与滚动条的外观契约（B4）
+ * ------------------------------------------------------------
+ * 用户反馈：暗色模式下滚动条仍是亮色，看着不协调。
+ * 根因**不在滚动条样式**，而在页面从未声明 color-scheme ——
+ * 那是浏览器给原生控件（滚动条 / select 下拉 / 默认底色）着暗色的**唯一开关**；
+ * 只换我们自己的 CSS 变量是换不动它的。这类回归没有任何视觉断言能发现，
+ * 只能靠静态契约钉住，所以本段存在的意义就是把"观感约定"变成可执行断言。
+ * 另外钉三件容易被悄悄改坏的事：
+ *   · **两个滚动面**（#output 与 textarea）都必须覆盖 —— 最容易只改一个；
+ *   · 颜色必须走 var()，不许硬编码 —— 硬编码会在换主题时静默漂移；
+ *   · 滚动条规则里不许出现 transition —— 一旦出现，就必须同步去改
+ *     prefers-reduced-motion 那个块，那是"改的人不知道要改"的隐形义务。
+ * 断言前**先剥注释**：注释里就写着 ::-webkit-scrollbar 字样，
+ * 不剥的话"有没有这条规则"这类判断会假阳。
+ * ============================================================ */
+console.log("\n[16] 主题与滚动条的外观契约");
+
+const styleCss = (HTML.match(/<style[^>]*>([\s\S]*?)<\/style>/i) || ["", ""])[1];
+const css = styleCss.replace(/\/\*[\s\S]*?\*\//g, "");   // 剥注释后再匹配
+
+const rootBlock = (css.match(/:root\s*\{([\s\S]*?)\}/) || ["", ""])[1];
+const darkBlock = (css.match(/\[data-theme="dark"\]\s*\{([\s\S]*?)\}/) || ["", ""])[1];
+
+ok("★ 亮色侧声明了 color-scheme: light（原生控件的配色开关）",
+   /color-scheme\s*:\s*light/.test(rootBlock), rootBlock.replace(/\s+/g, " ").slice(0, 90));
+ok("★ [data-theme=\"dark\"] 声明了 color-scheme: dark —— 这条就是「亮色滚动条」的根因修复",
+   /color-scheme\s*:\s*dark/.test(darkBlock), darkBlock.replace(/\s+/g, " ").slice(0, 90));
+ok("暗色块仍然在换令牌（别把整块改没了）", /--bg\s*:/.test(darkBlock));
+
+/* 取所有滚动条规则。@supports 里的 `selector(::-webkit-scrollbar)` 也会被正则扫到，
+   但那条的"选择器"里带 @，直接滤掉 —— 它的兜底作用另外单独验。 */
+const sbRules = [...css.matchAll(/([^{}]*::-webkit-scrollbar[^{}]*)\{([^{}]*)\}/g)]
+  .map((m) => ({ sel: m[1].trim().replace(/\s+/g, " "), body: m[2].trim().replace(/\s+/g, " ") }))
+  .filter((r) => !r.sel.includes("@"));
+const thumbRules = sbRules.filter((r) => r.sel.includes("::-webkit-scrollbar-thumb"));
+const thumbBase = thumbRules.filter((r) => !/:hover|:focus/.test(r.sel));
+const thumbHot = thumbRules.filter((r) => /:hover/.test(r.sel));
+const sbAllText = sbRules.map((r) => r.sel + " {" + r.body + "}").join("\n");
+const coversBoth = (rs) => rs.some((r) => r.sel.includes("#output") && r.sel.includes("textarea"));
+
+ok("滚动条宽度规则覆盖了 #output 与 textarea 两个滚动面",
+   coversBoth(sbRules.filter((r) => /width\s*:/.test(r.body) && !/scrollbar-width/.test(r.body))),
+   sbRules.map((r) => r.sel).join(" | "));
+ok("★ thumb 规则覆盖了两个滚动面（最容易只改输出区、忘了输入区）",
+   coversBoth(thumbBase), thumbRules.map((r) => r.sel).join(" | "));
+ok("★ 默认 thumb 是「淡」的：--border-strong（低存在感，但看得见、拖得动）",
+   thumbBase.some((r) => /background\s*:\s*var\(--border-strong\)/.test(r.body)),
+   thumbBase.map((r) => r.body).join(" | "));
+ok("★ 鼠标进滚动片区 / 键盘聚焦时提亮到 --text-3（淡 → 显）",
+   thumbHot.some((r) => /background\s*:\s*var\(--text-3\)/.test(r.body)),
+   thumbHot.map((r) => r.body).join(" | "));
+ok("★ 滚动条颜色一律走 var()，没有硬编码色值（硬编码会在换主题时静默漂移）",
+   !/#[0-9a-f]{3,8}\b|oklch\(|rgba?\(|hsla?\(/i.test(sbAllText), sbAllText.slice(0, 170));
+ok("滚动条规则只打在 #output / textarea 上，没有全局通配（别顺手改了别的元素的滚动条）",
+   sbRules.length > 0 && sbRules.every((r) => /#output|textarea/.test(r.sel)));
+
+/* Firefox 只有标准属性、且**没有 hover 态** → 必须有 @supports 兜底，否则它拿不到暗色 */
+const supportsBlock = (css.match(/@supports[^{]*selector\(\s*::-webkit-scrollbar\s*\)[^{]*\{([\s\S]*?)\n\}/) || ["", ""])[1];
+ok("★ 有 Firefox 兜底：@supports not selector(::-webkit-scrollbar) 里给了标准属性",
+   /scrollbar-width\s*:\s*thin/.test(supportsBlock) &&
+   /scrollbar-color\s*:/.test(supportsBlock) &&
+   /#output/.test(supportsBlock) && /textarea/.test(supportsBlock),
+   supportsBlock.replace(/\s+/g, " ").slice(0, 170));
+ok("滚动条规则里没有 transition（有的话就必须同步改 prefers-reduced-motion 那个块）",
+   !/transition/.test(sbAllText));
+
 console.log("\n================================");
 console.log(`通过 ${pass} · 失败 ${fail}`);
 if (fail) process.exitCode = 1;
