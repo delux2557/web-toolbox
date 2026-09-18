@@ -872,6 +872,122 @@ ok("状态栏样式里已经没有 is-ok（成功态彻底不占状态栏）", !
 ok("状态栏仍保留警告与错误两档语义色（该留的没被一起砍掉）",
    /\.status\.is-warn/.test(HTML) && /\.status\.is-error/.test(HTML));
 
+/* ============================================================
+ * [12] tokenize 词法器
+ * ------------------------------------------------------------
+ * 它必须是**词法器**而不是解析器：不判合法性、不抛异常。
+ * 这是它能和 parseJson 长期共存的前提 —— 一旦它开始"判断什么算合法"，
+ * 工具里就出现了两个判定源，早晚各说各话（所以它也**不参与报错定位**）。
+ * ============================================================ */
+console.log("\n[12] tokenize 词法器（不判合法性、不抛异常）");
+
+const tokTypes = (src) => J.tokenize(src).filter((t) => t.type !== "ws").map((t) => t.type).join(",");
+ok("{}[]:, 都是 punct", tokTypes('{"a":1}') === "punct,string,punct,number,punct", tokTypes('{"a":1}'));
+ok("true / false / null 是 literal",
+   J.tokenize("[true,false,null]").filter((t) => t.type === "literal").map((t) => t.raw).join(",") === "true,false,null");
+ok("负数带小数带指数算一个 number 整体",
+   J.tokenize("[-2.5e3]").filter((t) => t.type === "number")[0].raw === "-2.5e3");
+ok("raw 是原文切片（含引号、未解义）", J.tokenize('"a\\nb"')[0].raw === '"a\\nb"');
+ok("空输入 → 空数组（不是 undefined、也不抛）", Array.isArray(J.tokenize("")) && J.tokenize("").length === 0);
+ok("纯空白 → 只有一个 ws token", J.tokenize("  \n\t ").length === 1 && J.tokenize("  \n\t ")[0].type === "ws");
+ok("每个 token 的 start/end 能原样切回 raw", (() => {
+  const s = '{"a": 1}';
+  return J.tokenize(s).every((t) => s.slice(t.start, t.end) === t.raw);
+})());
+
+/* 最要紧的一条：**多烂的输入都不许抛**。
+   词法器一旦抛异常，将来高亮就会把整个输出区变成白屏 —— 而它本来只是个装饰。 */
+const nastyInputs = ['{"a":"unclosed', "}{][:", "'single'", "NaN", "//comment", "\u0000",
+                     '{"a":1,,,}', "[[[[", "1e", "-", "\uD800"];
+let firstThrow = null;
+try { nastyInputs.forEach((s) => J.tokenize(s)); } catch (e) { firstThrow = e.message; }
+ok("★ 各种畸形输入都不抛异常（词法器不是校验器）", firstThrow === null, String(firstThrow));
+ok("未闭合字符串也照给 string token，不中断扫描",
+   J.tokenize('{"a":"unclosed').filter((t) => t.type !== "ws")[3].type === "string",
+   J.tokenize('{"a":"unclosed').map((t) => t.type).join(","));
+
+/* ============================================================
+ * [13] 重复键检测（核心）
+ * ------------------------------------------------------------
+ * JSON 规范**允许**重复键，而 JSON.parse 会**静默只保留最后一个**。
+ * 所以这是警告、不是错误：不改 parseJson 的判定，也不拦任何操作。
+ * ============================================================ */
+console.log("\n[13] 重复键检测（核心）");
+const dupKeyNames = (s) => J.findDuplicateKeys(s).map((d) => d.key);
+ok("同一对象里同名键 → 命中", dupKeyNames('{"a":1,"a":2}').join(",") === "a");
+ok("不同名 → 不命中", J.findDuplicateKeys('{"a":1,"b":2}').length === 0);
+ok("大小写敏感（a 与 A 是不同键）", J.findDuplicateKeys('{"a":1,"A":2}').length === 0);
+ok("★ 数组里的重复**值**不算重复键", J.findDuplicateKeys("[1,1,1]").length === 0);
+ok("★ 数组里的重复字符串也不算（那不是键）", J.findDuplicateKeys('["a","a"]').length === 0);
+ok("值里的同名不算（{\"a\":\"a\"}）", J.findDuplicateKeys('{"a":"a"}').length === 0);
+ok("嵌套内重复能抓到", dupKeyNames('{"a":{"x":1,"x":2}}').join(",") === "x");
+ok("层级不同、键名相同 → 不算重复", J.findDuplicateKeys('{"a":{"x":1},"b":{"x":2}}').length === 0);
+ok("三层嵌套也能抓到", dupKeyNames('{"a":{"b":{"c":1,"c":2}}}').join(",") === "c");
+
+/* ★ 键必须先**解义**再比：JSON 里 "a" 与 "\u0061" 是同一个键，
+   parseJson 会把它们并成一个，检测器跟不上就是漏报。 */
+ok('★ 转义键等价：{"a":1,"\\u0061":2} → 命中', dupKeyNames('{"a":1,"\\u0061":2}').join(",") === "a");
+
+/* ★ 差点重蹈 sortKeysDeep 的覆辙：用普通 {} 当"已见键"表时，key 为 "__proto__"
+   会命中原型 setter → **静默漏报**。必须用 Object.create(null) 才挡得住。 */
+ok('★ 键名 "__proto__" 不会被静默漏报', dupKeyNames('{"__proto__":1,"__proto__":2}').join(",") === "__proto__");
+
+ok("给出 1 基的行列位置", (() => {
+  const d = J.findDuplicateKeys('{"a":1,"a":2}')[0];
+  return d.line === 1 && d.column === 8;
+})(), JSON.stringify(J.findDuplicateKeys('{"a":1,"a":2}')[0]));
+ok("多行输入的行号列号算对", (() => {
+  const d = J.findDuplicateKeys('{\n  "a": 1,\n  "a": 2\n}')[0];
+  return d.line === 3 && d.column === 3;
+})(), JSON.stringify(J.findDuplicateKeys('{\n  "a": 1,\n  "a": 2\n}')[0]));
+ok("键与冒号之间有空白也认", J.findDuplicateKeys('{"a" : 1, "a" : 2}').length === 1);
+ok("未闭合的输入不抛异常（词法器不判合法性）", (() => {
+  try { J.findDuplicateKeys('{"a":1,"a'); return true; } catch (e) { return false; }
+})());
+ok("decodeJsonString 解常见转义", J.decodeJsonString('"\\n\\t"') === "\n\t");
+ok("decodeJsonString 解 \\uXXXX", J.decodeJsonString('"\\u0061"') === "a");
+ok("decodeJsonString 对非法转义原样保留（不抛）", J.decodeJsonString('"\\q"') === "\\q");
+
+/* ============================================================
+ * [14] 重复键在界面上是「警告」不是「错误」
+ * ------------------------------------------------------------
+ * 判定不能只停在核心函数上 —— 真正决定体验的是它挂在哪儿。
+ * 按工具既定分工：会自己消失的浮层只放"做成了"，
+ * 警告/错误一律留状态栏（重复键属于"做成了，但请你注意"）。
+ * ============================================================ */
+console.log("\n[14] 重复键检测的界面表现");
+
+runSandboxTimers();                      // 先让上一条提示退场，才能确认这次没弹新的
+el("input").value = '{"a":1,"a":2}';
+el("btnFormat").dispatch("click");
+ok("含重复键 → 状态栏是警告态（is-warn）而不是成功态", /is-warn/.test(statusCls()), statusCls());
+ok("含重复键 → **不**弹会消失的提示（警告必须留住让人看完）", toastShown() === false, toastCls());
+ok("警告文案说明了「只保留最后一个」", /只保留最后一个/.test(statusText()), JSON.stringify(statusText()));
+ok("警告文案点出了第一个重复键的行列", /第 1 行第 8 列/.test(statusText()), JSON.stringify(statusText()));
+ok("结果区照样正常产出（重复键只警告、不拦操作）",
+   /\n {2}"a": 2/.test(el("output").value), JSON.stringify(el("output").value));
+
+/* 无重复键时要回到「成功走浮层」的老样子，别把警告挂成常驻 */
+runSandboxTimers();
+el("input").value = '{"a":1,"b":2}';
+el("btnFormat").dispatch("click");
+ok("无重复键 → 照旧弹成功提示", toastShown() === true, toastCls());
+ok("无重复键 → 状态栏不留警告", !/is-warn/.test(statusCls()), statusCls());
+
+/* 两种告警同时命中时都要说到 —— 否则修完一个才发现还有一个 */
+runSandboxTimers();
+el("input").value = '{"id":1234567890123456789,"id":2}';
+el("btnFormat").dispatch("click");
+ok("大整数 + 重复键同时命中 → 两条告警都在状态栏里",
+   /悄悄改写/.test(statusText()) && /只保留最后一个/.test(statusText()), JSON.stringify(statusText()));
+
+/* 「只校验」也要报重复键 —— 用户按这个按钮就是来查数据问题的 */
+runSandboxTimers();
+el("input").value = '{"a":1,"a":2}';
+el("btnValidate").dispatch("click");
+ok("「只校验」也能发现重复键", /is-warn/.test(statusCls()) && /只保留最后一个/.test(statusText()),
+   statusCls() + " | " + statusText());
+
 console.log("\n================================");
 console.log(`通过 ${pass} · 失败 ${fail}`);
 if (fail) process.exitCode = 1;

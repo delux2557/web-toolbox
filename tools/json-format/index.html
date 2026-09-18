@@ -501,6 +501,149 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     return hits;
   }
 
+  /* ---------- 词法分析（tokenize）----------
+     这是一个**词法器**，不是解析器：不判合法性、不抛异常，多烂的输入都返回 token 数组。
+     这样它永远不会跟 JSON.parse 打架 ——「什么算合法」始终只有 parseJson 一个判定源。
+
+     也**故意不用它做报错定位**：报错位置已经来自引擎 message（现成行列号），
+     让词法器参与定位等于引入第二个"什么算合法"的判定源。
+
+     token 形如 { type, start, end, raw }；raw 是**原文切片**（未解义、未转义），
+     要拼进 HTML 必须再过一次实义转义 —— 那是高亮那条路的 XSS 防线。 */
+  var TOK = { PUNCT: "punct", STRING: "string", NUMBER: "number", LITERAL: "literal", WS: "ws", BAD: "bad" };
+  var LITERALS = ["true", "false", "null"];
+
+  function isDigit(ch) { return ch >= "0" && ch <= "9"; }
+
+  function tokenize(src) {
+    var s = typeof src === "string" ? src : "";
+    var out = [], i = 0, n = s.length;
+
+    function push(type, start, end) {
+      out.push({ type: type, start: start, end: end, raw: s.slice(start, end) });
+    }
+
+    while (i < n) {
+      var c = s[i];
+
+      if (c === " " || c === "\t" || c === "\n" || c === "\r") {
+        var j = i + 1;
+        while (j < n && (s[j] === " " || s[j] === "\t" || s[j] === "\n" || s[j] === "\r")) j++;
+        push(TOK.WS, i, j); i = j; continue;
+      }
+
+      if (c === "{" || c === "}" || c === "[" || c === "]" || c === ":" || c === ",") {
+        push(TOK.PUNCT, i, i + 1); i++; continue;
+      }
+
+      if (c === "\"") {
+        /* 扫到配对的收尾引号；**未闭合就一路吃到结尾**，不抛异常。 */
+        var k = i + 1, esc = false;
+        while (k < n) {
+          var d = s[k];
+          if (esc) { esc = false; k++; continue; }
+          if (d === "\\") { esc = true; k++; continue; }
+          if (d === "\"") { k++; break; }
+          k++;
+        }
+        push(TOK.STRING, i, k); i = k; continue;
+      }
+
+      if (isDigit(c) || (c === "-" && isDigit(s[i + 1]))) {
+        var p = i + 1;
+        while (p < n && isDigit(s[p])) p++;
+        if (s[p] === ".") { p++; while (p < n && isDigit(s[p])) p++; }
+        if (s[p] === "e" || s[p] === "E") {
+          var q = p + 1;
+          if (s[q] === "+" || s[q] === "-") q++;
+          if (isDigit(s[q])) { p = q; while (p < n && isDigit(s[p])) p++; }
+        }
+        push(TOK.NUMBER, i, p); i = p; continue;
+      }
+
+      var lit = null;
+      for (var L = 0; L < LITERALS.length; L++) {
+        if (s.substr(i, LITERALS[L].length) === LITERALS[L]) { lit = LITERALS[L]; break; }
+      }
+      if (lit) { push(TOK.LITERAL, i, i + lit.length); i += lit.length; continue; }
+
+      /* 词法层面认不出的字符（`'x'`、`NaN`、`//注释`…）。
+         不抛异常 —— 标成 bad 交给上层展示，合法性依旧由 parseJson 说了算。 */
+      push(TOK.BAD, i, i + 1); i++;
+    }
+    return out;
+  }
+
+  /* 行、列都从 1 起（与 findLongIntegers 的约定一致）*/
+  function positionAt(text, index) {
+    var before = text.slice(0, index);
+    return { line: before.split("\n").length, column: index - before.lastIndexOf("\n") };
+  }
+
+  /* 把字符串字面量解义成它代表的键名。
+     必须**解义之后**才能判重 —— JSON 里 "a" 与 "\u0061" 是同一个键。
+     非法转义原样保留（依然不判合法性）。 */
+  var ESC_MAP = { n: "\n", t: "\t", r: "\r", b: "\b", f: "\f", "\"": "\"", "\\": "\\", "/": "/" };
+
+  function decodeJsonString(raw) {
+    var s = raw;
+    if (s.charAt(0) === "\"") s = s.slice(1);
+    if (s.length && s.charAt(s.length - 1) === "\"") s = s.slice(0, -1);
+    if (s.indexOf("\\") < 0) return s;
+    return s.replace(/\\(u[0-9a-fA-F]{4}|[\s\S])/g, function (m, g) {
+      if (g.charAt(0) === "u") return String.fromCharCode(parseInt(g.slice(1), 16));
+      return Object.prototype.hasOwnProperty.call(ESC_MAP, g) ? ESC_MAP[g] : m;
+    });
+  }
+
+  /* ---------- 重复键检测 ----------
+     JSON 规范**允许**重复键（同名时语义由实现决定），而 JSON.parse 的做法是
+     **静默只保留最后一个** —— 前面那些被无声丢弃。所以这是**警告**不是错误：
+     不改 parseJson 的判定，也不拦任何操作。
+
+     做法：tokenize 走一遍，维护「当前对象已见键」的栈。字符串后面紧跟冒号、
+     且栈顶是对象帧时，它才是键 —— 数组里的字符串不是键，自然也不判重。 */
+  function findDuplicateKeys(src) {
+    /* 每个 { 或 [ 压一帧「本层已见键」；顶层（栈空）的字符串不算键。
+       seen 必须用 Object.create(null)：否则 key 为 "__proto__" 时会命中原型 setter，
+       重复键**静默漏报** —— 与 sortKeysDeep 踩过的是同一个坑。 */
+    var toks = tokenize(src), dups = [], stack = [];
+
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i];
+
+      if (t.type === TOK.PUNCT) {
+        if (t.raw === "{" || t.raw === "[") stack.push(Object.create(null));
+        else if (t.raw === "}" || t.raw === "]") stack.pop();
+        continue;
+      }
+
+      if (t.type !== TOK.STRING) continue;
+
+      var seen = stack[stack.length - 1];
+      if (!seen) continue;                                   // 顶层 —— 字符串没有"键"这层身份
+
+      /* 「是不是键」只有这一条判据：**后面紧跟冒号**（中间允许空白）。
+         它同时排掉两类不是键的字符串 —— 对象里的**值**，
+         以及**数组元素**（数组里字符串后面只会是 , 或 ]）。
+         所以这里**不需要**再单独判断"当前层是对象还是数组"：
+         那条分支永远走不到，是死代码（反向实验 R4 就是这么发现的，已删）。 */
+      var k = i + 1;
+      while (k < toks.length && toks[k].type === TOK.WS) k++;
+      var nx = toks[k];
+      if (!nx || nx.type !== TOK.PUNCT || nx.raw !== ":") continue;
+
+      var key = decodeJsonString(t.raw);
+      if (Object.prototype.hasOwnProperty.call(seen, key)) {
+        var at = positionAt(src, t.start);
+        dups.push({ key: key, line: at.line, column: at.column, first: seen[key] });
+      } else {
+        seen[key] = positionAt(src, t.start);
+      }
+    }
+    return dups;
+  }
+
   /* 行数 / 字节数：状态栏与 meta 用 */
   function countLines(s) { return s ? s.split("\n").length : 0; }
   function byteSize(s) {
@@ -526,6 +669,9 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     minifyJson: minifyJson,
     validateJson: validateJson,
     findLongIntegers: findLongIntegers,
+    tokenize: tokenize,
+    decodeJsonString: decodeJsonString,
+    findDuplicateKeys: findDuplicateKeys,
     countLines: countLines,
     byteSize: byteSize
   };
@@ -652,7 +798,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     setStatus("error", "✗", body, e.message);
   }
 
-  /* 大整数告警统一在这里出，三处调用点共用 */
+  /* 大整数告警。与其它告警一起由 collectWarnings() 汇总，统一走状态栏。 */
   function bigintWarning() {
     var hits = findLongIntegers(stripBOM(els.input.value));
     if (!hits.length) return null;
@@ -662,13 +808,33 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
       "这类长 ID 的末尾几位可能已被悄悄改写。建议让上游把它们当字符串传。";
   }
 
+  /* 重复键告警：和大整数告警同一条通路 —— 都属于「做成了，但请你注意」。
+     措辞必须说清「这不是错」+「会丢掉什么」，否则用户会以为工具坏了。 */
+  function duplicateKeyWarning() {
+    var dups = findDuplicateKeys(stripBOM(els.input.value));
+    if (!dups.length) return null;
+    var first = dups[0];
+    return "检测到 " + dups.length + " 个重复键（第一个在第 " + first.line + " 行第 " + first.column +
+      " 列：" + JSON.stringify(first.key) + "）—— JSON 允许重复键，但解析时只保留最后一个，" +
+      "前面的会被静默丢弃。";
+  }
+
+  /* 告警可能不止一种，全部走状态栏（会自己消失的只放"做成了"）。
+     顺序固定：先大整数（数值被改写比键被覆盖更隐蔽），再重复键。 */
+  function collectWarnings() {
+    var ws = [];
+    var a = bigintWarning(); if (a) ws.push(a);
+    var b = duplicateKeyWarning(); if (b) ws.push(b);
+    return ws.join("");
+  }
+
   /* 统一的「产出结果」收尾：写输出、更新 meta、出状态（有告警优先显示告警） */
   function deliver(out, label) {
     els.output.value = out;
     unmarkStale();
     syncOutputActions();
     els.outMeta.textContent = countLines(out) + " 行 · " + byteSize(out) + " 字节";
-    var warn = bigintWarning();
+    var warn = collectWarnings();
     if (warn) {
       /* 有警告时**不**弹 toast —— 这条信息要留着让人看完，不能自己消失 */
       setStatus("warn", "⚠", "已" + label + "，但请注意：" + warn);
@@ -708,7 +874,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     var r = validateJson(els.input.value);
     if (!r.ok) { showError(r.error); return; }
     var t = els.input.value;
-    var warn = bigintWarning();
+    var warn = collectWarnings();
     if (warn) setStatus("warn", "⚠", "是合法的 JSON，但请注意：" + warn);
     else { clearStatus(); toast("是合法的 JSON · " + countLines(t) + " 行 · " + byteSize(t) + " 字节"); }
   }
