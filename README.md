@@ -14,7 +14,7 @@
 | 📽 [PPT Player](./tools/ppt-player/) | ✅ 可用 | 演示文稿播放器：SPA 壳 + manifest 版本注册（V1 示例 / V2 纯 CSS 极简引擎），版本切换 + 导出单文件（DOM 克隆 + 资源内联）；**需 HTTP 服务访问** |
 | 📝 [Assessment Studio](./tools/assessment-studio/test-v3.html) | ✅ 可用 | 在线考试系统 V3.3：练习/考试双模式 + 即时反馈 + 计时评分；单文件纯静态，支持 `file://` 直接打开 |
 | 📋 [表格解析工具 · Table Helper](./tools/table-helper/) | ✅ 可用 | CSV / JSON / HTML 表格解析与互转：粘贴或导入 → 预览、排序筛选、导出；纯静态多模块架构，支持 `file://` 直接打开（独立纯静态页面，表格解析互转的主体实现） |
-| { } [JSON 格式化](./tools/json-format/) | ✅ 可用 | 粘贴 JSON 或**把文件拖进来** → 格式化（2/4/Tab 缩进）/ 压缩 / **递归排序键名**（数组保序）/ 校验；结果可**一键复制**（带降级方案）或**下载成 .json**。报错带行号列号 + 中文解释 + 截断提示；超 15 位整数告警精度可能被改写，**重复键告警**（`JSON.parse` 只留最后一个、静默丢掉前面的）；输出区**语法高亮 + 缩进参考线**（键/字符串/数字/字面量分色，超 128 KB 自动退成纯文本）；零依赖单文件，**支持 `file://` 双击直接用**（无需 HTTP、无需构建） |
+| { } [JSON 格式化](./tools/json-format/) | ✅ 可用 | 粘贴 JSON 或**把文件拖进来** → 格式化（2/4/Tab 缩进）/ 压缩 / **递归排序键名**（数组保序）/ 校验；结果可**一键复制**（带降级方案）或**下载成 .json**。报错带行号列号 + 中文解释 + 截断提示；超 15 位整数告警精度可能被改写，**重复键告警**（`JSON.parse` 只留最后一个、静默丢掉前面的）；输出区**语法高亮 + 缩进参考线**（键/字符串/数字/字面量分色；超大输出退成纯文本，判据是**元素数**而不是字节数——真正的成本是 DOM 节点）；大输入**分帧渐进渲染**（先出前 200 行、其余按帧补齐，顶部细进度条 + 顶栏「正在着色…」，期间复制/下载暂时禁用以免拿到半截数据）；零依赖单文件，**支持 `file://` 双击直接用**（无需 HTTP、无需构建） |
 | ✨ [Prompt Helper](./tools/prompt-helper/) | ✅ 可用 | AI 提示词工作台：把提问变成按最佳实践填空（配置驱动模板）；插件化架构（PluginHost 宿主 + 可插拔插件）+ 多主题系统；Vite + Vue 构建，[在线版 release/latest.html](./tools/prompt-helper/release/latest.html)（单文件，可下载后双击使用） |
 | ⏱ 番茄时钟 | 🔜 占位 | 简洁番茄工作法计时器（规划中，后续继续做） |
 | 🎨 调色板工具 | 🔜 占位 | 颜色拾取、渐变生成（规划中，后续继续做） |
@@ -136,7 +136,7 @@ node tools/_build/check-portal-sync.mjs    # 退出码 0 = 一致，1 = 有漂�
 |------|------|
 | `check-portal-sync.mjs` | 10 · 门户一致性 |
 | `code-workspace/tests/run-all.mjs` | 253 · 悬空引用 / 逻辑 / 接线 / 文档防过期 |
-| `json-format/tests/format.test.mjs` | 256 · 形态契约 / 报错定位 / 词法器 / 重复键 / 高亮与参考线 / UI 冒烟 |
+| `json-format/tests/format.test.mjs` | 279 · 形态契约 / 报错定位 / 词法器 / 重复键 / 高亮与参考线 / 渐进渲染 / UI 冒烟 |
 | `build-single.mjs` | 传统单页内联产物 |
 | `build-snapshot.mjs` | SPA 快照（codebase-context / code-workspace / ppt-player） |
 | `verify-snapshot.mjs` | 19 · 快照产物在 vm 里真跑一遍 |

@@ -163,29 +163,51 @@ textarea:focus { outline: none; }
   background: var(--surface); overflow: auto;
   font-family: var(--font-mono); font-size: 13px; line-height: 1.65;
   tab-size: 2; white-space: pre;
+  /* 底色 = 标点色：标点与空白**不再单独套元素**，直接继承这一层颜色 ——
+     观感一分不变（标点本来就是"压暗、不当主角"），却省掉了本样本 8751 个元素。 */
+  color: var(--tok-punct);
+  --ind-w: 2ch;   /* 一层缩进占几列（ch 跟着等宽字体走）；JS 按当前缩进档改写 */
 }
 #output:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 #output:empty::before { content: attr(data-placeholder); color: var(--text-3); }
 /* 输入改过之后结果就"过期"了：降透明度提示需要重新点一次，比直接清空更不伤数据 */
 #output.is-stale { opacity: .5; }
 
+/* ---------- 大输出着色中的反馈 ----------
+   刻意**不用**居中转圈或遮罩：主线程正忙着建节点时动画自己也会顿，
+   而遮罩更容易让人以为界面卡死。改成顶部 2px 细条 + 标题栏一行静默文字，
+   走的是**真实进度**（已画行数 / 总行数），不糊弄人；画完自动收起，不做完成提示。 */
+.hl-track { flex: 0 0 auto; height: 2px; background: var(--surface-2); overflow: hidden; }
+.hl-track[hidden] { display: none; }
+.hl-fill { height: 100%; width: 0; background: var(--accent); transition: width 120ms linear; }
+.busy { margin-left: 8px; font-size: 12px; color: var(--text-3); }
+.busy[hidden] { display: none; }
+
 /* token 配色。class 名由 renderOutput() 从 TOK 枚举拼出来（tok-key / tok-string / …），
-   两处必须对得上：改 TOK 的值就要同步改这里的类名。 */
+   两处必须对得上：改 TOK 的值就要同步改这里的类名。
+   **故意没有 .tok-punct** —— 标点与空白退成文本节点、走 <pre> 的底色（见上面 #output 的 color），
+   这是「节点瘦身」的主要来源，不是漏写。 */
 .tok-key { color: var(--tok-key); }
 .tok-string { color: var(--tok-string); }
 .tok-number { color: var(--tok-number); }
 .tok-literal { color: var(--tok-literal); }
-.tok-punct { color: var(--tok-punct); }
 .tok-bad { color: var(--tok-bad); text-decoration: underline wavy; }
 
 /* 缩进参考线。两条都是踩过坑才定下来的：
-   ① 竖线用 **inset box-shadow** 画，不用 border —— border 会把元素撑宽 1px，
-      深层缩进累积下来整段文本会往右漂。box-shadow 不占布局宽度。
+   ① 竖线用**背景**画，不占布局宽度 —— 用 border 会把元素撑宽 1px，
+      深层缩进累积下来整段文本会往右漂。
    ② 参考线里**必须保留原始空白文本**（span 的内容就是那几个空格/\t）。
       一开始写成空的 <span> + 固定宽度，视觉没问题，但 textContent 里的缩进**全丢了**
       —— 复制与下载会拿到没有缩进的 JSON。测试当场报红 5 条，这是功能性回归。
-      现在宽度由真实空白撑出来，文本一个字符都不动。 */
-.ind { box-shadow: inset 1px 0 0 var(--guide); }
+      现在宽度由真实空白撑出来，文本一个字符都不动。
+   ③ 用**重复渐变**而不是「一层一个 span」：一行有几层就造几个元素的话，
+      5000 行 / 95 KB 的输入光参考线就要 11500 个带阴影的元素；重复渐变把它们收成
+      5251 个（一行一个），阴影 paint 也变成一次背景绘制。
+      --ind-w 是「一层占几列」，由 JS 按当前缩进档写在 <pre> 上（ch 跟着等宽字体走）。 */
+.ind {
+  background-image: repeating-linear-gradient(to right,
+    var(--guide) 0 1px, transparent 1px var(--ind-w));
+}
 
 /* ---------- 底部操作条 ---------- */
 footer {
@@ -262,6 +284,10 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 @media (prefers-reduced-motion: reduce) {
   .toast { transform: translate(-50%, 0); transition: opacity 180ms ease, visibility 180ms ease; }
   .toast.show { transform: translate(-50%, 0); }
+  /* 着色进度条同理：去掉宽度过渡。**合并进这一个块**而不是另开一个
+     —— 另开会在文档里出现两处 prefers-reduced-motion，而测试是按
+     「第一处 reduce 块」抓取来断言降级策略的，多一处就会抓错。 */
+  .hl-fill { transition: none; }
 }
 
 /* ---------- 窄屏：改上下两栏 ---------- */
@@ -309,6 +335,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   <section class="pane">
     <div class="pane-head">
       <b>结果</b><span class="meta" id="outMeta">—</span>
+      <span class="busy" id="outBusy" hidden>正在着色…</span>
       <span class="tools">
         <button class="icon-btn" id="btnCopy" type="button" title="复制结果到剪贴板" aria-label="复制结果" disabled>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -323,6 +350,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
         </button>
       </span>
     </div>
+    <div class="hl-track" id="hlTrack" hidden><div class="hl-fill" id="hlFill"></div></div>
     <pre id="output" tabindex="0" spellcheck="false"
       data-placeholder="结果会出现在这里（Ctrl + A 全选，或用右上角复制按钮）。"></pre>
   </section>
@@ -744,7 +772,8 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     btnFormat: $("btnFormat"), btnMinify: $("btnMinify"), btnSort: $("btnSort"),
     btnValidate: $("btnValidate"), btnClear: $("btnClear"), btnTheme: $("btnTheme"),
     btnCopy: $("btnCopy"), btnDownload: $("btnDownload"),
-    btnOpenFile: $("btnOpenFile"), fileInput: $("fileInput"), toast: $("toast")
+    btnOpenFile: $("btnOpenFile"), fileInput: $("fileInput"), toast: $("toast"),
+    hlTrack: $("hlTrack"), hlFill: $("hlFill"), outBusy: $("outBusy")
   };
 
   /* 局部存储一律 try/catch：file:// 下或隐私模式里 localStorage 可能直接抛，
@@ -890,7 +919,26 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
      ★ 输出文本的唯一读取口是 outputText()。以前是 els.output.value（textarea 自带），
        换成 <pre> 之后 value 不存在了 —— 散落的 .value 会**静默变成 undefined**
        （不报错，只是复制/下载拿到空串），所以全部收敛到这一个函数。 */
-  var HL_MAX_BYTES = 128 * 1024;
+
+  /* ── 渲染预算 ──────────────────────────────────────────────────────────
+     成本的真实驱动量是**元素节点数**，不是字节数：
+       实测 95 KB / 5252 行的输入 → 27,001 个 <span>；而旧的 128 KB 阈值要 129 KB
+       才触发 —— 等于那道阈值恰好挡不住最痛的那一段（76 KB ~ 128 KB 之间）。
+       而 JSON.parse 只要 0.2 ms、tokenize 只要 4 ms：卡顿**全在渲染**，不在解析。
+     所以判据改成分级，字节数只当便宜的粗筛：
+       > HL_MAX_BYTES   → 不必 tokenize，直接纯文本
+       元素数 > 上限     → 退回纯文本（只关着色，文本完整）
+       元素数 ≤ "同步"   → 一次同步画完（小输入的体感**完全不变**，不引入异步）
+       其余             → 分帧画：先同步画开头一小段，其余分块补齐并把主线程让回去 */
+  var HL_MAX_BYTES = 512 * 1024;   // 粗筛：挡住 tokenize 自己都吃不消的巨型输入
+  var HL_MAX_ELEMENTS = 60000;     // 超过 → 退回纯文本
+  /* 同步上限取 8000：≈ 3500 行 / 63 KB，这个量级一次画完约 70 ms（肉眼无感），
+     所以**这一段的行为与改造前逐字节一致**，不会为了没必要的分帧闪一下进度条。
+     再往上（3500 行以上）才开始分帧 —— 那里确实一次画不完。 */
+  var HL_SYNC_ELEMENTS = 8000;
+  var HL_FIRST_LINES = 200;        // 分帧：先同步画这么多行，让用户立刻看到开头
+  var HL_CHUNK_LINES = 300;        // 分帧：每块最多多少行（与时间预算先到为准）
+  var HL_CHUNK_MS = 8;             // 分帧：每块最多占用主线程多少毫秒
 
   function outputText() { return els.output.textContent; }
 
@@ -912,18 +960,11 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     return false;
   }
 
-  function renderOutput(text) {
-    var pre = els.output;
-    /* 一层缩进是几个空格 —— 只用于把行首空白**切段**，让每段各画一条竖线。
-       宽度不再由 JS 决定：参考线 span 的内容就是那一段空白原文。 */
-    var unit = els.indent.value === "4" ? 4 : 2;
-
-    if (!text) { pre.textContent = ""; return; }
-    if (byteSize(text) > HL_MAX_BYTES) { pre.textContent = text; return; }
-
-    /* 先按行切开。合法 JSON 的字符串里不会有裸换行，所以每个 token 都落在单行；
-       仍然按 \n 再切一刀，是为了畸形输入也不至于把结构画错。 */
-    var toks = tokenize(text), lines = [[]];
+  /* 把一个 token 流按行切开（纯数据，不建任何 DOM）。
+     合法 JSON 的字符串里不会有裸换行，所以每个 token 都落在单行；
+     仍然按 \n 再切一刀，是为了畸形输入也不至于把结构画错。 */
+  function splitLines(toks) {
+    var lines = [[]];
     for (var i = 0; i < toks.length; i++) {
       var parts = String(toks[i].raw).split("\n");
       for (var p = 0; p < parts.length; p++) {
@@ -931,42 +972,142 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
         if (parts[p]) lines[lines.length - 1].push({ type: toks[i].type, raw: parts[p] });
       }
     }
+    return lines;
+  }
 
-    /* 先在一块脱离文档的容器里拼好，最后一次性挂上去 —— 避免逐节点触发重排 */
-    var host = document.createElement("span");
+  /* 行首有空白 → 1（那个空白片段要变成一个 .ind），否则 0 */
+  function leadAt(frags) {
+    return (frags.length && frags[0].type === TOK.WS) ? 1 : 0;
+  }
+
+  /* 一个片段要不要单独套元素 —— ★ **只有这一处判据**，数元素与画元素共用。
+     两处各写一份迟早漂移成「数的和画的不一样」，而那种偏差不会报错，
+     只会让阈值骗人（以为只有 4000 个元素、其实造了 8000 个）。 */
+  function fragClass(frags, i) {
+    var f = frags[i];
+    if (f.type === TOK.STRING) return isKeyFragment(frags, i) ? "tok-key" : "tok-string";
+    /* 标点与空白**不套元素**：标点本来就被定成「压暗、不当主角」的角色，
+       颜色交给 <pre> 的底色（--tok-punct），退成文本节点即可。
+       文本节点不进布局树、不必匹配选择器 —— 本样本这一项省掉 8751 个元素。 */
+    if (f.type === TOK.PUNCT || f.type === TOK.WS) return "";
+    return "tok-" + f.type;
+  }
+
+  /* 数「会造出多少个元素」。只数元素、不数文本节点 —— 贵的只有元素。 */
+  function countElements(lines) {
+    var n = 0;
     for (var li = 0; li < lines.length; li++) {
-      if (li > 0) host.appendChild(document.createTextNode("\n"));
-      var frags = lines[li];
-
-      /* 行首空白切成「一层一段」，每段套一个 .ind 画竖线。
-         ★ 每段 span 里装的就是**原始空白字符**，一个都不能丢 ——
-           textContent 是复制与下载的唯一来源，丢了缩进就是拿到了错的结果。
-           竖线本身靠 CSS 的 inset box-shadow 画（见 .ind），不占布局宽度。 */
-      if (frags.length && frags[0].type === TOK.WS) {
-        var lead = frags[0].raw;
-        if (lead.charAt(0) === "\t") {
-          /* tab 缩进：一个 \t 就是一层（tab-size 把宽度交给 CSS 决定） */
-          for (var g = 0; g < lead.length; g++) host.appendChild(makeNode("ind", "\t"));
-        } else {
-          var n = Math.floor(lead.length / unit);
-          for (var g2 = 0; g2 < n; g2++) host.appendChild(makeNode("ind", lead.substr(g2 * unit, unit)));
-          /* 缩进不是整数层（畸形输入）时，余下的空白照原样留在文本里 */
-          var rest = lead.slice(n * unit);
-          if (rest) host.appendChild(document.createTextNode(rest));
-        }
-        frags = frags.slice(1);
-      }
-
-      for (var fi = 0; fi < frags.length; fi++) {
-        var f = frags[fi], cls = "";
-        if (f.type === TOK.STRING) cls = isKeyFragment(frags, fi) ? "tok-key" : "tok-string";
-        else if (f.type !== TOK.WS) cls = "tok-" + f.type;
-        host.appendChild(cls ? makeNode(cls, f.raw) : document.createTextNode(f.raw));
-      }
+      var frags = lines[li], start = leadAt(frags);
+      if (start) n++;                                    // 行首参考线
+      for (var i = start; i < frags.length; i++) if (fragClass(frags, i)) n++;
     }
+    return n;
+  }
 
-    pre.textContent = "";      // 清空（也顺带把上一次的高亮节点摘掉）
-    pre.appendChild(host);
+  /* 画一行（节点都挂在 host 上）。needNL：行首要补一个换行（首行之外都要）。
+     行首空白整段装进**一个** .ind —— 多层竖线由 CSS 的重复渐变一次画完，
+     不再一层一个 span。span 里装的仍是原始空白，textContent 一个字符都不差。 */
+  function paintLine(host, frags, needNL) {
+    if (needNL) host.appendChild(document.createTextNode("\n"));
+    var start = leadAt(frags);
+    if (start) host.appendChild(makeNode("ind", frags[0].raw));
+    /* 连续的不上色片段（标点 / 空白）攒成**一个**文本节点：
+       结构上仍是文本，textContent 完全等价，但少了成百上千个小节点。 */
+    var pending = "";
+    var flush = function () {
+      if (pending) { host.appendChild(document.createTextNode(pending)); pending = ""; }
+    };
+    for (var i = start; i < frags.length; i++) {
+      var cls = fragClass(frags, i);
+      if (cls) { flush(); host.appendChild(makeNode(cls, frags[i].raw)); }
+      else pending += frags[i].raw;
+    }
+    flush();
+  }
+
+  /* 让出主线程：有调度器就用调度器（background 优先级，不跟用户交互抢），
+     否则退到 setTimeout。★ 抽成一个变量是为了测试能驱动它 ——
+     分帧渲染如果没被测到，等于没写。 */
+  var yieldToMain = (typeof scheduler !== "undefined" && scheduler.postTask)
+    ? function (fn) { scheduler.postTask(fn, { priority: "background" }); }
+    : function (fn) { setTimeout(fn, 0); };
+
+  var rendering = false;   // 分帧正在画：此时复制/下载要禁用（textContent 还是半截的）
+  var renderSeq = 0;       // 每次渲染自增；老的分帧任务发现序号变了就自己收手
+
+  function setProgress(ratio) {
+    if (els.hlFill) els.hlFill.style.width = Math.round(ratio * 100) + "%";
+  }
+  function setBusy(on) {
+    rendering = on;
+    if (els.hlTrack) els.hlTrack.hidden = !on;
+    if (els.outBusy) els.outBusy.hidden = !on;
+    if (!on) setProgress(0);
+    syncOutputActions();
+  }
+
+  /* 分帧渐进渲染：先把开头一小段**同步**画上去（用户不必盯着空屏），其余分块补齐。
+     每块之间把主线程还回去 —— 于是进度条能动、滚动能响应、按钮能点，
+     感知上从「整体冻结」变成「结果逐渐长出来」。总节点数没变，变的是**可交互性**。 */
+  function paintChunked(pre, lines, my) {
+    var total = lines.length;
+    var upto = Math.min(HL_FIRST_LINES, total);
+    var head = document.createElement("span");
+    for (var i = 0; i < upto; i++) paintLine(head, lines[i], i > 0);
+    pre.textContent = "";
+    pre.appendChild(head);
+    setBusy(true);
+    setProgress(upto / total);
+
+    var rest = document.createElement("span");
+    var cursor = upto;
+    var step = function () {
+      if (my !== renderSeq) return;        // 被新的一次渲染顶掉了：停手，别再抢主线程
+      var t0 = Date.now();
+      /* ★ 块预算要按「本块的起点」算，不能按 upto（表头）算 ——
+         按 upto 算的话第一块就会把 300 行的额度用光，之后每块一进来
+         `cursor - upto` 已经 ≥ 300 → 一行都画不了，只能无限重排下去。
+         这个 bug 的表现是「进度条永远停在同一格、页面一直转」，
+         由「抽干后必须逐字节完整」这条断言抓出来。 */
+      var from = cursor;
+      while (cursor < total && cursor - from < HL_CHUNK_LINES && Date.now() - t0 < HL_CHUNK_MS) {
+        paintLine(rest, lines[cursor], true);
+        cursor++;
+      }
+      setProgress(cursor / total);
+      if (cursor < total) { yieldToMain(step); return; }
+      pre.appendChild(rest);               // 其余一次性挂上：整段只多一次布局
+      setBusy(false);
+    };
+    yieldToMain(step);
+  }
+
+  function renderOutput(text) {
+    var my = ++renderSeq;                  // 抢过渲染权（老的分帧任务下一拍会自己收手）
+    var pre = els.output;
+    /* 一层缩进占几列：写成 <pre> 上的 CSS 变量，让参考线渐变跟着走。
+       tab 的宽度由 tab-size 定（CSS 里是 2），所以 tab 缩进落在同一条规则上。 */
+    var unit = els.indent.value === "4" ? 4 : 2;
+
+    setBusy(false);
+    if (!text) { pre.textContent = ""; return; }
+    if (byteSize(text) > HL_MAX_BYTES) { pre.textContent = text; return; }
+
+    var lines = splitLines(tokenize(text));
+    var elems = countElements(lines);
+    if (elems > HL_MAX_ELEMENTS) { pre.textContent = text; return; }
+
+    pre.style.setProperty("--ind-w", unit + "ch");
+    if (elems <= HL_SYNC_ELEMENTS) {
+      /* 小输入：先拼在脱离文档的容器里，最后一次性挂上去，避免逐节点触发重排。
+         这条路上**没有任何异步** —— 常见场景的行为与改造前逐字节一致。 */
+      var host = document.createElement("span");
+      for (var li = 0; li < lines.length; li++) paintLine(host, lines[li], li > 0);
+      pre.textContent = "";
+      pre.appendChild(host);
+      return;
+    }
+    paintChunked(pre, lines, my);
   }
 
   /* 统一的「产出结果」收尾：写输出、更新 meta、出状态（有告警优先显示告警） */
@@ -1194,7 +1335,10 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   /* 输出区空的时候复制/下载没有意义 —— 直接置灰，比"点了没反应"清楚 */
   function syncOutputActions() {
-    var empty = !outputText();
+    /* 分帧渲染还没画完时**不给复制/下载** —— textContent 这时还是半截的，
+       点下去会静默拿到不完整的 JSON。禁用按钮比拿到错数据好得多，
+       而且进度条本来就在说「还在着色」，用户等一拍就行。 */
+    var empty = rendering || !outputText();
     els.btnCopy.disabled = empty;
     els.btnDownload.disabled = empty;
   }
@@ -1284,9 +1428,20 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   API.downloadText = downloadText;
   API.readFileAsText = readFileAsText;
   API.sortKeysDeep = sortKeysDeep;
-  /* 高亮阈值：测试要贴着边界造输入，所以把它暴露出去，
-     免得测试里再抄一遍数字（抄一遍就多一个会漂移的常量）。 */
+  /* 高亮阈值与分帧参数：测试要贴着边界造输入，所以全都暴露出去，
+     免得测试里再抄一遍数字（抄一遍就多一个会漂移的常量）。
+     —— 数字一旦漂移，测试就变成在测「自己抄的那份」，而不是产品里那份。 */
   API.HL_MAX_BYTES = HL_MAX_BYTES;
+  API.HL_MAX_ELEMENTS = HL_MAX_ELEMENTS;
+  API.HL_SYNC_ELEMENTS = HL_SYNC_ELEMENTS;
+  API.HL_FIRST_LINES = HL_FIRST_LINES;
+  API.HL_CHUNK_LINES = HL_CHUNK_LINES;
+  /* 分帧渲染的状态与内部件也暴露出来：
+     「还在画」这件事测试必须能观察到，否则「渲染中禁用复制」这条断言只能靠猜。 */
+  API.isRendering = function () { return rendering; };
+  API.countElements = countElements;
+  API.splitLines = splitLines;
+  API.fragClass = fragClass;
 
   initTheme();
   syncMeta();
