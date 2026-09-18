@@ -34,6 +34,17 @@
   --warn-soft: oklch(96% 0.05 85);
   --danger: oklch(54% 0.19 25);
   --danger-soft: oklch(95.5% 0.042 25);
+
+  /* 输出区高亮配色。亮色侧统一压到 44%~58% 明度：
+     白底（--surface）上都能过 4.5:1，又不会深到像纯黑那样糊成一片。 */
+  --tok-key: oklch(45% 0.15 258);      /* 键名：偏冷蓝，与字符串值区分开 */
+  --tok-string: oklch(44% 0.13 150);   /* 字符串值：绿 */
+  --tok-number: oklch(48% 0.16 300);   /* 数字：紫 */
+  --tok-literal: oklch(50% 0.13 60);   /* true / false / null：琥珀 */
+  --tok-punct: oklch(58% 0.012 255);   /* 括号逗号冒号：故意压暗，不当主角 */
+  --tok-bad: oklch(54% 0.19 25);       /* 词法认不出的字符，与 --danger 同色 */
+  --guide: oklch(92% 0.006 250);       /* 缩进参考线：比 --border 再淡一档 */
+
   --radius-l: 12px;
   --radius: 9px;
   --radius-s: 7px;
@@ -58,6 +69,17 @@
   --warn-soft: oklch(31% 0.055 80);
   --danger: oklch(70% 0.16 25);
   --danger-soft: oklch(31% 0.065 25);
+
+  /* 暗色侧把明度抬到 79%~85%（底是 oklch(25.5%) 的 --surface），
+     保持与亮色相同的色相分工（键=蓝 / 值=绿 / 数=紫 / 字面量=琥珀）。 */
+  --tok-key: oklch(80% 0.11 258);
+  --tok-string: oklch(79% 0.12 150);
+  --tok-number: oklch(80% 0.12 300);
+  --tok-literal: oklch(84% 0.12 75);
+  --tok-punct: oklch(63% 0.012 248);
+  --tok-bad: oklch(72% 0.16 25);
+  --guide: oklch(34% 0.014 252);
+
   --shadow-1: 0 1px 2px oklch(0% 0 0 / .3);
   --shadow-2: 0 10px 32px oklch(0% 0 0 / .4);
 }
@@ -129,9 +151,41 @@ textarea {
 }
 textarea:focus { outline: none; }
 #input::placeholder { color: var(--text-3); }
-#output { background: var(--surface); }
+/* ---------- 输出区：<pre> 而不是 <textarea> ----------
+   要语法高亮就得能往里面装元素，所以换成 <pre>。换来的两个损失都补回来了：
+   ① <pre> 没有 placeholder → 用下面的 :empty::before + data-placeholder；
+   ② <pre> 的 Ctrl+A 是「全选整页」（textarea 只选自己）→ JS 里挂 keydown 限定选区。
+   其余排版参数（mono / 13px / 1.65 / tab-size）必须与 textarea 那条保持一致，
+   否则左右两栏的行高与缩进对不齐。 */
+#output {
+  flex: 1 1 auto; min-height: 0; width: 100%;
+  margin: 0; padding: 12px 14px; border: 0;
+  background: var(--surface); overflow: auto;
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.65;
+  tab-size: 2; white-space: pre;
+}
+#output:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#output:empty::before { content: attr(data-placeholder); color: var(--text-3); }
 /* 输入改过之后结果就"过期"了：降透明度提示需要重新点一次，比直接清空更不伤数据 */
 #output.is-stale { opacity: .5; }
+
+/* token 配色。class 名由 renderOutput() 从 TOK 枚举拼出来（tok-key / tok-string / …），
+   两处必须对得上：改 TOK 的值就要同步改这里的类名。 */
+.tok-key { color: var(--tok-key); }
+.tok-string { color: var(--tok-string); }
+.tok-number { color: var(--tok-number); }
+.tok-literal { color: var(--tok-literal); }
+.tok-punct { color: var(--tok-punct); }
+.tok-bad { color: var(--tok-bad); text-decoration: underline wavy; }
+
+/* 缩进参考线。两条都是踩过坑才定下来的：
+   ① 竖线用 **inset box-shadow** 画，不用 border —— border 会把元素撑宽 1px，
+      深层缩进累积下来整段文本会往右漂。box-shadow 不占布局宽度。
+   ② 参考线里**必须保留原始空白文本**（span 的内容就是那几个空格/\t）。
+      一开始写成空的 <span> + 固定宽度，视觉没问题，但 textContent 里的缩进**全丢了**
+      —— 复制与下载会拿到没有缩进的 JSON。测试当场报红 5 条，这是功能性回归。
+      现在宽度由真实空白撑出来，文本一个字符都不动。 */
+.ind { box-shadow: inset 1px 0 0 var(--guide); }
 
 /* ---------- 底部操作条 ---------- */
 footer {
@@ -269,8 +323,8 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
         </button>
       </span>
     </div>
-    <textarea id="output" readonly spellcheck="false"
-      placeholder="结果会出现在这里（可直接 Ctrl + A 全选复制）。"></textarea>
+    <pre id="output" tabindex="0" spellcheck="false"
+      data-placeholder="结果会出现在这里（Ctrl + A 全选，或用右上角复制按钮）。"></pre>
   </section>
 </main>
 
@@ -772,7 +826,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
      不清空又会出现「左边已经改过、右边还是旧结果」的误解。
      标一下，两边的代价都避开。 */
   function markStale() {
-    if (!els.output.value) return;
+    if (!outputText()) return;
     els.output.classList.add("is-stale");
     els.outMeta.textContent = "已过期";
   }
@@ -828,9 +882,96 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     return ws.join("");
   }
 
+  /* ---------- 输出区渲染 ----------
+     ★ 刻意用**真 DOM 节点**（createTextNode / createElement）而不是 innerHTML 拼串：
+       数据永远走文本节点，标签结构不可能被内容破坏 —— XSS 是**结构性免疫**，
+       不依赖某个转义函数写对（也就没地方可以写错）。
+       代价是节点多时比一次性 innerHTML 慢，所以超过阈值直接退回纯文本。
+     ★ 输出文本的唯一读取口是 outputText()。以前是 els.output.value（textarea 自带），
+       换成 <pre> 之后 value 不存在了 —— 散落的 .value 会**静默变成 undefined**
+       （不报错，只是复制/下载拿到空串），所以全部收敛到这一个函数。 */
+  var HL_MAX_BYTES = 128 * 1024;
+
+  function outputText() { return els.output.textContent; }
+
+  function makeNode(cls, text) {
+    var s = document.createElement("span");
+    if (cls) s.className = cls;
+    if (text != null) s.textContent = text;
+    return s;
+  }
+
+  /* 「这个字符串是不是键」只有一条判据：**同一行里后面紧跟冒号**。
+     与 findDuplicateKeys 是同一条判据（那边跨整条 token 流，这边只看行内片段）——
+     它同时排掉两类不是键的字符串：对象里的**值**、以及数组元素。 */
+  function isKeyFragment(frags, i) {
+    for (var j = i + 1; j < frags.length; j++) {
+      if (frags[j].type === TOK.WS) continue;
+      return frags[j].type === TOK.PUNCT && frags[j].raw === ":";
+    }
+    return false;
+  }
+
+  function renderOutput(text) {
+    var pre = els.output;
+    /* 一层缩进是几个空格 —— 只用于把行首空白**切段**，让每段各画一条竖线。
+       宽度不再由 JS 决定：参考线 span 的内容就是那一段空白原文。 */
+    var unit = els.indent.value === "4" ? 4 : 2;
+
+    if (!text) { pre.textContent = ""; return; }
+    if (byteSize(text) > HL_MAX_BYTES) { pre.textContent = text; return; }
+
+    /* 先按行切开。合法 JSON 的字符串里不会有裸换行，所以每个 token 都落在单行；
+       仍然按 \n 再切一刀，是为了畸形输入也不至于把结构画错。 */
+    var toks = tokenize(text), lines = [[]];
+    for (var i = 0; i < toks.length; i++) {
+      var parts = String(toks[i].raw).split("\n");
+      for (var p = 0; p < parts.length; p++) {
+        if (p > 0) lines.push([]);
+        if (parts[p]) lines[lines.length - 1].push({ type: toks[i].type, raw: parts[p] });
+      }
+    }
+
+    /* 先在一块脱离文档的容器里拼好，最后一次性挂上去 —— 避免逐节点触发重排 */
+    var host = document.createElement("span");
+    for (var li = 0; li < lines.length; li++) {
+      if (li > 0) host.appendChild(document.createTextNode("\n"));
+      var frags = lines[li];
+
+      /* 行首空白切成「一层一段」，每段套一个 .ind 画竖线。
+         ★ 每段 span 里装的就是**原始空白字符**，一个都不能丢 ——
+           textContent 是复制与下载的唯一来源，丢了缩进就是拿到了错的结果。
+           竖线本身靠 CSS 的 inset box-shadow 画（见 .ind），不占布局宽度。 */
+      if (frags.length && frags[0].type === TOK.WS) {
+        var lead = frags[0].raw;
+        if (lead.charAt(0) === "\t") {
+          /* tab 缩进：一个 \t 就是一层（tab-size 把宽度交给 CSS 决定） */
+          for (var g = 0; g < lead.length; g++) host.appendChild(makeNode("ind", "\t"));
+        } else {
+          var n = Math.floor(lead.length / unit);
+          for (var g2 = 0; g2 < n; g2++) host.appendChild(makeNode("ind", lead.substr(g2 * unit, unit)));
+          /* 缩进不是整数层（畸形输入）时，余下的空白照原样留在文本里 */
+          var rest = lead.slice(n * unit);
+          if (rest) host.appendChild(document.createTextNode(rest));
+        }
+        frags = frags.slice(1);
+      }
+
+      for (var fi = 0; fi < frags.length; fi++) {
+        var f = frags[fi], cls = "";
+        if (f.type === TOK.STRING) cls = isKeyFragment(frags, fi) ? "tok-key" : "tok-string";
+        else if (f.type !== TOK.WS) cls = "tok-" + f.type;
+        host.appendChild(cls ? makeNode(cls, f.raw) : document.createTextNode(f.raw));
+      }
+    }
+
+    pre.textContent = "";      // 清空（也顺带把上一次的高亮节点摘掉）
+    pre.appendChild(host);
+  }
+
   /* 统一的「产出结果」收尾：写输出、更新 meta、出状态（有告警优先显示告警） */
   function deliver(out, label) {
-    els.output.value = out;
+    renderOutput(out);
     unmarkStale();
     syncOutputActions();
     els.outMeta.textContent = countLines(out) + " 行 · " + byteSize(out) + " 字节";
@@ -881,7 +1022,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   function doClear() {
     els.input.value = "";
-    els.output.value = "";
+    renderOutput("");
     els.inMeta.textContent = "—";
     els.outMeta.textContent = "—";
     sourceName = "";
@@ -1053,13 +1194,13 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   /* 输出区空的时候复制/下载没有意义 —— 直接置灰，比"点了没反应"清楚 */
   function syncOutputActions() {
-    var empty = !els.output.value;
+    var empty = !outputText();
     els.btnCopy.disabled = empty;
     els.btnDownload.disabled = empty;
   }
 
   function doCopy() {
-    var text = els.output.value;
+    var text = outputText();
     if (!text) { setStatus("", "·", "还没有结果可复制。"); return; }
     copyText(text).then(function (r) {
       if (r.ok) { clearStatus(); toast("已复制 " + byteSize(text) + " 字节到剪贴板"); }
@@ -1069,7 +1210,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   }
 
   function doDownload() {
-    var text = els.output.value;
+    var text = outputText();
     if (!text) { setStatus("", "·", "还没有结果可下载。"); return; }
     var r = downloadText(text, outputFilename());
     if (r.ok) { clearStatus(); toast("已下载 " + r.name + " · 在浏览器的下载目录里"); }
@@ -1119,6 +1260,22 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     markStale();
   });
 
+  /* 输出区是 <pre>，它的 Ctrl+A 默认是「全选整个页面」——会把按钮上的文字也一起选进去。
+     原来 textarea 自带「Ctrl+A 只选自己」，所以这里把选区限定回输出区，
+     保住提示里承诺的那条行为。缺 Range / Selection 的老环境直接放行默认行为 ——
+     宁可退回「全选整页」，也不要静默把 Ctrl+A 吞掉。 */
+  els.output.addEventListener("keydown", function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    if (e.key !== "a" && e.key !== "A") return;
+    var sel = (typeof window !== "undefined" && window.getSelection) ? window.getSelection() : null;
+    if (!sel || typeof document.createRange !== "function") return;
+    var r = document.createRange();
+    r.selectNodeContents(els.output);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    e.preventDefault();
+  });
+
   /* 把 UI 层里值得单测的动作挂到同一个命名空间上，供测试直接驱动。
      浏览器里的正常流程不依赖它们 —— 但这样测试才能覆盖
      「复制走哪条路 / 下载的文件名与回收 / 拖入能不能读进来」这些真实行为。 */
@@ -1127,6 +1284,9 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   API.downloadText = downloadText;
   API.readFileAsText = readFileAsText;
   API.sortKeysDeep = sortKeysDeep;
+  /* 高亮阈值：测试要贴着边界造输入，所以把它暴露出去，
+     免得测试里再抄一遍数字（抄一遍就多一个会漂移的常量）。 */
+  API.HL_MAX_BYTES = HL_MAX_BYTES;
 
   initTheme();
   syncMeta();

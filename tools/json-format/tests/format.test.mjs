@@ -266,7 +266,17 @@ ok("超大文件上限是 2MB", J.MAX_BYTES === 2 * 1024 * 1024);
 
 ok("页面有 input / output / status 三个必需元素",
    /id="input"/.test(HTML) && /id="output"/.test(HTML) && /id="status"/.test(HTML));
-ok("输出区是只读的（防止误以为能直接改结果）", /id="output"[^>]*readonly/.test(HTML));
+/* 输出区从 <textarea readonly> 换成了 <pre>（B2：高亮要能往里装元素）。
+   「结果不能被直接改」这个性质还在，但断言得换个写法 ——
+   <pre> 本身不是编辑控件，可**加个 contenteditable 就能编辑**，那才是真正要防的。 */
+ok("输出区是 <pre>（语法高亮要能往里装元素，textarea 装不了）", /<pre[^>]*id="output"/.test(HTML));
+ok("输出区不可编辑（不是 textarea、也没有 contenteditable）",
+   !/<textarea[^>]*id="output"/.test(HTML) && !/id="output"[^>]*contenteditable/.test(HTML));
+/* <pre> 不像 textarea 那样自带可聚焦性，而「Ctrl+A 只选输出区」得先能聚焦 */
+ok("输出区可聚焦（tabindex=0，配合 JS 里的 Ctrl+A 选区限定）",
+   /id="output"[^>]*tabindex="0"/.test(HTML));
+ok("输出区用 data-placeholder 承担了原来 textarea 的 placeholder",
+   /id="output"[^>]*data-placeholder/.test(HTML));
 ok("页面自报「零依赖 · 数据不出浏览器」", /零依赖/.test(HTML));
 
 /* 主题 key 必须带自己的前缀：web-toolbox 各工具同域部署，
@@ -357,6 +367,8 @@ const execLog = [];          // execCommand 收到的命令
 const blobLog = [];          // 造出来的 Blob（只记参数，够断言了）
 const urlLog = [];           // createObjectURL / revokeObjectURL 的往返
 const docEvents = {};        // document 上挂的监听器（dragover / drop 靠它驱动）
+const rangeLog = [];         // createRange 造出来的 Range（记下它被圈到了哪个节点）
+const selLog = { ranges: [] };   // Selection 的当前 Range 列表
 
 const FAKE_DOC = {
   documentElement: makeEl("html", "html"),
@@ -366,16 +378,32 @@ const FAKE_DOC = {
     return registry.get(id) || null;
   },
   createElement(tag) { const e = makeEl("(created)", tag); created.push(e); return e; },
+  /* 输出区高亮是用**真文本节点**拼的（不是 innerHTML），所以桩必须能造文本节点。
+     注意**不能返回裸字符串**：appendChild 里要写 c._parent，而本文件是 .mjs（严格模式），
+     给原始值设属性会直接 TypeError。返回一个只有 textContent 的对象即可 ——
+     textContent 的 getter 对「非字符串」取的就是 n.textContent。 */
+  createTextNode(t) { return { nodeType: 3, textContent: String(t) }; },
   addEventListener(type, fn) { (docEvents[type] || (docEvents[type] = [])).push(fn); },
   dispatch(type, ev) { (docEvents[type] || []).forEach((fn) => fn(ev || {})); },
   execCommand(cmd) { execLog.push(cmd); return FAKE_DOC.execOk; },
+  /* Ctrl+A 要把选区限定在输出区里 —— 没有 Range / Selection 就只能测到
+     「不抛异常」，测不到「圈的是输出区」。所以这两个也按记录型桩建出来。 */
+  createRange() {
+    const r = { node: null, selectNodeContents(n) { r.node = n; } };
+    rangeLog.push(r);
+    return r;
+  },
   /* execCommand 的桩**不能恒返回 true** —— 那会让「两条路都不通」这条分支
      永远走不到，等于那段降级提示从来没被测过。留一个开关来制造真实失败。 */
   execOk: true
 };
 const FAKE_WIN = {
   matchMedia: () => ({ matches: false }),
-  isSecureContext: true
+  isSecureContext: true,
+  getSelection: () => ({
+    removeAllRanges() { selLog.ranges = []; },
+    addRange(r) { selLog.ranges.push(r); }
+  })
 };
 /* navigator 做成可变的：测试要在「现代 API 可用 / 不可用」两种情况下各跑一遍 */
 const FAKE_NAV = {
@@ -479,7 +507,7 @@ el("indent").value = "2";
 el("input").value = '{"b":2,"a":{"c":[1,2]}}';
 el("btnFormat").dispatch("click");
 ok("点格式化 → 输出区拿到格式化结果",
-   /\n {2}"b"/.test(el("output").value), JSON.stringify(el("output").value));
+   /\n {2}"b"/.test(el("output").textContent), JSON.stringify(el("output").textContent));
 /* 用户明确不要「操作后状态栏变色」→ 成功反馈改成会自己退场的浮动提示。
    这一对断言把两个方向都钉住：提示要出来，状态栏要**不动**。 */
 ok("点格式化 → 浮出提示且说明结果规模",
@@ -508,10 +536,10 @@ ok("截断输入 → 状态条真的出现「没粘完」提示（不是只在�
    /没粘完/.test(statusText()), JSON.stringify(statusText()));
 
 /* --- 「只校验」不许动输出区 --- */
-const before = el("output").value;
+const before = el("output").textContent;
 el("input").value = '{"ok":1}';
 el("btnValidate").dispatch("click");
-ok("「只校验」不动输出区（用户可能正拿它核对）", el("output").value === before);
+ok("「只校验」不动输出区（用户可能正拿它核对）", el("output").textContent === before);
 ok("合法且无问题时校验 → 同样走浮动提示", toastShown() && /合法的 JSON/.test(toastText()),
    toastCls() + " | " + toastText());
 
@@ -538,12 +566,12 @@ ok("点主题按钮 → 偏好写进 localStorage 的 jf-theme", store.get("jf-t
 /* --- 输入改动 → 旧结果标「已过期」而不是被清空 --- */
 el("input").value = '{"x":1}';
 el("btnFormat").dispatch("click");
-const staleBefore = el("output").value;
+const staleBefore = el("output").textContent;
 el("input").value = '{"x":2}';
 el("input").dispatch("input");
 ok("改了输入 → 旧结果被标「已过期」而不是清空",
-   el("output").value === staleBefore && el("output").classList.contains("is-stale"),
-   "value 变了？" + (el("output").value !== staleBefore));
+   el("output").textContent === staleBefore && el("output").classList.contains("is-stale"),
+   "value 变了？" + (el("output").textContent !== staleBefore));
 ok("改了输入 → 输出区 meta 显示「已过期」", el("outMeta").textContent === "已过期",
    JSON.stringify(el("outMeta").textContent));
 
@@ -551,7 +579,7 @@ ok("改了输入 → 输出区 meta 显示「已过期」", el("outMeta").textCo
 let prevented = false;
 el("input").value = '{"k":1}';
 el("input").dispatch("keydown", { ctrlKey: true, key: "Enter", preventDefault: () => { prevented = true; } });
-ok("Ctrl + Enter → 触发格式化", /\n {2}"k"/.test(el("output").value), JSON.stringify(el("output").value));
+ok("Ctrl + Enter → 触发格式化", /\n {2}"k"/.test(el("output").textContent), JSON.stringify(el("output").textContent));
 ok("Ctrl + Enter → 拦掉了默认行为", prevented === true);
 
 /* --- Tab 在输入框里插缩进、不跳焦点 --- */
@@ -569,7 +597,7 @@ ok("Ctrl + Tab 不被拦截（留给浏览器切标签）", prevented3 === false
 /* --- 清空 --- */
 el("btnClear").dispatch("click");
 ok("点清空 → 输入输出都空、meta 归位到 —",
-   el("input").value === "" && el("output").value === "" && el("outMeta").textContent === "—");
+   el("input").value === "" && el("output").textContent === "" && el("outMeta").textContent === "—");
 
 /* ============================================================
  * [9] 递归排序键名（纯核心）
@@ -660,7 +688,7 @@ copyLog.length = 0; execLog.length = 0;
 FAKE_NAV.clipboard = realClipboard; FAKE_NAV.clipboard.fail = false;
 el("input").value = '{"b":1,"a":2}';
 el("btnFormat").dispatch("click");
-const outText = el("output").value;
+const outText = el("output").textContent;
 el("btnCopy").dispatch("click");
 await tick();
 ok("点复制 → 结果内容进了剪贴板", copyLog.length === 1 && copyLog[0] === outText);
@@ -711,7 +739,7 @@ blobLog.length = 0; urlLog.length = 0; created.length = 0;
 el("btnDownload").dispatch("click");
 const anchor = created.find((e) => e.tagName === "A");
 ok("点下载 → 造了一个 JSON 类型的 Blob", blobLog.length === 1 && /json/.test(blobLog[0].type));
-ok("Blob 内容就是结果区的内容", blobLog.length === 1 && blobLog[0].parts[0] === el("output").value);
+ok("Blob 内容就是结果区的内容", blobLog.length === 1 && blobLog[0].parts[0] === el("output").textContent);
 ok("用临时 <a download> 触发，没粘贴来源时文件名是 formatted.json",
    !!anchor && anchor.download === "formatted.json" && /^blob:/.test(anchor.href),
    anchor ? anchor.download : "(没造出 <a>)");
@@ -796,10 +824,10 @@ el("input").value = '{"b":1,"a":{"d":3,"c":[2,1]}}';
 el("indent").value = "2";
 el("btnSort").dispatch("click");
 ok("点「排序键名」→ 结果区是按键名排序后的文本",
-   el("output").value === JSON.stringify({ a: { c: [2, 1], d: 3 }, b: 1 }, null, 2),
-   JSON.stringify(el("output").value));
+   el("output").textContent === JSON.stringify({ a: { c: [2, 1], d: 3 }, b: 1 }, null, 2),
+   JSON.stringify(el("output").textContent));
 ok("排序结果里数组顺序没被动（[2,1] 还是 2 在前）",
-   /\[\n\s+2,\n\s+1\n\s+\]/.test(el("output").value), JSON.stringify(el("output").value));
+   /\[\n\s+2,\n\s+1\n\s+\]/.test(el("output").textContent), JSON.stringify(el("output").textContent));
 ok("排序**不动输入区**（用户随时能改回去）",
    el("input").value === '{"b":1,"a":{"d":3,"c":[2,1]}}');
 ok("排序后浮出提示且说明了做了什么",
@@ -965,7 +993,7 @@ ok("含重复键 → **不**弹会消失的提示（警告必须留住让人看�
 ok("警告文案说明了「只保留最后一个」", /只保留最后一个/.test(statusText()), JSON.stringify(statusText()));
 ok("警告文案点出了第一个重复键的行列", /第 1 行第 8 列/.test(statusText()), JSON.stringify(statusText()));
 ok("结果区照样正常产出（重复键只警告、不拦操作）",
-   /\n {2}"a": 2/.test(el("output").value), JSON.stringify(el("output").value));
+   /\n {2}"a": 2/.test(el("output").textContent), JSON.stringify(el("output").textContent));
 
 /* 无重复键时要回到「成功走浮层」的老样子，别把警告挂成常驻 */
 runSandboxTimers();
@@ -987,6 +1015,172 @@ el("input").value = '{"a":1,"a":2}';
 el("btnValidate").dispatch("click");
 ok("「只校验」也能发现重复键", /is-warn/.test(statusCls()) && /只保留最后一个/.test(statusText()),
    statusCls() + " | " + statusText());
+
+/* ============================================================
+ * [15] 输出区高亮与缩进参考线（B2）
+ * ------------------------------------------------------------
+ * 输出区从 <textarea> 换成了 <pre>：要高亮就得能往里装元素。
+ * 这一换带来两类风险，本段就是守它们的：
+ *   ① **文本会不会被渲染改坏** —— 复制与下载都读 textContent，
+ *      渲染层一旦吞掉/多加一个字符，用户拿到的就是错的结果；
+ *   ② **数据会不会变成结构** —— 高亮要往 DOM 里塞东西，
+ *      而字符串里可能带 `</span><img onerror=…>`。
+ *
+ * 断言一律走**节点树**（桩的 _nodes 就是为这个留的），不靠整串 HTML 搜关键词。
+ * ============================================================ */
+console.log("\n[15] 输出区高亮与缩进参考线");
+
+/* 桩把子节点放在 _nodes 上，这里封装两个遍历器；
+   文本节点是「只有 textContent 的对象」，用 typeof 过滤掉。 */
+function walkNodes(node, fn) {
+  fn(node);
+  (node._nodes || []).forEach((n) => { if (n && typeof n === "object") walkNodes(n, fn); });
+}
+function nodesWithClass(cls) {
+  const hits = [];
+  walkNodes(el("output"), (n) => { if (n._cls && n._cls.has(cls)) hits.push(n); });
+  return hits;
+}
+const classText = (cls) => nodesWithClass(cls).map((n) => n.textContent);
+const renderInto = (src, indent) => {
+  runSandboxTimers();
+  el("indent").value = indent || "2";
+  el("input").value = src;
+  el("btnFormat").dispatch("click");
+};
+
+/* ---------- ① 文本无损：渲染后拿回来的必须与源文本逐字节相同 ---------- */
+const srcNested = '{"b":2,"a":{"c":[1,2],"d":true,"e":null}}';
+const expectedNested = J.formatJson(srcNested, "2").value;
+renderInto(srcNested, "2");
+ok("★ 高亮渲染之后 textContent 与格式化结果**逐字节相同**（缩进不能丢）",
+   el("output").textContent === expectedNested,
+   JSON.stringify(el("output").textContent));
+
+/* 上面那条是「整体相等」，容易被"两边一起错"骗过；这里正面钉一句缩进确实在 */
+ok("★ 缩进空格没有在渲染时被吞掉（复制/下载读的就是它）",
+   /\n {2}"b": 2/.test(el("output").textContent), JSON.stringify(el("output").textContent));
+
+/* 4 空格与 Tab 各来一遍 —— 缩进单位不同，切段逻辑走的是不同分支 */
+const expected4 = J.formatJson(srcNested, "4").value;
+renderInto(srcNested, "4");
+ok("缩进 4 空格：渲染后仍逐字节相同", el("output").textContent === expected4);
+
+const expectedTab = J.formatJson(srcNested, "tab").value;
+renderInto(srcNested, "tab");
+ok("缩进 Tab：渲染后仍逐字节相同（\\t 也要原样保留）",
+   el("output").textContent === expectedTab && /\n\t"b": 2/.test(el("output").textContent));
+
+/* 压缩成一行时没有行首空白，参考线必须是 0 条（不能凭空画线） */
+runSandboxTimers();
+el("input").value = srcNested;
+el("btnMinify").dispatch("click");
+ok("压缩成一行 → 一条缩进参考线都不画", nodesWithClass("ind").length === 0);
+ok("压缩成一行 → 文本仍逐字节相同", el("output").textContent === J.minifyJson(srcNested).value);
+
+/* ---------- ② 高亮结构：类型对了才算高亮对了 ---------- */
+renderInto('{"n":123,"s":"hi","t":true,"f":false,"z":null}', "2");
+ok("数字套 tok-number", classText("tok-number").join(",") === "123", classText("tok-number").join(","));
+ok("字符串值套 tok-string", classText("tok-string").join(",") === '"hi"', classText("tok-string").join(","));
+ok("true / false / null 都套 tok-literal",
+   classText("tok-literal").join(",") === "true,false,null", classText("tok-literal").join(","));
+ok("括号与冒号套 tok-punct", classText("tok-punct").includes("{") && classText("tok-punct").includes(":"),
+   classText("tok-punct").join(""));
+
+/* ★ 键名与字符串值要分开着色 —— 判据只能是「后面紧跟冒号」。
+   这条同时排掉两类不是键的字符串：数组元素、以及对象里的值。 */
+renderInto('{"k":"v"}', "2");
+ok('★ 键 "k" 归 tok-key、值 "v" 归 tok-string（不是同一个色）',
+   classText("tok-key").join(",") === '"k"' && classText("tok-string").join(",") === '"v"',
+   "key=" + classText("tok-key").join(",") + " string=" + classText("tok-string").join(","));
+
+renderInto('{"a":["x","y"]}', "2");
+ok('★ 数组里的字符串是 tok-string 而不是 tok-key（数组元素不是键）',
+   classText("tok-key").join(",") === '"a"' && classText("tok-string").join(",") === '"x","y"',
+   "key=" + classText("tok-key").join(",") + " string=" + classText("tok-string").join(","));
+
+renderInto('{"a":1,"b":{"c":2}}', "2");
+ok("键名个数与嵌套层数一致（每层各算各的键）", classText("tok-key").join(",") === '"a","b","c"',
+   classText("tok-key").join(","));
+
+/* ---------- ③ 缩进参考线：条数由**层数**决定，与缩进单位无关 ---------- */
+const countInd = () => nodesWithClass("ind").length;
+renderInto('{"a":{"b":1}}', "2");
+const ind2 = countInd();
+renderInto('{"a":{"b":1}}', "4");
+const ind4 = countInd();
+/* 该输入格式化后每层的行首缩进分别是 0 / 1 / 2 / 1 / 0 层 → 合计 4 条 */
+ok("★ 缩进参考线条数 = 各行缩进层数之和（2 空格时 4 条）", ind2 === 4, String(ind2));
+ok("★ 换成 4 空格缩进，参考线条数不变（层数没变，只是每层更宽）", ind4 === ind2,
+   `2 空格 ${ind2} 条 vs 4 空格 ${ind4} 条`);
+
+renderInto('{"a":{"b":1}}', "tab");
+ok("Tab 缩进：一个 \\t 算一层，条数与 2 空格一致", countInd() === ind2, String(countInd()));
+
+/* 参考线要**包着原始空白**，不是空壳 —— 否则 textContent 又会丢缩进 */
+ok("★ 每条参考线的内容就是那段空白原文（不是空 span）",
+   nodesWithClass("ind").every((n) => n.textContent === "  " || n.textContent === "\t"),
+   JSON.stringify(nodesWithClass("ind").map((n) => n.textContent)));
+
+/* 顶层不缩进的行不该被画线：`{` 与 `}` 各自 0 条 */
+renderInto("{}", "2");
+ok("空对象只有顶层、不画参考线", countInd() === 0, String(countInd()));
+
+/* ---------- ④ XSS：数据不许变成结构 ---------- */
+const XSS = '{"k":"</span><img src=x onerror=alert(1)>"}';
+created.length = 0;      // 只看这一次渲染造了什么，别把前面几百个节点也算进来
+renderInto(XSS, "2");
+const madeTags = created.map((c) => c.tagName);
+ok("★ 字符串里的标签没有变成真元素（只造 span / 不造 img）",
+   !madeTags.includes("IMG"), madeTags.join(","));
+ok("★ 造出来的元素上没有 on* 属性（属性级断言，不靠搜关键词）",
+   created.every((c) => Object.keys(c._attrs || {}).every((k) => !/^on/i.test(k))),
+   JSON.stringify(created.map((c) => Object.keys(c._attrs || {}))));
+ok("★ 危险内容原样留在文本里（既没被吞、也没被解成标签）",
+   el("output").textContent.includes("<img src=x onerror=alert(1)>"),
+   JSON.stringify(el("output").textContent));
+
+/* ---------- ⑤ 超大输出退回纯文本 ---------- */
+/* 注意走 UI.* 而不是 J.*：高亮阈值是在 UI 层（`if (typeof document === "undefined") return;`
+   之后）才挂到 API 上的，只注入 DOM 的那个沙箱有它。J 是「不注入 document」的纯核心沙箱。 */
+ok("高亮阈值是 128 KB（暴露给测试，避免两边各写一份数字）", UI.HL_MAX_BYTES === 128 * 1024,
+   String(UI.HL_MAX_BYTES));
+runSandboxTimers();
+el("input").value = '{"big":"' + "x".repeat(UI.HL_MAX_BYTES + 200) + '"}';
+el("btnFormat").dispatch("click");
+ok("超过阈值 → 不建任何 token / 参考线节点（节点太多会卡）",
+   nodesWithClass("ind").length === 0 && nodesWithClass("tok-string").length === 0);
+ok("★ 超过阈值 → **文本照样完整**（退的只是着色，不是结果）",
+   el("output").textContent === J.formatJson(el("input").value, "2").value);
+
+/* ---------- ⑥ Ctrl+A 限定在输出区 ---------- */
+/* <pre> 的 Ctrl+A 默认全选整页（会把按钮文字也复制进去）。
+   原来 textarea 只选自己 —— 这条断言守的就是「别把这个行为弄丢」。 */
+rangeLog.length = 0; selLog.ranges = [];
+/* 变量名统一加 ca 前缀：本文件前面（Ctrl+Enter / Tab 那两段）已经用过 prevented 了 */
+const pressOnOutput = (ev) => {
+  let caPd = false;
+  el("output").dispatch("keydown", Object.assign({ preventDefault() { caPd = true; } }, ev));
+  return caPd;
+};
+let caPd = pressOnOutput({ key: "a", ctrlKey: true, altKey: false, shiftKey: false });
+ok("Ctrl+A → 选区被限定为输出区的内容", rangeLog.length === 1 && rangeLog[0].node === el("output"),
+   `rangeLog=${rangeLog.length}`);
+ok("Ctrl+A → 选区被真正换成了这一个 Range", selLog.ranges.length === 1 && selLog.ranges[0] === rangeLog[0]);
+ok("Ctrl+A → 拦下了浏览器默认的「全选整页」", caPd === true);
+
+rangeLog.length = 0;
+caPd = pressOnOutput({ key: "a", ctrlKey: false, altKey: false, shiftKey: false });
+ok("光按 a（没有 Ctrl）→ 不拦、不动选区", rangeLog.length === 0 && caPd === false);
+
+rangeLog.length = 0;
+caPd = pressOnOutput({ key: "a", ctrlKey: true, altKey: true, shiftKey: false });
+ok("Ctrl+Alt+A（macOS 上是特殊字符输入）→ 让路，不拦", rangeLog.length === 0 && caPd === false,
+   `rangeLog=${rangeLog.length} preventDefault=${caPd} handler数=${(el("output")._handlers.keydown || []).length}`);
+
+rangeLog.length = 0;
+caPd = pressOnOutput({ key: "c", ctrlKey: true, altKey: false, shiftKey: false });
+ok("Ctrl+C → 不拦（复制走的还是浏览器原生那条）", rangeLog.length === 0 && caPd === false);
 
 console.log("\n================================");
 console.log(`通过 ${pass} · 失败 ${fail}`);
