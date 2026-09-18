@@ -998,6 +998,43 @@ ok("decodeJsonString 解常见转义", J.decodeJsonString('"\\n\\t"') === "\n\t"
 ok("decodeJsonString 解 \\uXXXX", J.decodeJsonString('"\\u0061"') === "a");
 ok("decodeJsonString 对非法转义原样保留（不抛）", J.decodeJsonString('"\\q"') === "\\q");
 
+/* ---------- ★ 线性度守卫：这条守的是"它别再变回平方" ----------
+ * 背景（2026-09-18 实测）：这个函数曾经对**每一个键**都算一次位置，而算位置的办法是
+ * `text.slice(0, index).split("\n")`（把前缀整段复制+切分一遍）→ 整体 O(n²)。
+ * 1.9 MB 的输入要 **26.9 秒**，而且是"格式化 / 压缩 / 校验每次都会跑"的路径。
+ * 换成一个线性推进的行号游标后，同一份输入 **86.9 ms**（约 310×）。
+ *
+ * 为什么断言"比值"而不是"绝对毫秒"：绝对耗时会随机器快慢整体漂，CI 上必然假红。
+ * 这里造两份**每键同样字节数**的输入，规模差 3 倍 ——
+ * 线性应约 3 倍，平方会到 9 倍，卡在 6 倍上区分。取两次里较小的那次，把 GC / JIT 抖动压掉。
+ * （反向实验 R14 就是把游标换回旧的 slice+split 写法，这条必须变红 —— 已验证。） */
+const dupSized = (n) => {
+  const a = new Array(n);
+  for (let i = 0; i < n; i++) a[i] = '"k' + ("00000" + i).slice(-6) + '":0';   // 每键固定 12 字节
+  return "{" + a.join(",") + "}";
+};
+const dupTime = (src) => {
+  let best = Infinity;
+  for (let r = 0; r < 2; r++) {
+    const t = process.hrtime.bigint();
+    J.findDuplicateKeys(src);
+    best = Math.min(best, Number(process.hrtime.bigint() - t) / 1e6);
+  }
+  return best;
+};
+const smallDup = dupSized(20000);      // 约 240 KB
+const bigDup = dupSized(60000);        // 约 720 KB
+const tSmall = dupTime(smallDup), tBig = dupTime(bigDup);
+const dupRatio = tBig / Math.max(tSmall, 0.01);
+ok("★ findDuplicateKeys 是线性的（规模 ×3 → 耗时不得超 ×6；平方写法会到 ×9）",
+   dupRatio < 6,
+   `${tSmall.toFixed(1)} ms → ${tBig.toFixed(1)} ms，比值 ${dupRatio.toFixed(2)}`);
+ok("两份线性度样本的规模确实差 3 倍（否则上面的比值没有意义）",
+   Math.abs(bigDup.length / smallDup.length - 3) < 0.01,
+   `${smallDup.length} → ${bigDup.length}`);
+ok("大样本里没有重复键（比值测的是纯扫描，不是重复键收集）",
+   J.findDuplicateKeys(bigDup).length === 0);
+
 /* ============================================================
  * [14] 重复键在界面上是「警告」不是「错误」
  * ------------------------------------------------------------
