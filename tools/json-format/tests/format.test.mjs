@@ -307,7 +307,16 @@ function makeEl(id, tag) {
   const self = {
     id, tagName: String(tag || "div").toUpperCase(),
     value: "", title: "", disabled: false,
-    files: null, href: "", download: "", style: {},
+    files: null, href: "", download: "",
+    /* style 要做得**半忠实**：产品里用 setProperty 写 CSS 变量（自定义属性没法用
+       `style["--x"] = …` 赋值，浏览器不认）。桩只给一个空对象的话，
+       setProperty 就是 undefined → 直接 TypeError，而且是在渲染主路径上。
+       这里让「属性赋值」和 setProperty 落进同一个袋子，两种写法都读得到。 */
+    style: {
+      setProperty(k, v) { this[k] = String(v); },
+      getPropertyValue(k) { return k in this ? this[k] : ""; },
+      removeProperty(k) { delete this[k]; }
+    },
     _nodes: [], _handlers: {}, _attrs: {}, _cls: new Set(),
     _parent: null, _clicks: 0, _selected: false,
     addEventListener(type, fn) { (self._handlers[type] || (self._handlers[type] = [])).push(fn); },
@@ -1020,11 +1029,13 @@ ok("「只校验」也能发现重复键", /is-warn/.test(statusCls()) && /只�
  * [15] 输出区高亮与缩进参考线（B2）
  * ------------------------------------------------------------
  * 输出区从 <textarea> 换成了 <pre>：要高亮就得能往里装元素。
- * 这一换带来两类风险，本段就是守它们的：
+ * 这一换带来三类风险，本段就是守它们的：
  *   ① **文本会不会被渲染改坏** —— 复制与下载都读 textContent，
  *      渲染层一旦吞掉/多加一个字符，用户拿到的就是错的结果；
  *   ② **数据会不会变成结构** —— 高亮要往 DOM 里塞东西，
- *      而字符串里可能带 `</span><img onerror=…>`。
+ *      而字符串里可能带 `</span><img onerror=…>`；
+ *   ③ **大输出会不会冻住界面** —— 实测卡顿全在渲染（解析只要 0.2 ms），
+ *      所以既要节点瘦身，也要分帧渐进；⑦⑧ 两段守的就是"过程可交互"。
  *
  * 断言一律走**节点树**（桩的 _nodes 就是为这个留的），不靠整串 HTML 搜关键词。
  * ============================================================ */
@@ -1084,8 +1095,22 @@ ok("数字套 tok-number", classText("tok-number").join(",") === "123", classTex
 ok("字符串值套 tok-string", classText("tok-string").join(",") === '"hi"', classText("tok-string").join(","));
 ok("true / false / null 都套 tok-literal",
    classText("tok-literal").join(",") === "true,false,null", classText("tok-literal").join(","));
-ok("括号与冒号套 tok-punct", classText("tok-punct").includes("{") && classText("tok-punct").includes(":"),
-   classText("tok-punct").join(""));
+/* ★ 标点**故意不套元素**：颜色由 <pre> 的底色（--tok-punct）继承。
+   这是节点瘦身的主要来源（本样本 8751 个元素），所以要**同时**钉住两件事：
+   ① 元素确实不再造了；② 字符一个都没少。
+   只钉住 ①，就可能把标点连同文本一起删掉而没人发现。 */
+ok("★ 标点不套元素（退成文本节点，颜色走 <pre> 底色）",
+   nodesWithClass("tok-punct").length === 0, String(nodesWithClass("tok-punct").length));
+ok("★ 标点虽然不套元素，字符一个都没少（文本仍与格式化结果逐字节相同）",
+   ["{", "}", ":", ","].every((c) => el("output").textContent.includes(c)) &&
+   el("output").textContent === J.formatJson(el("input").value, "2").value,
+   JSON.stringify(el("output").textContent));
+
+/* 底色必须真的是标点色 —— 否则「标点压暗」这个观感就丢了（它只是不再单独套元素）。 */
+const outRule = (HTML.match(/#output\s*\{([\s\S]*?)\}/) || ["", ""])[1];
+ok("★ <pre> 的底色就是标点色（观感不变，只是换了承载方式）",
+   /color:\s*var\(--tok-punct\)/.test(outRule) && !/\.tok-punct\s*\{/.test(HTML),
+   outRule.replace(/\s+/g, " ").slice(0, 120));
 
 /* ★ 键名与字符串值要分开着色 —— 判据只能是「后面紧跟冒号」。
    这条同时排掉两类不是键的字符串：数组元素、以及对象里的值。 */
@@ -1103,24 +1128,50 @@ renderInto('{"a":1,"b":{"c":2}}', "2");
 ok("键名个数与嵌套层数一致（每层各算各的键）", classText("tok-key").join(",") === '"a","b","c"',
    classText("tok-key").join(","));
 
-/* ---------- ③ 缩进参考线：条数由**层数**决定，与缩进单位无关 ---------- */
+/* ---------- ③ 缩进参考线：**一行一个** span，多层竖线由 CSS 重复渐变一次画完 ----------
+   该输入格式化后是 5 行，其中 3 行带行首缩进 → 3 条。
+   ★ 断言从「层数之和」改成「有缩进的行数」是节点瘦身带来的**有意变化**
+   （同一行的多层竖线现在由一个 span 的重复渐变画出来），不是把断言改松：
+   层数信息改由 --ind-w 承载，下面单独钉住它。 */
 const countInd = () => nodesWithClass("ind").length;
 renderInto('{"a":{"b":1}}', "2");
 const ind2 = countInd();
+ok("★ 缩进参考线 = 有缩进的行数（2 空格时 3 条）", ind2 === 3, String(ind2));
+/* ★ 层数信息现在由 CSS 变量承载：一行里有几层 = span 宽度 / --ind-w。
+   变量没写上（或没随缩进档改），竖线就会按错误周期画 → 参考线**整体错位**。
+   这是本段唯一还能测到"层数"的断言，所以在两档缩进下各钉一次。 */
+ok("★ 缩进档 2 空格 → <pre> 上的 --ind-w 是 2ch",
+   el("output").style.getPropertyValue("--ind-w") === "2ch",
+   JSON.stringify(el("output").style.getPropertyValue("--ind-w")));
+
 renderInto('{"a":{"b":1}}', "4");
 const ind4 = countInd();
-/* 该输入格式化后每层的行首缩进分别是 0 / 1 / 2 / 1 / 0 层 → 合计 4 条 */
-ok("★ 缩进参考线条数 = 各行缩进层数之和（2 空格时 4 条）", ind2 === 4, String(ind2));
-ok("★ 换成 4 空格缩进，参考线条数不变（层数没变，只是每层更宽）", ind4 === ind2,
+ok("★ 换成 4 空格缩进，参考线条数不变（一行一条，与每层多宽无关）", ind4 === ind2,
    `2 空格 ${ind2} 条 vs 4 空格 ${ind4} 条`);
+ok("★ 缩进档 4 空格 → --ind-w 跟着变成 4ch（不跟就会整体错位）",
+   el("output").style.getPropertyValue("--ind-w") === "4ch",
+   JSON.stringify(el("output").style.getPropertyValue("--ind-w")));
 
 renderInto('{"a":{"b":1}}', "tab");
-ok("Tab 缩进：一个 \\t 算一层，条数与 2 空格一致", countInd() === ind2, String(countInd()));
+ok("Tab 缩进：条数与 2 空格一致（一层是几个 \\t 不影响条数）", countInd() === ind2, String(countInd()));
+ok("★ Tab 缩进 → --ind-w 用 tab-size 那一档（CSS 里 tab-size: 2）",
+   el("output").style.getPropertyValue("--ind-w") === "2ch",
+   JSON.stringify(el("output").style.getPropertyValue("--ind-w")));
 
-/* 参考线要**包着原始空白**，不是空壳 —— 否则 textContent 又会丢缩进 */
-ok("★ 每条参考线的内容就是那段空白原文（不是空 span）",
-   nodesWithClass("ind").every((n) => n.textContent === "  " || n.textContent === "\t"),
+/* 参考线要**包着原始空白**，不是空壳 —— 否则 textContent 又会丢缩进。
+   现在一条 span 里可能装着好几层空白，所以判据是「非空 + 全是空白字符」，
+   不再写死成两个字符（写死会让「多层合并」这条改动直接测不过，而它本身是对的）。 */
+ok("★ 每条参考线里装的都是**非空的空白原文**（不是空 span）",
+   nodesWithClass("ind").every((n) => n.textContent.length > 0 && /^[ \t]+$/.test(n.textContent)),
    JSON.stringify(nodesWithClass("ind").map((n) => n.textContent)));
+
+/* 参考线改用背景渐变画 —— 这条守着「别再改回 border / box-shadow」：
+   border 会把元素撑宽，深层缩进累积起来整段文本往右漂；
+   一层一个带阴影的 span 则是节点爆炸的来源。两条都是踩过的坑。 */
+const indRule = (HTML.match(/\.ind\s*\{([\s\S]*?)\}/) || ["", ""])[1];
+ok("★ .ind 用重复渐变画竖线（没有 border / box-shadow，不占布局宽度）",
+   /repeating-linear-gradient/.test(indRule) && /var\(--ind-w\)/.test(indRule) &&
+   !/border/.test(indRule) && !/box-shadow/.test(indRule), indRule.replace(/\s+/g, " "));
 
 /* 顶层不缩进的行不该被画线：`{` 与 `}` 各自 0 条 */
 renderInto("{}", "2");
@@ -1143,15 +1194,39 @@ ok("★ 危险内容原样留在文本里（既没被吞、也没被解成标签
 /* ---------- ⑤ 超大输出退回纯文本 ---------- */
 /* 注意走 UI.* 而不是 J.*：高亮阈值是在 UI 层（`if (typeof document === "undefined") return;`
    之后）才挂到 API 上的，只注入 DOM 的那个沙箱有它。J 是「不注入 document」的纯核心沙箱。 */
-ok("高亮阈值是 128 KB（暴露给测试，避免两边各写一份数字）", UI.HL_MAX_BYTES === 128 * 1024,
+/* 判据分两级：字节数只是**便宜的粗筛**，真正决定退不退的是**数出来的元素数**。
+   为什么必须两级：实测 95 KB / 5252 行会造出 27001 个元素，而旧的 128 KB 阈值
+   要 129 KB 才触发 —— 那道阈值恰好挡不住最痛的那一段（76 KB ~ 128 KB）。 */
+ok("字节数粗筛是 512 KB（暴露给测试，避免两边各写一份数字）", UI.HL_MAX_BYTES === 512 * 1024,
    String(UI.HL_MAX_BYTES));
+ok("元素数上限 / 同步上限 / 分帧参数都暴露出来（测试不抄数字）",
+   UI.HL_MAX_ELEMENTS === 60000 && UI.HL_SYNC_ELEMENTS === 8000 &&
+   UI.HL_CHUNK_LINES === 300 && UI.HL_FIRST_LINES === 200,
+   [UI.HL_MAX_ELEMENTS, UI.HL_SYNC_ELEMENTS, UI.HL_CHUNK_LINES, UI.HL_FIRST_LINES].join("/"));
+
 runSandboxTimers();
 el("input").value = '{"big":"' + "x".repeat(UI.HL_MAX_BYTES + 200) + '"}';
 el("btnFormat").dispatch("click");
-ok("超过阈值 → 不建任何 token / 参考线节点（节点太多会卡）",
+ok("字节数超过粗筛 → 不建任何 token / 参考线节点（节点太多会卡）",
    nodesWithClass("ind").length === 0 && nodesWithClass("tok-string").length === 0);
-ok("★ 超过阈值 → **文本照样完整**（退的只是着色，不是结果）",
+ok("★ 超过粗筛 → **文本照样完整**（退的只是着色，不是结果）",
    el("output").textContent === J.formatJson(el("input").value, "2").value);
+
+/* ★ 只测字节那条路，等于没测这个阈值 —— 最痛的那一段恰恰是「字节没超、元素超了」。
+   所以这里专门造一份**字节在粗筛之下、元素在上限之上**的输入把它拦下来。 */
+(() => {
+  const many = JSON.stringify(Array.from({ length: 9000 }, (_, i) => ({ i, s: "v" + i })), null, 2);
+  const prettyMany = J.formatJson(many, "2").value;
+  const elems = UI.countElements(UI.splitLines(J.tokenize(prettyMany)));
+  runSandboxTimers();
+  el("input").value = many;
+  el("btnFormat").dispatch("click");
+  ok("★ 字节没超粗筛、但**元素超上限** → 照样退纯文本（元素数才是真实成本判据）",
+     elems > UI.HL_MAX_ELEMENTS && J.byteSize(prettyMany) < UI.HL_MAX_BYTES &&
+     el("output").textContent === prettyMany &&
+     nodesWithClass("ind").length === 0 && nodesWithClass("tok-number").length === 0,
+     `元素 ${elems}（上限 ${UI.HL_MAX_ELEMENTS}）· 字节 ${J.byteSize(prettyMany)}（粗筛 ${UI.HL_MAX_BYTES}）`);
+})();
 
 /* ---------- ⑥ Ctrl+A 限定在输出区 ---------- */
 /* <pre> 的 Ctrl+A 默认全选整页（会把按钮文字也复制进去）。
@@ -1181,6 +1256,88 @@ ok("Ctrl+Alt+A（macOS 上是特殊字符输入）→ 让路，不拦", rangeLog
 rangeLog.length = 0;
 caPd = pressOnOutput({ key: "c", ctrlKey: true, altKey: false, shiftKey: false });
 ok("Ctrl+C → 不拦（复制走的还是浏览器原生那条）", rangeLog.length === 0 && caPd === false);
+
+/* ★ 先钉住边界：中等输入必须**留在同步那条路**上。
+   否则哪天「顺手把同步上限调小」，本来毫秒级完成的输入也开始闪一下进度条 ——
+   那是**体验退步**，而且不会有任何断言发现它。 */
+(() => {
+  const midSrc = JSON.stringify(Array.from({ length: 300 }, (_, i) => ({ i, s: "v" + i })));
+  const midPretty = J.formatJson(midSrc, "2").value;
+  const midElems = UI.countElements(UI.splitLines(J.tokenize(midPretty)));
+  runSandboxTimers();
+  el("input").value = midSrc;
+  el("btnFormat").dispatch("click");
+  ok("★ 中等输入（元素数在同步上限以内）→ 一次画完，不出现进度条、不走异步",
+     midElems <= UI.HL_SYNC_ELEMENTS && midElems > 0 &&
+     el("hlTrack").hidden === true && el("outBusy").hidden === true &&
+     UI.isRendering() === false && el("output").textContent === midPretty,
+     `元素 ${midElems}（同步上限 ${UI.HL_SYNC_ELEMENTS}）`);
+})();
+
+/* ---------- ⑦ 分帧渐进渲染：大输出不再"整体冻结" ----------
+   实测说得很清楚：JSON.parse 0.2 ms、tokenize 4 ms —— 卡顿**全在渲染**。
+   所以这里要钉住的不是"结果对不对"（前面已经钉过），而是**过程可交互**：
+   ① 立刻有内容（不是白屏干等）；② 这一拍确实**没画完**（证明是渐进不是一次画完）；
+   ③ 期间复制/下载被禁用（半截的 textContent 不能流出去）；④ 抽干后逐字节还原。
+   ★「没画完」这条是关键：只断言"最后是对的不够" —— 一次同步画完也满足它。 */
+const bigSrc = JSON.stringify(Array.from({ length: 3000 }, (_, i) => ({ i, s: "v" + i })));
+const bigPretty = J.formatJson(bigSrc, "2").value;
+const bigElems = UI.countElements(UI.splitLines(J.tokenize(bigPretty)));
+ok("前置：这份输入确实超过同步上限（否则下面测的还是同步那条路）",
+   bigElems > UI.HL_SYNC_ELEMENTS && bigElems <= UI.HL_MAX_ELEMENTS,
+   `元素 ${bigElems}（同步上限 ${UI.HL_SYNC_ELEMENTS}）`);
+
+runSandboxTimers();
+el("indent").value = "2";
+el("input").value = bigSrc;
+el("btnFormat").dispatch("click");
+
+/* 这一拍：主线程还没让出去，只同步画了开头一小段 */
+ok("★ 分帧开始后**立刻**就有内容（不是白屏干等）",
+   el("output").textContent.length > 0, String(el("output").textContent.length));
+ok("★ 这一拍确实**没画完**：文本比最终结果短（证明是渐进画，不是一次画完）",
+   el("output").textContent.length < bigPretty.length,
+   `现在 ${el("output").textContent.length} / 最终 ${bigPretty.length}`);
+ok("★ 进度条与「正在着色…」这时可见",
+   el("hlTrack").hidden === false && el("outBusy").hidden === false);
+ok("★ 进度条走的是真实进度（0 < 宽度 ≤ 100%）",
+   (() => { const w = parseFloat(el("hlFill").style.width); return w > 0 && w <= 100; })(),
+   el("hlFill").style.width);
+ok("★ 渲染期间复制/下载被禁用（这时 textContent 是半截的，点了会静默拿到错数据）",
+   el("btnCopy").disabled === true && el("btnDownload").disabled === true);
+ok("★ 渲染期间 isRendering() = true（界面之外也能问出「还在画」）",
+   UI.isRendering() === true);
+
+let hlFrames = 0;
+while (sandboxTimers.size && hlFrames < 4000) { runSandboxTimers(); hlFrames++; }
+ok("★ 抽干之后文本与格式化结果**逐字节相同**（渐进不能把内容画坏）",
+   el("output").textContent === bigPretty,
+   `长度 ${el("output").textContent.length} vs ${bigPretty.length}`);
+ok("★ 抽干用的帧数与「总行数 / 每块行数」对得上（不是靠一次巨块糊过去的）",
+   hlFrames >= 2 && Math.ceil((J.countLines(bigPretty) - UI.HL_FIRST_LINES) / UI.HL_CHUNK_LINES) <= hlFrames,
+   `帧数 ${hlFrames}`);
+ok("★ 画完 → 进度条与「正在着色…」自动收起（不做完成提示，结果本身就是提示）",
+   el("hlTrack").hidden === true && el("outBusy").hidden === true);
+ok("★ 画完 → isRendering() 归 false，复制/下载恢复可用",
+   UI.isRendering() === false && el("btnCopy").disabled === false && el("btnDownload").disabled === false);
+/* 分帧只是把"什么时候画"切开，不能改变"画成什么样" */
+const indExpect = bigPretty.split("\n").filter((l) => /^[ \t]/.test(l)).length;
+ok("★ 分帧画完的 DOM 与一次性画的一致（参考线条数 = 有缩进的行数）",
+   nodesWithClass("ind").length === indExpect && nodesWithClass("tok-string").length > 0,
+   `参考线 ${nodesWithClass("ind").length} / 期望 ${indExpect}`);
+
+/* ---------- ⑧ 中途改主意：新渲染要能顶掉旧的分帧任务 ---------- */
+el("input").value = bigSrc;
+el("btnFormat").dispatch("click");            // 开始分帧，还没画完
+el("input").value = '{"k":1}';
+el("btnFormat").dispatch("click");            // 立刻换成小输入
+let hlFrames2 = 0;
+while (sandboxTimers.size && hlFrames2 < 4000) { runSandboxTimers(); hlFrames2++; }
+ok("★ 被顶掉的分帧任务不会再改输出（否则旧结果会把新结果覆盖掉）",
+   el("output").textContent === J.formatJson('{"k":1}', "2").value,
+   JSON.stringify(el("output").textContent));
+ok("★ 顶掉之后进度条是收起的、isRendering() 归 false（不会卡在「正在着色」）",
+   el("hlTrack").hidden === true && UI.isRendering() === false);
 
 console.log("\n================================");
 console.log(`通过 ${pass} · 失败 ${fail}`);
