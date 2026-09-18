@@ -277,7 +277,14 @@ ok("输出区可聚焦（tabindex=0，配合 JS 里的 Ctrl+A 选区限定）",
    /id="output"[^>]*tabindex="0"/.test(HTML));
 ok("输出区用 data-placeholder 承担了原来 textarea 的 placeholder",
    /id="output"[^>]*data-placeholder/.test(HTML));
-ok("页面自报「零依赖 · 数据不出浏览器」", /零依赖/.test(HTML));
+/* 这句定位原本以 <small> 挂在 brand 上，后来按需从界面撤掉（顶栏更干净）。
+   定位声明本身保留在 <meta name="description">，所以断言改为指向它。
+   ⚠️ 原来的写法是 `/零依赖/.test(HTML)` —— 那是**假守卫**：整份 HTML 里 meta 也含这三个字，
+   界面上那句删掉它照样绿，而名字却写着「页面自报」。断言必须打在**具体的载体**上。 */
+ok("定位声明保留在 <meta name=\"description\">（界面上的 brand 副标题已按需撤掉）",
+   /<meta\s+name="description"[^>]*零依赖/.test(HTML));
+ok("brand 副标题已撤掉（顶栏只留工具名，不再有 <small>）",
+   !/<div class="brand">[\s\S]*?<small/.test(HTML));
 
 /* 主题 key 必须带自己的前缀：web-toolbox 各工具同域部署，
    共用 localStorage，不带前缀会互相覆盖（code-workspace 用 cw-）。 */
