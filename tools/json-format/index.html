@@ -733,10 +733,31 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     return out;
   }
 
-  /* 行、列都从 1 起（与 findLongIntegers 的约定一致）*/
-  function positionAt(text, index) {
-    var before = text.slice(0, index);
-    return { line: before.split("\n").length, column: index - before.lastIndexOf("\n") };
+  /* ---------- 行号游标 ----------
+     行、列都从 1 起（与 findLongIntegers 的约定一致）。
+     ★ 为什么不"每次现算"：最早的写法是
+         var before = text.slice(0, index);
+         return { line: before.split("\n").length, column: index - before.lastIndexOf("\n") };
+     单次调用是 O(index)，**偶尔问一次完全没问题**；但重复键检测是**逐 token** 问位置的，
+     于是整体变成「键数 × 文本长度」= **O(n²)** —— 实测 1.9 MB 的输入要 26.9 秒
+     （每问一次就把前缀整段复制 + 切分，约 2 万次 × 约 1 MB 的分配，GC 也跟着炸）。
+     现在改成**有状态游标**：调用方保证问的位置**单调不减**时，整趟只从 0 扫到最后一个位置，
+     总代价 O(文本长度)（tokenize 本来就是线性的，于是整体回到线性）。
+     位置回退（理论上不该发生）时退回无状态写法：宁可慢一次，也绝不给出错的行列号。
+     语义与旧写法逐字对齐：行 = 1 + 前缀里 "\n" 的个数；列 = 位置 − 本行起点 + 1
+     （旧写法在"前面没有换行"时 lastIndexOf 返回 -1，算出来同样 +1）。 */
+  function makeLineCursor(text) {
+    var line = 1, lineStart = 0, pos = 0;
+    return function (index) {
+      if (index < pos) {
+        var before = text.slice(0, index);
+        return { line: before.split("\n").length, column: index - before.lastIndexOf("\n") };
+      }
+      for (; pos < index; pos++) {
+        if (text.charCodeAt(pos) === 10) { line++; lineStart = pos + 1; }
+      }
+      return { line: line, column: index - lineStart + 1 };
+    };
   }
 
   /* 把字符串字面量解义成它代表的键名。
@@ -766,7 +787,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     /* 每个 { 或 [ 压一帧「本层已见键」；顶层（栈空）的字符串不算键。
        seen 必须用 Object.create(null)：否则 key 为 "__proto__" 时会命中原型 setter，
        重复键**静默漏报** —— 与 sortKeysDeep 踩过的是同一个坑。 */
-    var toks = tokenize(src), dups = [], stack = [];
+    var toks = tokenize(src), dups = [], stack = [], at = makeLineCursor(src);
 
     for (var i = 0; i < toks.length; i++) {
       var t = toks[i];
@@ -793,11 +814,13 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
       if (!nx || nx.type !== TOK.PUNCT || nx.raw !== ":") continue;
 
       var key = decodeJsonString(t.raw);
+      /* 位置只问一次、之后复用。游标按"问到哪"推进，同一位置问两次也算得对，
+         但没必要白跑一遍循环。（原来这里在两个分支里各调一次 positionAt。） */
+      var pos0 = at(t.start);
       if (Object.prototype.hasOwnProperty.call(seen, key)) {
-        var at = positionAt(src, t.start);
-        dups.push({ key: key, line: at.line, column: at.column, first: seen[key] });
+        dups.push({ key: key, line: pos0.line, column: pos0.column, first: seen[key] });
       } else {
-        seen[key] = positionAt(src, t.start);
+        seen[key] = pos0;
       }
     }
     return dups;

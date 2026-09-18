@@ -136,7 +136,7 @@ node tools/_build/check-portal-sync.mjs    # 退出码 0 = 一致，1 = 有漂�
 |------|------|
 | `check-portal-sync.mjs` | 10 · 门户一致性 |
 | `code-workspace/tests/run-all.mjs` | 253 · 悬空引用 / 逻辑 / 接线 / 文档防过期 |
-| `json-format/tests/format.test.mjs` | 313 · 形态契约 / 报错定位 / 词法器 / 重复键 / 高亮与参考线 / 渐进渲染 / 主题外观契约 / 自动换行开关 / UI 冒烟 |
+| `json-format/tests/format.test.mjs` | 316 · 形态契约 / 报错定位 / 词法器 / 重复键（含线性度） / 高亮与参考线 / 渐进渲染 / 主题外观契约 / 自动换行开关 / UI 冒烟 |
 | `build-single.mjs` | 传统单页内联产物 |
 | `build-snapshot.mjs` | SPA 快照（codebase-context / code-workspace / ppt-player） |
 | `verify-snapshot.mjs` | 19 · 快照产物在 vm 里真跑一遍 |
