@@ -247,6 +247,22 @@ html[data-wrap="on"] #output {
 .busy { margin-left: 8px; font-size: 12px; color: var(--text-3); }
 .busy[hidden] { display: none; }
 
+/* ---------- 「界面只画了开头」的说明条 ----------
+   占的是文档流（在输出区上方一条），不是浮层 —— 它说的是「你现在看到的东西不完整」，
+   这种信息不能叠在内容上、更不能自己消失。
+   和状态栏的分工：状态栏说的是**这次操作**怎么样（成功/警告/报错），
+   这里说的是**这块结果区当前显示了什么**，属于常驻事实，所以留在结果区自己头上。 */
+.view-note {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+  padding: 7px 14px; font-size: 12px; line-height: 1.5;
+  color: var(--text-2); background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.view-note[hidden] { display: none; }
+.view-note .vn-text { flex: 1 1 auto; }
+.view-note .vn-num { color: var(--text); font-weight: 600; font-family: var(--font-mono); }
+.btn-mini { height: 24px; padding: 0 9px; font-size: 12px; flex: 0 0 auto; }
+
 /* token 配色。class 名由 renderOutput() 从 TOK 枚举拼出来（tok-key / tok-string / …），
    两处必须对得上：改 TOK 的值就要同步改这里的类名。
    **故意没有 .tok-punct** —— 标点与空白退成文本节点、走 <pre> 的底色（见上面 #output 的 color），
@@ -302,6 +318,9 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 }
 .btn-primary:hover { background: var(--accent-strong); color: #fff; }
 [data-theme="dark"] .btn-primary { color: oklch(20% 0.02 268); }
+/* ⚠️ 必须写在这两条 hover 之后：选择器特异性与 .btn:hover 相同（都是 0-2-0），
+   平局时**靠源码顺序**决定胜负 —— 写在前面的话置灰按钮照样会响应 hover。 */
+.btn:disabled, .btn:disabled:hover { opacity: .38; cursor: default; background: var(--surface); color: var(--text-2); }
 
 /* ---------- 状态条：只管「当前输入是什么状态」 ----------
    常驻、带语义色。**成功反馈不在这里** —— 那类是一次性动作的结果，走下方的 toast。
@@ -428,6 +447,10 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
       </span>
     </div>
     <div class="hl-track" id="hlTrack" hidden><div class="hl-fill" id="hlFill"></div></div>
+    <div class="view-note" id="viewNote" hidden>
+      <span class="vn-text" id="viewNoteText"></span>
+      <button class="btn btn-mini" id="btnShowAll" type="button"></button>
+    </div>
     <pre id="output" tabindex="0" spellcheck="false"
       data-placeholder="结果会出现在这里（Ctrl + A 全选，或用右上角复制按钮）。"></pre>
   </section>
@@ -874,7 +897,8 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     btnWrap: $("btnWrap"),
     btnCopy: $("btnCopy"), btnDownload: $("btnDownload"),
     btnOpenFile: $("btnOpenFile"), fileInput: $("fileInput"), toast: $("toast"),
-    hlTrack: $("hlTrack"), hlFill: $("hlFill"), outBusy: $("outBusy")
+    hlTrack: $("hlTrack"), hlFill: $("hlFill"), outBusy: $("outBusy"),
+    viewNote: $("viewNote"), viewNoteText: $("viewNoteText"), btnShowAll: $("btnShowAll")
   };
 
   /* 局部存储一律 try/catch：file:// 下或隐私模式里 localStorage 可能直接抛，
@@ -1003,9 +1027,15 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     els.output.classList.remove("is-stale");
   }
 
-  function syncMeta() {
+  /* lines / bytes 可以预先算好传进来。
+     从文件读入那条路上，这两个数**本来就已经算过了**，再让 syncMeta 自己
+     去 countLines/byteSize 一遍等于白跑（对 2 MB 的输入，byteSize 每次都要
+     新分配一个 2 MB 的 Uint8Array，countLines 每次都要切出一个十几万元素的数组）。 */
+  function syncMeta(lines, bytes) {
     var t = els.input.value;
-    els.inMeta.textContent = t ? countLines(t) + " 行 · " + byteSize(t) + " 字节" : "—";
+    if (!t) { els.inMeta.textContent = "—"; return; }
+    els.inMeta.textContent = (lines == null ? countLines(t) : lines) + " 行 · " +
+      (bytes == null ? byteSize(t) : bytes) + " 字节";
   }
 
   /* 位置前缀：能拿到位置就给「第 N 行第 M 列」，拿不到就只说错误本身 */
@@ -1079,8 +1109,29 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   var HL_FIRST_LINES = 200;        // 分帧：先同步画这么多行，让用户立刻看到开头
   var HL_CHUNK_LINES = 300;        // 分帧：每块最多多少行（与时间预算先到为准）
   var HL_CHUNK_MS = 8;             // 分帧：每块最多占用主线程多少毫秒
+  /* ── 视口化上限 ────────────────────────────────────────────────────────
+     排版代价的驱动量是**行数**，而且到了大结果那一档它是唯一驱动量。
+     真机实测（把结果铺进 <pre> 并强制同步布局，完整结果 2.6 MB / 127,677 行）：
+         500 行 12.6 ms · 1000 行 12.1 · 2000 行 21.3 · 3000 行 33.2
+        ·5000 行 46.1 · 10000 行 90.8 · 20000 行 219 · 127677 行 **1378 ms**
+     字节数在这里几乎不起作用：同一份 2.6 MB 只画 3000 行也只要 33 ms。
+     （对照：给同一个 <pre> 挂 content-visibility:auto 只从 1378 降到 799 ms —— 救不了，
+       因为它是**一个文本节点**，浏览器没法只跳过其中屏外的部分。）
+     所以超过上限就只画开头一段，其余靠说明条上的「显示全部」按需展开。
+     ★ 上限定在 10000 行（≈91 ms）：再往上就开始有可感的停顿，
+       再往下就会把 B3 的分帧渐进区间（约 5700 行以上）整个盖掉 —— 那套机制会变成死代码。 */
+  var HL_VIEW_LINES = 10000;
 
-  function outputText() { return els.output.textContent; }
+  /* ── 结果的真相来源是**这个变量**，不是 DOM ─────────────────────────────
+     以前 outputText() 读的是 els.output.textContent（B2 把输出区从 <textarea>
+     换成 <pre> 之后唯一能读的地方）。一旦结果区开始**只画一部分**，
+     "DOM 就是结果" 这个前提就不成立了 —— 复制/下载会静默拿到被截断的内容。
+     所以把真相挪到变量上，DOM 降级成**视图**。
+     顺带解掉 B3 的一个包袱：那时分帧渲染期间必须禁用复制/下载（怕流出半截 textContent），
+     现在复制读的是变量、随时完整，那道禁用就不需要了。 */
+  var fullResult = "";
+
+  function outputText() { return fullResult; }
 
   function makeNode(cls, text) {
     var s = document.createElement("span");
@@ -1172,7 +1223,10 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     ? function (fn) { scheduler.postTask(fn, { priority: "background" }); }
     : function (fn) { setTimeout(fn, 0); };
 
-  var rendering = false;   // 分帧正在画：此时复制/下载要禁用（textContent 还是半截的）
+  /* 分帧正在画。**不再用来禁用复制/下载** —— 那两件事读的是 fullResult，
+     渲染画到一半也照样是完整内容（B3 当时禁用，是因为那时 DOM 就是唯一数据源）。
+     现在它只负责禁「显示全部」：画到一半再点一次没有意义。 */
+  var rendering = false;
   var renderSeq = 0;       // 每次渲染自增；老的分帧任务发现序号变了就自己收手
 
   function setProgress(ratio) {
@@ -1222,20 +1276,62 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     yieldToMain(step);
   }
 
-  function renderOutput(text) {
+  /* 第 n 个 "\n" 的下标；换行不足 n 个就返回 -1。
+     用 indexOf 逐步推进，而不是 split 完再取前几个 —— split 会把整份结果
+     切成十几万个字符串（大结果下光这一步就要十几毫秒），而这里只关心开头那一段。 */
+  function nthNewline(text, n) {
+    var idx = -1;
+    for (var i = 0; i < n; i++) {
+      idx = text.indexOf("\n", idx + 1);
+      if (idx < 0) return -1;
+    }
+    return idx;
+  }
+
+  /* 说明条的文案与开关。total 为 null 表示「这次画全了」，收起说明条。 */
+  function setViewNote(total) {
+    if (!els.viewNote) return;
+    if (total == null) { els.viewNote.hidden = true; return; }
+    var t = els.viewNoteText;
+    t.textContent = "结果共 ";
+    t.appendChild(makeNode("vn-num", total + " 行"));
+    t.appendChild(document.createTextNode("，界面只画了前 "));
+    t.appendChild(makeNode("vn-num", HL_VIEW_LINES + " 行"));
+    t.appendChild(document.createTextNode("。复制与下载拿到的仍是完整结果。"));
+    els.btnShowAll.textContent = "显示全部 " + total + " 行";
+    els.viewNote.hidden = false;
+  }
+
+  function renderOutput(text, forceAll) {
     var my = ++renderSeq;                  // 抢过渲染权（老的分帧任务下一拍会自己收手）
     var pre = els.output;
     /* 一层缩进占几列：写成 <pre> 上的 CSS 变量，让参考线渐变跟着走。
        tab 的宽度由 tab-size 定（CSS 里是 2），所以 tab 缩进落在同一条规则上。 */
     var unit = els.indent.value === "4" ? 4 : 2;
 
+    fullResult = text || "";               // ★ 结果的真相先落到变量上，再谈怎么画
     setBusy(false);
-    if (!text) { pre.textContent = ""; return; }
-    if (byteSize(text) > HL_MAX_BYTES) { pre.textContent = text; return; }
+    if (!text) { pre.textContent = ""; setViewNote(null); return; }
 
-    var lines = splitLines(tokenize(text));
+    /* ① 视口化：超过上限就只把开头这一段交给后面的流程。 */
+    var shown = text, hiddenTotal = null;
+    if (!forceAll) {
+      var cut = nthNewline(text, HL_VIEW_LINES);
+      if (cut >= 0) { shown = text.slice(0, cut); hiddenTotal = countLines(text); }
+    }
+    setViewNote(hiddenTotal);
+
+    /* ② 着色闸门。★ 判的是 `shown` —— **这次真正要画的那一段**，
+       不是整份结果。门槛的意义是「别真的去干那么贵的活」，而截断之后
+       真正要干的活就是这一段；拿整份结果去判，会出现
+       「窗口只有 200 KB、本来毫不费力，却因为总量 2.6 MB 就被判成不适合着色」——
+       那是把闸门当成了标签，不是当成了预算。
+       （两条路都不过闸门时它们照样顶用，见 renderOutput(text, true)。） */
+    if (byteSize(shown) > HL_MAX_BYTES) { pre.textContent = shown; return; }
+
+    var lines = splitLines(tokenize(shown));
     var elems = countElements(lines);
-    if (elems > HL_MAX_ELEMENTS) { pre.textContent = text; return; }
+    if (elems > HL_MAX_ELEMENTS) { pre.textContent = shown; return; }
 
     pre.style.setProperty("--ind-w", unit + "ch");
     if (elems <= HL_SYNC_ELEMENTS) {
@@ -1248,6 +1344,15 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
       return;
     }
     paintChunked(pre, lines, my);
+  }
+
+  /* 「显示全部」：拿 fullResult 原样重画一遍，这次不走视口化。
+     分帧渐进那条路现在只在这里 —— 大结果默认只画开头（几十毫秒），
+     只有用户**主动**要求画全的时候，才值得把那 1 秒多花掉。 */
+  function showAllOutput() {
+    if (!fullResult || rendering) return;
+    renderOutput(fullResult, true);
+    syncOutputActions();
   }
 
   /* 统一的「产出结果」收尾：写输出、更新 meta、出状态（有告警优先显示告警） */
@@ -1266,8 +1371,10 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     }
   }
 
-  function guardSize() {
-    var n = byteSize(els.input.value);
+  /* bytes 可以预先算好传进来 —— 那条路上如果让 guardSize 自己再去读一次
+     els.input.value，浏览器就得把整段文本从 textarea 里**重新序列化**一遍。 */
+  function guardSize(bytes) {
+    var n = bytes == null ? byteSize(els.input.value) : bytes;
     if (n <= MAX_BYTES) return false;
     setStatus("warn", "⚠", "这段内容有 " + Math.round(n / 1048576 * 10) / 10 + " MB，超过 " +
       (MAX_BYTES / 1048576) + " MB 的处理上限。浏览器里全量重排会明显卡顿 —— " +
@@ -1410,20 +1517,61 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     });
   }
 
-  /* 统一入口：拖入 / 选文件都走这里 —— BOM 剥离、meta 刷新、超限劝退只写一遍。 */
-  function loadText(text, name) {
-    var s = stripBOM(String(text == null ? "" : text));
+  /* ── 「先出提示再干活」──────────────────────────────────────────────────
+     把一大段文本塞进 textarea 是**一次同步阻塞排版**：textarea 必须为每一行
+     生成一个行盒，实测 1.5 MB / 7.5 万行要 1–3 秒，期间页面完全冻住（连滚动都不响应）。
+     这件事做不到让它不冻 —— 但可以做到**冻之前先说一句**，否则用户面对的是一个
+     没有任何解释的死界面，只会以为工具坏了。
+     实测：把提示写进状态栏后强制布局只要 3 ms，所以提示确实能先画出去。
+
+     等「这一帧真的画出去了」用双 rAF：第一帧提交本次改动，第二帧时它已经上了屏。
+     ⚠️ 必须有 setTimeout 兜底 —— 后台标签页的 rAF 会被浏览器暂停，
+        只挂 rAF 的话用户切到别的标签再回来，文件会**永远读不进去**。 */
+  var afterPaint = (typeof requestAnimationFrame === "function")
+    ? function (fn) {
+      var done = false;
+      var run = function () { if (done) return; done = true; fn(); };
+      requestAnimationFrame(function () { requestAnimationFrame(run); });
+      setTimeout(run, 150);
+    }
+    : function (fn) { setTimeout(fn, 0); };
+
+  /* 判据按**行数为主**：textarea 排版的代价由行数驱动（实测 1.5 MB 单行只要 233 ms，
+     同样 1.5 MB 但 7.5 万行要 1–3 s）；字节数只兜住「单行巨大」那一种。
+     定这么高是为了让常见的中小文件**完全走同步路径** —— 不引入多余的等待与闪烁。 */
+  var LOAD_NOTICE_LINES = 8000;
+  var LOAD_NOTICE_BYTES = 1024 * 1024;
+
+  /* 真正落地的动作（提示已经画出去了才开始跑这一段） */
+  function applyLoadedText(s, name, lines, bytes) {
     els.input.value = s;
-    sourceName = name || "";
-    syncMeta();
+    syncMeta(lines, bytes);
     markStale();
-    if (guardSize()) return;        // 超限时 guardSize 自己已经出了提示
+    if (guardSize(bytes)) return;   // 超限时 guardSize 自己已经出了提示
     if (!s.trim()) {
       setStatus("warn", "⚠", "这个文件是空的（或者只有空白）。");
       return;
     }
     clearStatus();
-    toast("已读入 " + (name || "内容") + " · " + countLines(s) + " 行 · " + byteSize(s) + " 字节");
+    toast("已读入 " + (name || "内容") + " · " + lines + " 行 · " + bytes + " 字节");
+  }
+
+  /* 统一入口：拖入 / 选文件都走这里 —— BOM 剥离、meta 刷新、超限劝退只写一遍。 */
+  function loadText(text, name) {
+    var s = stripBOM(String(text == null ? "" : text));
+    sourceName = name || "";
+    /* 行数与字节数**只算一次**，后面 syncMeta / guardSize / toast 都复用。
+       原来这三处各算各的：countLines 跑 2 遍、byteSize 跑 3 遍，
+       还多读了一次 textarea.value（读 .value 会把整串从 DOM 里重新序列化出来）。 */
+    var bytes = byteSize(s), lines = countLines(s);
+
+    if (lines > LOAD_NOTICE_LINES || bytes > LOAD_NOTICE_BYTES) {
+      setStatus("", "·", "正在载入 " + Math.round(bytes / 1048576 * 10) / 10 + " MB / " +
+        lines + " 行，稍等…");
+      afterPaint(function () { applyLoadedText(s, name, lines, bytes); });
+      return;
+    }
+    applyLoadedText(s, name, lines, bytes);
   }
 
   function loadFile(file) {
@@ -1473,14 +1621,15 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     if (files && files.length) loadFile(files[0]);   // 一次只读一个，取第一个
   });
 
-  /* 输出区空的时候复制/下载没有意义 —— 直接置灰，比"点了没反应"清楚 */
+  /* 输出区空的时候复制/下载没有意义 —— 直接置灰，比"点了没反应"清楚。
+     ★ 这里**不再**因为「正在渲染」而禁用：复制/下载读的是 fullResult（完整结果），
+       跟 DOM 画到第几行毫无关系 —— 这正是把真相从 DOM 挪到变量上换来的好处。 */
   function syncOutputActions() {
-    /* 分帧渲染还没画完时**不给复制/下载** —— textContent 这时还是半截的，
-       点下去会静默拿到不完整的 JSON。禁用按钮比拿到错数据好得多，
-       而且进度条本来就在说「还在着色」，用户等一拍就行。 */
-    var empty = rendering || !outputText();
+    var empty = !outputText();
     els.btnCopy.disabled = empty;
     els.btnDownload.disabled = empty;
+    /* 「显示全部」反过来要禁：画到一半再点一次没有意义，只会再排一次队 */
+    if (els.btnShowAll) els.btnShowAll.disabled = rendering;
   }
 
   function doCopy() {
@@ -1509,6 +1658,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   els.btnClear.addEventListener("click", doClear);
   els.btnCopy.addEventListener("click", doCopy);
   els.btnDownload.addEventListener("click", doDownload);
+  els.btnShowAll.addEventListener("click", showAllOutput);
   els.btnOpenFile.addEventListener("click", function () { els.fileInput.click(); });
   els.fileInput.addEventListener("change", function () {
     var f = els.fileInput.files && els.fileInput.files[0];
@@ -1597,12 +1747,26 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   API.HL_SYNC_ELEMENTS = HL_SYNC_ELEMENTS;
   API.HL_FIRST_LINES = HL_FIRST_LINES;
   API.HL_CHUNK_LINES = HL_CHUNK_LINES;
+  API.HL_VIEW_LINES = HL_VIEW_LINES;
   /* 分帧渲染的状态与内部件也暴露出来：
-     「还在画」这件事测试必须能观察到，否则「渲染中禁用复制」这条断言只能靠猜。 */
+     「还在画」这件事测试必须能观察到，否则「渲染期间按钮什么状态」这类断言只能靠猜。 */
   API.isRendering = function () { return rendering; };
   API.countElements = countElements;
   API.splitLines = splitLines;
   API.fragClass = fragClass;
+  /* 视口化的两条通路：默认那条（内部跑）与「显示全部」那条（用户点出来）。
+     测试必须能分别驱动，否则「默认不画全」与「画全后逐字节完整」只能测到一半。 */
+  API.renderOutput = renderOutput;
+  API.showAllOutput = showAllOutput;
+  /* 结果的真相来源。测试要能直接问「现在对外声称的结果是什么」，
+     否则「视口化没把结果弄小」这条只能靠对比按钮行为间接推。 */
+  API.outputText = outputText;
+  /* 导入入口。它现在是**可能异步**的（大文件先画提示再赋值），
+     不暴露出去的话，「先出提示」这段行为在测试里根本驱动不到。 */
+  API.loadText = loadText;
+  API.LOAD_NOTICE_LINES = LOAD_NOTICE_LINES;
+  API.LOAD_NOTICE_BYTES = LOAD_NOTICE_BYTES;
+  API.nthNewline = nthNewline;
 
   initTheme();
   initWrap();

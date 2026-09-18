@@ -1263,16 +1263,26 @@ ok("★ 超过粗筛 → **文本照样完整**（退的只是着色，不是结
    el("output").textContent === J.formatJson(el("input").value, "2").value);
 
 /* ★ 只测字节那条路，等于没测这个阈值 —— 最痛的那一段恰恰是「字节没超、元素超了」。
-   所以这里专门造一份**字节在粗筛之下、元素在上限之上**的输入把它拦下来。 */
+   所以这里专门造一份**字节在粗筛之下、元素在上限之上**的输入把它拦下来。
+   ★ B7 之后这条闸门守的是**「显示全部」那条路**：默认路径会先按行数截断，
+     截断后最多一万行（约 1.4 万元素），根本到不了元素上限。
+     分工是清楚的 —— 默认路径由**行数上限**保护，元素/字节上限保护「要求画全」那一次。 */
 (() => {
   const many = JSON.stringify(Array.from({ length: 9000 }, (_, i) => ({ i, s: "v" + i })), null, 2);
   const prettyMany = J.formatJson(many, "2").value;
   const elems = UI.countElements(UI.splitLines(J.tokenize(prettyMany)));
-  runSandboxTimers();
+  /* 分帧是**一环套一环**地排队的，跑一次定时器队列只推进一环 ——
+     必须循环抽干，否则 showAllOutput() 会因为 rendering 还是 true 而直接返回。 */
+  const drain = () => { let n = 0; while (sandboxTimers.size && n < 4000) { runSandboxTimers(); n++; } return n; };
+  drain();
   el("input").value = many;
-  el("btnFormat").dispatch("click");
-  ok("★ 字节没超粗筛、但**元素超上限** → 照样退纯文本（元素数才是真实成本判据）",
+  el("btnFormat").dispatch("click");           // 默认路径：先截断
+  drain();
+  UI.showAllOutput();                          // 「显示全部」：这次交出完整结果
+  drain();
+  ok("★ 【显示全部】字节没超粗筛、但**元素超上限** → 照样退纯文本（元素数才是真实成本判据）",
      elems > UI.HL_MAX_ELEMENTS && J.byteSize(prettyMany) < UI.HL_MAX_BYTES &&
+     J.countLines(prettyMany) > UI.HL_VIEW_LINES &&   // 前提：默认路径确实会截断，必须靠「显示全部」才够得着这条闸门
      el("output").textContent === prettyMany &&
      nodesWithClass("ind").length === 0 && nodesWithClass("tok-number").length === 0,
      `元素 ${elems}（上限 ${UI.HL_MAX_ELEMENTS}）· 字节 ${J.byteSize(prettyMany)}（粗筛 ${UI.HL_MAX_BYTES}）`);
@@ -1330,12 +1340,21 @@ ok("Ctrl+C → 不拦（复制走的还是浏览器原生那条）", rangeLog.le
    ① 立刻有内容（不是白屏干等）；② 这一拍确实**没画完**（证明是渐进不是一次画完）；
    ③ 期间复制/下载被禁用（半截的 textContent 不能流出去）；④ 抽干后逐字节还原。
    ★「没画完」这条是关键：只断言"最后是对的不够" —— 一次同步画完也满足它。 */
-const bigSrc = JSON.stringify(Array.from({ length: 3000 }, (_, i) => ({ i, s: "v" + i })));
+/* ★ 份量要卡在**两条线之间**，两边都是硬要求：
+     下界 HL_SYNC_ELEMENTS —— 不到这条线走的是同步路径，分帧那段代码根本进不去；
+     上界 HL_VIEW_LINES    —— 过了这条线默认路径会**先截断**，测的就不是「画全」了。
+   B7 之前 3000 份（约 1.5 万行）是够的；加了行数上限之后就必须减到 1500 份，
+   否则这条用例会静默地变成在测视口化 —— 用错了路径还以为分帧是好的。 */
+const bigSrc = JSON.stringify(Array.from({ length: 1500 }, (_, i) => ({ i, s: "v" + i })));
 const bigPretty = J.formatJson(bigSrc, "2").value;
 const bigElems = UI.countElements(UI.splitLines(J.tokenize(bigPretty)));
+const bigLines = J.countLines(bigPretty);
 ok("前置：这份输入确实超过同步上限（否则下面测的还是同步那条路）",
    bigElems > UI.HL_SYNC_ELEMENTS && bigElems <= UI.HL_MAX_ELEMENTS,
    `元素 ${bigElems}（同步上限 ${UI.HL_SYNC_ELEMENTS}）`);
+ok("前置：这份输入又**没超过行数上限**（否则默认路径会截断，测的就不是「画全」了）",
+   bigLines <= UI.HL_VIEW_LINES && bigLines > UI.HL_FIRST_LINES,
+   `${bigLines} 行（行数上限 ${UI.HL_VIEW_LINES}）`);
 
 runSandboxTimers();
 el("indent").value = "2";
@@ -1353,8 +1372,18 @@ ok("★ 进度条与「正在着色…」这时可见",
 ok("★ 进度条走的是真实进度（0 < 宽度 ≤ 100%）",
    (() => { const w = parseFloat(el("hlFill").style.width); return w > 0 && w <= 100; })(),
    el("hlFill").style.width);
-ok("★ 渲染期间复制/下载被禁用（这时 textContent 是半截的，点了会静默拿到错数据）",
-   el("btnCopy").disabled === true && el("btnDownload").disabled === true);
+/* ★ B7 把这条**反过来了**。以前渲染期间必须禁用复制/下载，因为那时 DOM 就是唯一数据源、
+   半截的 textContent 会静默流出错数据。现在结果读的是 fullResult 变量，跟画到哪一行无关 ——
+   所以渲染到一半也能复制，而且拿到的必须是**完整**内容。
+   这条断言比原来那条更强：不只是"按钮能点"，而是"点了拿到的字节数一个不少"。 */
+copyLog.length = 0;
+el("btnCopy").dispatch("click");
+await tick();                            // copyText 是异步的（现代 API 那条路）
+ok("★ 渲染期间复制/下载**不再**被禁用（真相已经不在 DOM 上，半截的 DOM 不影响它们）",
+   el("btnCopy").disabled === false && el("btnDownload").disabled === false);
+ok("★ 而且渲染到一半复制，拿到的仍然是**完整结果**（不是画到一半的那截）",
+   copyLog.length === 1 && copyLog[copyLog.length - 1] === bigPretty,
+   `拿到 ${copyLog.length ? copyLog[copyLog.length - 1].length : "(没拿到)"} / 完整 ${bigPretty.length}`);
 ok("★ 渲染期间 isRendering() = true（界面之外也能问出「还在画」）",
    UI.isRendering() === true);
 
@@ -1455,6 +1484,26 @@ ok("★ 有 Firefox 兜底：@supports not selector(::-webkit-scrollbar) 里给�
    supportsBlock.replace(/\s+/g, " ").slice(0, 170));
 ok("滚动条规则里没有 transition（有的话就必须同步改 prefers-reduced-motion 那个块）",
    !/transition/.test(sbAllText));
+
+/* --- B7 新增的说明条与它的按钮 --- */
+/* 断言打在**具体载体**上（不能写成"页面里有没有 disabled 这个词"这类假守卫）：
+   ① 说明条必须在 HTML 里静态带 hidden —— 否则首屏会闪一条空的横条；
+   ② 它的初始态不能靠 JS 事后补，那是「JS 没跑就露出来」的经典坑。 */
+ok("★ 说明条在 HTML 里**静态**就是 hidden（否则首屏会闪一条空横条）",
+   /<div class="view-note"[^>]*\shidden/.test(HTML),
+   (HTML.match(/<div class="view-note"[^>]*>/) || ["(没找到)"])[0]);
+ok("★ 说明条是文档流里的常驻元素，不是浮层（position 不许是 fixed/absolute）",
+   (() => {
+     const block = (css.match(/\.view-note\s*\{([\s\S]*?)\}/) || ["", ""])[1];
+     return /flex\s*:\s*0\s+0\s+auto/.test(block) && !/(position\s*:\s*(fixed|absolute))/.test(block);
+   })(),
+   (css.match(/\.view-note\s*\{[\s\S]*?\}/) || ["(没找到)"])[0].replace(/\s+/g, " ").slice(0, 110));
+/* ★ 这条是我自己在 B7 里踩出来的：`.btn:disabled` 与 `.btn:hover` **特异性相同**（都是 0-2-0），
+   平局时靠**源码顺序**决胜 —— 写在前面的话置灰按钮照样响应 hover，而且没有任何断言会发现。 */
+ok("★ 「置灰按钮不响应 hover」的规则排在 .btn:hover **之后**（同特异性靠源码顺序决胜）",
+   css.indexOf(".btn:disabled") > css.indexOf(".btn:hover") &&
+   css.indexOf(".btn:disabled") > css.indexOf(".btn-primary:hover"),
+   `.btn:hover@${css.indexOf(".btn:hover")} < .btn:disabled@${css.indexOf(".btn:disabled")}`);
 
 /* ============================================================
  * [17] 自动换行开关（Alt+Z）
@@ -1570,6 +1619,166 @@ UI.initWrap();
 ok("存的是 off 时读回来就是关（不把任意非空值都当成开）",
    FAKE_DOC.documentElement.getAttribute("data-wrap") === "off" && UI.readWrap() === false,
    String(FAKE_DOC.documentElement.getAttribute("data-wrap")));
+
+/* ============================================================
+ * [18] 大结果的视口化与「显示全部」（B7）
+ * ------------------------------------------------------------
+ * 真机实测（结果 2.6 MB / 127,677 行，把文本铺进 <pre> 并强制同步布局）：
+ *     500 行 12.6 ms · 1000 行 12.1 · 2000 行 21.3 · 3000 行 33.2
+ *   · 5000 行 46.1 · 10000 行 90.8 · 20000 行 219 · 127677 行 **1378 ms**
+ * 驱动量是**行数**，字节数几乎不起作用（同一份 2.6 MB 只画 3000 行也只要 33 ms）。
+ * 对照：给同一个 <pre> 挂 content-visibility:auto 只从 1378 降到 799 ms —— 救不了，
+ * 因为它是**一个文本节点**，浏览器没法只跳过其中屏外的部分。
+ *
+ * ★ 但本段花最多力气钉的**不是"快"，是"别把结果弄丢"**：
+ *   结果区一旦只画一部分，「DOM 就是结果」这个前提就崩了 ——
+ *   复制/下载会**静默**少内容（不报错、不提示，只是贴出去的 JSON 不完整）。
+ *   所以下面把 fullResult 与 DOM 的解耦钉死。 */
+console.log("\n[18] 大结果的视口化与「显示全部」（重点在「不许把结果弄丢」）");
+
+const viewDrain = () => { let n = 0; while (sandboxTimers.size && n < 4000) { runSandboxTimers(); n++; } return n; };
+
+const vSrc = JSON.stringify(Array.from({ length: 4000 }, (_, i) => ({ i, s: "v" + i })));
+const vFull = J.formatJson(vSrc, "2").value;
+const vLines = J.countLines(vFull);
+ok("前置：这份结果确实超过行数上限（否则下面测的还是默认那条路）",
+   vLines > UI.HL_VIEW_LINES, `${vLines} 行（上限 ${UI.HL_VIEW_LINES}）`);
+
+viewDrain();
+el("input").value = vSrc;
+el("btnFormat").dispatch("click");
+viewDrain();
+
+const vHead = el("output").textContent;
+ok("★ 超上限 → 说明条出现", el("viewNote").hidden === false);
+ok("★ 说明条说的是**真实总行数**与视口行数（不是含糊的「结果过大」）",
+   el("viewNoteText").textContent.includes(String(vLines)) &&
+   el("viewNoteText").textContent.includes(String(UI.HL_VIEW_LINES)),
+   el("viewNoteText").textContent);
+ok("★ 按钮文案带总行数（点之前就知道这一次要画多少）",
+   el("btnShowAll").textContent.includes(String(vLines)) &&
+   el("btnShowAll").disabled === false,
+   el("btnShowAll").textContent);
+ok("★ 默认路径下输出区**确实短于**完整结果",
+   vHead.length > 0 && vHead.length < vFull.length, `${vHead.length} / ${vFull.length}`);
+/* 位置必须落在**行边界**上，而且是第 HL_VIEW_LINES 行之后 ——
+   否则说明条说的「只画了前 N 行」就是假的。 */
+ok("★ 截的位置正好在第 N 行之后（说明条的承诺与画出来的东西一致）",
+   vFull.startsWith(vHead) && vHead.split("\n").length === UI.HL_VIEW_LINES,
+   `${vHead.split("\n").length} 行`);
+ok("★ 截在行边界上（不会把一行劈成半截）",
+   !vHead.endsWith("\n") && vFull[vHead.length] === "\n");
+
+/* ★★ 本段最关键的一条：**视口化绝不能把结果变小**。
+   复制走的是 fullResult，与 DOM 画到第几行无关 —— 破了这条，用户会把一份
+   看起来正常的 JSON 贴给同事，而里面少了几万行。 */
+copyLog.length = 0;
+el("btnCopy").dispatch("click");
+await tick();
+ok("★★ 默认路径（只画了开头）下复制，拿到的仍是**完整结果** —— 视口化不许把结果弄丢",
+   copyLog.length === 1 && copyLog[0] === vFull && copyLog[0].length > vHead.length,
+   `复制到 ${copyLog.length ? copyLog[0].length : "(没拿到)"} 字节 / 界面只画了 ${vHead.length}`);
+ok("★ 下载同理（同一个真相来源，不会一条对一个错）",
+   UI.outputText() === vFull);
+
+/* 说明条是「常驻事实」，不是会自己消失的 toast —— 定时器都抽干了它还得在 */
+ok("★ 说明条不会自己消失（它说的是当前显示状态，不是一次性操作反馈）",
+   viewDrain() >= 0 && el("viewNote").hidden === false);
+
+/* --- 点「显示全部」：这次把完整结果交出去 --- */
+el("btnShowAll").dispatch("click");
+viewDrain();
+ok("★ 点「显示全部」→ 说明条收起", el("viewNote").hidden === true);
+ok("★ 点「显示全部」→ 输出区与完整结果**逐字节相同**",
+   el("output").textContent === vFull,
+   `${el("output").textContent.length} vs ${vFull.length}`);
+
+/* --- 反向：没超上限的输入**不该**多出一条横条 --- */
+viewDrain();
+el("input").value = '{"a":1}';
+el("btnFormat").dispatch("click");
+viewDrain();
+ok("★ 行数没超上限 → 不出现说明条（不给正常输入平白加一条横条）",
+   el("viewNote").hidden === true && el("output").textContent === J.formatJson('{"a":1}', "2").value);
+
+/* --- 清空后一切归位 --- */
+el("btnClear").dispatch("click");
+viewDrain();
+ok("★ 清空 → 说明条收起、结果读回空（否则复制还能拿到上一份的完整结果）",
+   el("viewNote").hidden === true && UI.outputText() === "" && el("btnCopy").disabled === true);
+
+/* --- nthNewline 的边界：正好 N 行**不该**被截断 --- */
+const exactN = new Array(UI.HL_VIEW_LINES).join("\n");        // N 行 → N-1 个换行
+ok("★ nthNewline：换行不足 n 个 → -1（正好 N 行的输入不会被截断）",
+   UI.nthNewline(exactN, UI.HL_VIEW_LINES) === -1 &&
+   UI.nthNewline(new Array(UI.HL_VIEW_LINES + 1).join("\n"), UI.HL_VIEW_LINES) === UI.HL_VIEW_LINES - 1 &&
+   UI.nthNewline("a", 1) === -1 && UI.nthNewline("a\nb", 1) === 1 && UI.nthNewline("a\nb", 2) === -1,
+   `nthNewline 边界`);
+
+/* ============================================================
+ * [19] 导入路径：先出提示再干活 + 只算一次（B7）
+ * ------------------------------------------------------------
+ * 把一大段文本塞进 textarea 是**一次同步阻塞排版**（textarea 要为每一行生成一个行盒）：
+ * 真机实测 1.5 MB / 75,242 行要 1–3 秒，期间页面完全冻住 —— 连滚动都不响应。
+ * 做不到让它不冻，但可以做到**冻之前先说一句**，否则用户面对的是一个
+ * 没有任何解释的死界面，只会以为工具坏了（实测：提示写进状态栏后强制布局只要 3 ms，
+ * 所以它确实能在阻塞之前画出去）。
+ * 只有大文件走这条路 —— 小文件必须保持**完全同步**，不引入多余的等待与闪烁。 */
+console.log("\n[19] 导入路径：先出提示再干活 + 只算一次（B7）");
+
+const smallLoad = '{"a": 1}';
+el("input").value = "";
+el("status").textContent = "";
+UI.loadText(smallLoad, "small.json");
+ok("★ 小文件走**同步**路径：调用一返回输入区就有内容（不引入多余的异步与闪烁）",
+   el("input").value === smallLoad && el("status").textContent.indexOf("正在载入") === -1 &&
+   el("inMeta").textContent === J.countLines(smallLoad) + " 行 · " + J.byteSize(smallLoad) + " 字节",
+   el("inMeta").textContent);
+
+/* 造一份超过提示阈值的输入 */
+const bigLoad = J.formatJson(JSON.stringify(Array.from(
+  { length: UI.LOAD_NOTICE_LINES }, (_, i) => ({ i, s: "v" + i }))), "2").value;
+const bigLoadLines = J.countLines(bigLoad), bigLoadBytes = J.byteSize(bigLoad);
+ok("前置：这份输入确实超过「先出提示」的阈值（否则下面测的还是同步那条路）",
+   bigLoadLines > UI.LOAD_NOTICE_LINES || bigLoadBytes > UI.LOAD_NOTICE_BYTES,
+   `${bigLoadLines} 行（阈值 ${UI.LOAD_NOTICE_LINES}）/ ${bigLoadBytes} 字节（阈值 ${UI.LOAD_NOTICE_BYTES}）`);
+
+el("input").value = "";
+el("inMeta").textContent = "—";
+el("status").textContent = "";
+UI.loadText(bigLoad, "big.json");
+ok("★★ 「先出提示」：调用返回时提示**已经写进状态栏**，而输入区**还是空的**（活还没开始干）",
+   el("status").textContent.indexOf("正在载入") >= 0 && el("input").value === "",
+   `status="${el("status").textContent.slice(0, 46)}" · input=${el("input").value.length} 字节`);
+ok("★ 提示里带**真实体量**（行数），不是一句含糊的「请稍候」",
+   el("status").textContent.indexOf(String(bigLoadLines)) >= 0,
+   el("status").textContent.slice(0, 70));
+
+viewDrain();
+ok("★★ 抽干之后才真的载入：输入区拿到内容，且 meta 报的行数/字节数与输入**完全对得上**",
+   el("input").value === bigLoad &&
+   el("inMeta").textContent === bigLoadLines + " 行 · " + bigLoadBytes + " 字节" &&
+   el("status").textContent.indexOf("正在载入") === -1,
+   el("inMeta").textContent);
+ok("★ 载入完弹的是成功提示（「正在载入」不能留在状态栏当结果）",
+   toastText().indexOf("已读入") >= 0 && toastText().indexOf(String(bigLoadLines)) >= 0,
+   toastText().slice(0, 70));
+
+/* --- 去重之后仍然算对：行数/字节数只算一次，但报出来的必须是那两个数 --- */
+ok("★ 行数/字节数只算一次，但报出来的仍是**独立算出来的**那两份（去重不许把结果带偏）",
+   el("inMeta").textContent === J.countLines(bigLoad) + " 行 · " + J.byteSize(bigLoad) + " 字节" &&
+   bigLoadBytes === J.byteSize(bigLoad) && bigLoadLines === J.countLines(bigLoad));
+
+/* --- 超限那条路：预置的字节数也必须让 guardSize 判对 --- */
+const overText = '{"big":"' + "x".repeat(J.MAX_BYTES + 64) + '"}';
+el("status").textContent = "";
+UI.loadText(overText, "over.json");
+viewDrain();
+ok("★ 超上限 → 警告态，且文案点明上限与替代办法（预置字节数没有让这道闸门失效）",
+   el("status").className.indexOf("is-warn") >= 0 &&
+   el("status").textContent.indexOf("2 MB") >= 0 &&
+   el("status").textContent.indexOf("jq") >= 0,
+   el("status").textContent.slice(0, 80));
 
 console.log("\n================================");
 console.log(`通过 ${pass} · 失败 ${fail}`);
