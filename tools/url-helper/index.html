@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>URL 解码工具 - 帆软路径提取</title>
+<style>
+  /* ============ Design Tokens（OKLCH + 数据蓝） ============ */
+  :root {
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, Menlo, monospace;
+    --radius-s: 7px;
+    --radius-m: 10px;
+    --radius-l: 16px;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --shadow-1: 0 1px 2px oklch(0 0 0 / 0.04), 0 4px 18px oklch(0 0 0 / 0.05);
+    --shadow-2: 0 2px 6px oklch(0 0 0 / 0.06), 0 14px 40px oklch(0 0 0 / 0.09);
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: oklch(97.6% 0.006 250);
+    --surface: oklch(99.4% 0.003 250);
+    --surface-2: oklch(95.8% 0.007 250);
+    --surface-3: oklch(93% 0.009 250);
+    --border: oklch(90.5% 0.009 250);
+    --border-strong: oklch(84.5% 0.012 250);
+    --text: oklch(24% 0.02 255);
+    --text-2: oklch(45% 0.015 255);
+    --text-3: oklch(58% 0.012 250);
+    --accent: oklch(0.56 0.16 250);
+    --accent-strong: oklch(0.46 0.18 250);
+    --accent-ink: oklch(0.98 0.01 250);
+    --accent-soft: oklch(0.94 0.04 250);
+    --success: oklch(0.52 0.13 155);
+    --success-soft: oklch(0.94 0.05 155);
+    --warn: oklch(0.66 0.15 65);
+    --danger: oklch(0.58 0.19 25);
+    --code-bg: oklch(96.8% 0.008 250);
+    --thead: oklch(0.40 0.12 250);
+    --thead-ink: oklch(0.98 0.01 250);
+    --glass: oklch(99% 0.003 250 / 0.72);
+    --focus-ring: oklch(0.46 0.18 250 / 0.12);
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: oklch(16.5% 0.012 250);
+    --surface: oklch(20% 0.012 250);
+    --surface-2: oklch(23% 0.013 250);
+    --surface-3: oklch(27% 0.014 250);
+    --border: oklch(27% 0.015 250);
+    --border-strong: oklch(34% 0.015 250);
+    --text: oklch(93% 0.008 240);
+    --text-2: oklch(72% 0.012 240);
+    --text-3: oklch(58% 0.01 240);
+    --accent: oklch(0.72 0.14 250);
+    --accent-strong: oklch(0.78 0.13 250);
+    --accent-ink: oklch(0.18 0.03 250);
+    --accent-soft: oklch(0.30 0.06 250);
+    --success: oklch(0.72 0.13 155);
+    --success-soft: oklch(0.30 0.05 155);
+    --warn: oklch(0.80 0.12 75);
+    --danger: oklch(0.70 0.16 25);
+    --code-bg: oklch(15% 0.01 250);
+    --thead: oklch(0.30 0.08 250);
+    --thead-ink: oklch(0.92 0.01 250);
+    --glass: oklch(20% 0.012 250 / 0.7);
+    --focus-ring: oklch(0.78 0.13 250 / 0.20);
+    --shadow-1: none;
+    --shadow-2: none;
+  }
+
+  /* ============ Reset & Base ============ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
+  body {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+  button { font-family: inherit; font-size: inherit; color: inherit; cursor: pointer; }
+  code, pre, kbd, textarea { font-family: var(--font-mono); }
+  svg { display: block; }
+
+  .bg-glow {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(52% 42% at 82% -8%, oklch(0.85 0.10 72 / 0.20), transparent 60%),
+      radial-gradient(46% 40% at 8% 108%, oklch(0.82 0.06 250 / 0.16), transparent 60%);
+    transition: opacity 300ms var(--ease-out);
+  }
+  :root[data-theme="dark"] .bg-glow { opacity: 0.55; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 56px; }
+
+  /* ============ Topbar ============ */
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 58px;
+    background: var(--glass);
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .logo {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: var(--accent); color: var(--accent-ink);
+    display: grid; place-items: center; flex-shrink: 0;
+  }
+  .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+  .brand-name { font-weight: 650; font-size: 15px; letter-spacing: -0.01em; }
+  .brand-sub { font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono); }
+  .topbar-actions { display: flex; align-items: center; gap: 8px; }
+  .icon-btn {
+    width: 34px; height: 34px; border-radius: 8px;
+    display: grid; place-items: center;
+    background: transparent; border: 1px solid transparent;
+    color: var(--text-2);
+    transition: background 140ms var(--ease-out), color 140ms var(--ease-out), border-color 140ms var(--ease-out);
+  }
+  .icon-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+  .icon-btn .icon-sun, .icon-btn .icon-moon { display: none; }
+  :root[data-theme="light"] .icon-btn .icon-sun { display: block; }
+  :root[data-theme="dark"] .icon-btn .icon-moon { display: block; }
+
+  /* ============ Panel 卡片 ============ */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-l); box-shadow: var(--shadow-1);
+    margin-bottom: 18px; overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 13px 18px; border-bottom: 1px solid var(--border);
+    font-size: 13px; font-weight: 600; color: var(--text-2);
+  }
+  .panel-head .panel-title { font-weight: 600; color: var(--text); font-size: 14px; cursor: default; }
+  .panel-head .head-hint { color: var(--text-3); font-size: 12px; font-family: var(--font-mono); }
+  .panel-head .head-spacer { flex: 1; }
+  .panel-body { padding: 18px; }
+
+  .input-row { display: flex; align-items: stretch; gap: 14px; }
+  textarea {
+    flex: 1; min-height: 200px; resize: vertical;
+    border: 1px solid var(--border); border-radius: var(--radius-m);
+    padding: 12px 14px;
+    font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6;
+    color: var(--text); background: var(--code-bg); outline: none;
+  }
+  textarea::placeholder { color: var(--text-3); }
+  textarea:focus {
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+    outline: none;
+  }
+  .btn-col { display: flex; flex-direction: column; gap: 10px; }
+
+  /* ============ Button 体系 ============ */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    height: 40px; padding: 0 18px; border-radius: var(--radius-m);
+    font-weight: 600; font-size: 14px; border: 1px solid transparent;
+    white-space: nowrap;
+    transition: transform 140ms var(--ease-out), background 140ms var(--ease-out), border-color 140ms var(--ease-out), color 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { transform: translateY(1px) scale(0.99); }
+  .btn-primary {
+    background: var(--accent); color: var(--accent-ink);
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.10) inset;
+  }
+  .btn-primary:hover { background: var(--accent-strong); }
+  .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+  .btn-ghost:hover { background: var(--surface-2); }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-success:hover { filter: brightness(0.94); }
+  .btn:disabled { opacity: 0.42; cursor: not-allowed; }
+  .btn:disabled:active { transform: none; }
+  .btn-sm { height: 30px; padding: 0 12px; font-size: 13px; border-radius: 8px; }
+
+  /* ============ Chip 统计 ============ */
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex; align-items: baseline; gap: 7px;
+    padding: 7px 14px; border-radius: var(--radius-m);
+    background: var(--surface); border: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .chip .k { color: var(--text-3); font-size: 12px; }
+  .chip .v { font-weight: 650; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--accent-strong); }
+  .chip-ok .v { color: var(--success); }
+  .chip-err .v { color: var(--danger); }
+
+  /* ============ 单条解码过程 ============ */
+  .panel-title { font-size: 14px; font-weight: 600; margin: 2px 0 10px; }
+  .panel-title b { color: var(--accent-strong); font-variant-numeric: tabular-nums; }
+  .steps {
+    max-height: 260px; overflow: auto;
+    border: 1px solid var(--border); border-radius: var(--radius-m);
+    padding: 12px 14px; background: var(--code-bg);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .step { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; }
+  .step-badge {
+    flex: none;
+    background: var(--accent-soft); color: var(--accent-strong);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-s); padding: 2px 8px;
+    font-size: 12px; font-weight:600; font-family: var(--font-mono);
+  }
+  .step-text {
+    font-family: var(--font-mono); word-break: break-all; line-height: 1.6; color: var(--text-2);
+  }
+
+  .path-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .path-label { font-size: 14px; font-weight: 600; }
+  .path-value {
+    font-family: var(--font-mono); font-size: 13px;
+    background: var(--success-soft); color: var(--success);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-m);
+    padding: 6px 10px; word-break: break-all;
+  }
+  .path-value.empty { background: var(--surface-2); color: var(--text-3); border-color: var(--border); }
+
+  /* ============ 表格预览 ============ */
+  .table-wrap {
+    max-height: 60vh; overflow: auto;
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--thead); color: var(--thead-ink);
+    text-align: left; padding: 10px 12px;
+    border-bottom: 1px solid var(--border); border-right: 1px solid oklch(0 0 0 / 0.08);
+    font-weight: 600; white-space: nowrap;
+  }
+  thead th:last-child { border-right: none; }
+  tbody td {
+    padding: 9px 12px; border-bottom: 1px solid var(--border);
+    vertical-align: top; word-break: break-all;
+  }
+  thead th:first-child, tbody td:first-child {
+    width: 54px; min-width: 54px; text-align: center;
+    white-space: nowrap; word-break: normal !important;
+    color: var(--text-3);
+  }
+  tbody tr:nth-child(even) { background: var(--surface-2); }
+  tbody tr:hover { background: var(--accent-soft); }
+  .cell-muted { color: var(--text-3); }
+
+  .preview-note { font-size: 12px; color: var(--text-3); padding: 10px 18px 0; }
+
+  /* ============ 导出栏 ============ */
+  .export-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 0 0; }
+  .export-bar .label { font-size: 14px; font-weight: 600; }
+  .export-note { font-size: 12px; color: var(--text-3); width: 100%; }
+
+  /* ============ 空状态 ============ */
+  .empty-panel { padding: 0; }
+  .empty {
+    padding: 60px 32px; text-align: center;
+    animation: rise 600ms var(--ease-out) both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .empty-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent-strong);
+    font-size: 12.5px; font-weight: 500; margin-bottom: 18px;
+  }
+  .empty-title { font-size: 26px; margin: 0 0 10px; letter-spacing: -0.02em; font-weight: 650; }
+  .empty-title .accent { color: var(--accent-strong); }
+  .empty-lead { color: var(--text-2); margin: 0 0 26px; font-size: 15px; }
+  .empty-features { display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; }
+  .feature { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 13px; }
+  .feature b { color: var(--text-2); font-weight: 600; }
+
+  /* ============ 导入示例 ============ */
+  /* 文字链接：辅助入口最低强调等级，默认次要色，hover 才体现交互 */
+  .link-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    border: none; background: none; padding: 4px 8px;
+    font-size: 13px; font-weight: 500; line-height: 1.4;
+    color: var(--text-2); cursor: pointer; border-radius: 6px;
+    transition: color 140ms var(--ease-out), background 140ms var(--ease-out);
+  }
+  .link-btn:hover {
+    color: var(--accent-strong); background: var(--accent-soft);
+    text-decoration: underline;
+  }
+  .link-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+
+  .example-list { display: flex; flex-direction: column; gap: 10px; }
+  .example-card {
+    width: 100%; text-align: left;
+    display: flex; flex-direction: column; gap: 5px;
+    padding: 14px 16px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-m); cursor: pointer;
+    transition: background 140ms var(--ease-out), border-color 140ms var(--ease-out), transform 140ms var(--ease-out);
+  }
+  .example-card:hover { background: var(--accent-soft); border-color: var(--accent-strong); }
+  .example-card:active { transform: translateY(1px); }
+  .ex-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .ex-title { font-weight: 600; font-size: 14px; color: var(--text); }
+  .ex-tag {
+    flex-shrink: 0; font-size: 11px; font-weight: 600;
+    color: var(--accent-strong); background: var(--accent-soft);
+    padding: 1px 8px; border-radius: 999px;
+  }
+  .ex-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+
+  .example-banner {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 14px; margin-bottom: 14px;
+    background: var(--accent-soft); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-m); font-size: 13px; color: var(--text-2);
+  }
+  .example-banner .ex-badge {
+    flex-shrink: 0; background: var(--accent); color: var(--accent-ink);
+    padding: 1px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  }
+  .example-banner .ex-hint { flex: 1; min-width: 180px; }
+
+  /* ============ Toast ============ */
+  .toast {
+    position: fixed; bottom: 48px; left: 50%; z-index: 100;
+    background: var(--text); color: var(--bg);
+    padding: 10px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 500;
+    box-shadow: var(--shadow-2); max-width: min(560px, 86vw);
+    opacity: 0; transform: translate(-50%, 12px) scale(0.96);
+    transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  .toast.ok { background: var(--success); color: #fff; }
+  .toast.warn { background: var(--warn); color: #fff; }
+  .toast.error { background: var(--danger); color: #fff; }
+
+  /* ============ Modal ============ */
+  .modal-mask {
+    position: fixed; inset: 0; z-index: 50;
+    background: oklch(0 0 0 / 0.4);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal {
+    width: 100%; max-width: 520px; max-height: 82vh; display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 16px 48px oklch(0 0 0 / 0.25); overflow: hidden;
+  }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+  }
+  .modal-title { font-size: 15px; font-weight: 650; }
+  .modal-close {
+    border: none; background: none; font-size: 20px; line-height: 1; cursor: pointer;
+    color: var(--text-3); padding: 2px 8px; border-radius: 6px;
+  }
+  .modal-close:hover { background: var(--surface-2); color: var(--text); }
+  .modal-body { padding: 16px 18px; overflow: auto; font-size: 13.5px; line-height: 1.75; color: var(--text-2); }
+  .modal-body ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .modal-body li { display: flex; gap: 8px; }
+  .modal-body li::before { content: "•"; color: var(--accent-strong); font-weight: 700; flex-shrink: 0; }
+  .modal-foot { display: flex; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--border); }
+  kbd {
+    background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px;
+    border-radius: 5px; padding: 1px 6px; font-size: 12px; font-family: var(--font-mono); color: var(--text);
+  }
+
+  /* ============ Focus & Motion ============ */
+  :focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+
+  /* ============ Responsive ============ */
+  @media (max-width: 720px) {
+    .input-row { flex-direction: column; }
+    .btn-col { flex-direction: row; }
+    .btn-col .btn { flex: 1; }
+  }
+</style>
+<script>
+/* 主题前置：首帧前设置 data-theme，阻止闪烁 */
+(function () {
+  var KEY = 'url-helper-theme';
+  var t = null;
+  try { t = localStorage.getItem(KEY); } catch (e) {}
+  if (t !== 'dark' && t !== 'light') {
+    t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', t);
+})();
+</script>
+</head>
+<body>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <span class="brand-name">URL 解码工具</span>
+      <span class="brand-sub">url → decode → path</span>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button class="icon-btn" id="btnTips" title="使用提示" aria-label="使用提示">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    </button>
+    <button class="icon-btn" id="themeToggle" title="切换明暗主题" aria-label="切换明暗主题">
+      <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+      </svg>
+      <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- 输入区 -->
+  <section class="panel">
+    <div class="panel-head">
+      <label class="panel-title" for="inputBox">输入 URL</label>
+      <span class="head-hint">每行一个 · 支持批量</span>
+      <span class="head-spacer"></span>
+      <button class="link-btn" id="btnExample">加载示例</button>
+      <span class="head-hint">Ctrl + Enter 快速解码</span>
+    </div>
+    <div class="panel-body">
+      <div class="input-row">
+        <textarea id="inputBox" placeholder="每行一个 URL，或点上方「加载示例」快速体验…"></textarea>
+        <div class="btn-col">
+          <button class="btn btn-primary" id="btnDecode">🔓 解码</button>
+          <button class="btn btn-ghost" id="btnReset">↺ 重置</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 结果区 -->
+  <section class="panel" id="resultCard" hidden>
+    <div class="panel-head">
+      <span class="panel-title">解码结果</span>
+      <div class="chips">
+        <span class="chip"><span class="k">共</span><b class="v" id="statTotal">0</b><span class="k">条</span></span>
+        <span class="chip chip-ok"><span class="k">成功</span><b class="v" id="statOk">0</b><span class="k">条</span></span>
+        <span class="chip chip-err"><span class="k">失败</span><b class="v" id="statFail">0</b><span class="k">条</span></span>
+      </div>
+    </div>
+
+    <div class="panel-body">
+      <div class="example-banner" id="exampleBanner" hidden>
+        <span class="ex-badge">示例数据</span>
+        <span class="ex-hint">这是示例演示，帮你快速了解解码效果。</span>
+        <button class="btn btn-ghost btn-sm" id="btnClearExample">清空输入</button>
+      </div>
+
+      <!-- 单条：解码过程 + 路径 -->
+      <div id="singlePanel" hidden>
+        <div class="panel-title">解码过程 <b id="stepCount">0</b> 步</div>
+        <div class="steps" id="stepList"></div>
+        <div class="path-row">
+          <span class="path-label">帆软文件路径：</span>
+          <code class="path-value" id="pathValue">—</code>
+          <button class="btn btn-ghost btn-sm" id="btnCopyPath">📋 复制</button>
+        </div>
+      </div>
+
+      <!-- 批量：结果表 + 导出 -->
+      <div id="batchPanel" hidden>
+        <div class="table-wrap"><table id="resultTable"></table></div>
+        <div class="preview-note" id="previewNote" hidden></div>
+        <div class="export-bar">
+          <span class="label">📤 导出：</span>
+          <button class="btn btn-success" id="btnDownload">⬇️ 下载 CSV</button>
+          <button class="btn btn-ghost" id="btnCopyCsv">📋 复制 CSV</button>
+          <button class="btn btn-ghost" id="btnCopyPaths">📁 仅复制路径</button>
+          <span class="export-note">CSV：UTF-8 编码（下载含 BOM），字段自动转义，Excel 可直接打开。</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 空状态 -->
+  <section class="panel empty-panel" id="emptyCard">
+    <div class="empty">
+      <div class="empty-badge">本地运行 · 数据不离开浏览器</div>
+      <h2 class="empty-title">粘贴 URL，<span class="accent">一键提取路径</span></h2>
+      <p class="empty-lead">每行一个 URL，自动循环解码并提取帆软文件路径，支持批量导出。</p>
+      <div class="empty-features">
+        <span class="feature"><b>循环解码</b> 最多 10 层，防死循环</span>
+        <span class="feature"><b>帆软路径</b> 提取 viewlet / reportlet</span>
+        <span class="feature"><b>批量导出</b> CSV / 仅路径</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- 使用提示弹窗 -->
+<div class="modal-mask" id="tipModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="使用提示">
+    <div class="modal-head">
+      <span class="modal-title">使用提示</span>
+      <button class="modal-close" id="btnCloseModalX" aria-label="关闭">&times;</button>
+    </div>
+    <div class="modal-body">
+      <ul>
+        <li>每行一个 URL，支持批量；快捷键 <kbd>Ctrl</kbd> + <kbd>Enter</kbd> 快速解码。</li>
+        <li>自动循环解码直到无 % 编码（最多 10 层，含定点保护，防止死循环）。</li>
+        <li>自动提取 <kbd>viewlet</kbd> / <kbd>reportlet</kbd> 参数作为帆软文件路径，值若多层编码会二次解码。</li>
+        <li>单条 URL 显示解码过程，多条显示结果表格并支持 CSV 导出。</li>
+        <li>成功 = 提取到路径；失败 = 未识别到参数（解码结果仍会展示，便于人工核对）。</li>
+      </ul>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" id="btnCloseModal">知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- 示例选择弹窗 -->
+<div class="modal-mask" id="exampleModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="加载示例">
+    <div class="modal-head">
+      <span class="modal-title">加载示例数据</span>
+      <button class="modal-close" id="btnCloseExampleX" aria-label="关闭">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="example-list" id="exampleList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+ * v3.0 新增：导入示例（场景化示例 + 填充即自动解码 + 示例标识条）
+ *  - 输入区标题栏「加载示例」文字链接
+ *  - 示例选择弹窗列出 3 个场景示例，点击填充并自动解码
+ *  - 结果区顶部「示例数据」标识条，可一键清空退出
+ *  - 用户手动解码 / Ctrl+Enter / 重置 即退出示例模式
+ * ================================================================== */
+
+const MAX_DECODE = 10;
+const PREVIEW_LIMIT = 200;
+
+/* ---------- 解码核心 ---------- */
+function safeDecodeOnce(s) {
+  try { return decodeURIComponent(s); }
+  catch (e) {
+    // 畸形编码回退：对连续的 %XX 段整体解码（保留 UTF-8 多字节），无效段原样保留
+    return s.replace(/(?:%[0-9a-fA-F]{2})+/g, seg => {
+      try { return decodeURIComponent(seg); } catch (e2) { return seg; }
+    });
+  }
+}
+function decodeAll(raw) {
+  const steps = [raw];
+  let cur = raw;
+  for (let i = 0; i < MAX_DECODE; i++) {
+    if (!/%[0-9a-fA-F]{2}/.test(cur)) break;   // 已无编码
+    const next = safeDecodeOnce(cur);
+    if (next === cur) break;                   // 定点：解码不再变化
+    cur = next;
+    steps.push(cur);
+  }
+  return { final: cur, steps };
+}
+function extractViewlet(stages) {
+  for (let i = stages.length - 1; i >= 0; i--) {
+    const m = stages[i].match(/[?&](?:viewlet|reportlet)=([^&#\s]+)/i);
+    if (m) {
+      let v = m[1];
+      for (let k = 0; k < 4; k++) {            // 值本身可能仍多层编码
+        try { const d = decodeURIComponent(v); if (d === v) break; v = d; }
+        catch (e) { break; }
+      }
+      return v;
+    }
+  }
+  return '';
+}
+
+/* ---------- 导入示例：示例数据常量 ---------- */
+const EXAMPLES = [
+  {
+    id: 'single',
+    title: '单条帆软链接',
+    tag: '解码过程',
+    desc: '多层编码的 viewlet，展示逐步解码与路径提取',
+    data: 'https://example.com/WebReport/ReportServer?viewlet=%252Fdemo%252Fsales%252Fmonthly.frm'
+  },
+  {
+    id: 'batch',
+    title: '批量帆软链接',
+    tag: '批量导出',
+    desc: '多条 viewlet / reportlet 链接，演示结果表与仅复制路径',
+    data: `https://example.com/WebReport/ReportServer?viewlet=%252Fdemo%252Freport%252Forder.frm
+https://example.com/WebReport/ReportServer?reportlet=%252Fdemo%252Freport%252Finventory.cpt
+https://example.com/WebReport/ReportServer?viewlet=%252Fdemo%252Freport%252Ffinance.frm`
+  },
+  {
+    id: 'reportlet',
+    title: 'reportlet 深编码',
+    tag: '二次解码',
+    desc: 'reportlet 值多次编码，演示值的二次解码与路径提取',
+    data: 'https://example.com/WebReport/ReportServer?reportlet=%25252Fdemo%25252Fanalysis%25252Fyearly.cpt'
+  }
+];
+
+/* ---------- DOM 引用与状态 ---------- */
+const $ = id => document.getElementById(id);
+const inputBox = $('inputBox'), btnDecode = $('btnDecode'), btnReset = $('btnReset'),
+  resultCard = $('resultCard'), emptyCard = $('emptyCard'),
+  statTotal = $('statTotal'), statOk = $('statOk'), statFail = $('statFail'),
+  singlePanel = $('singlePanel'), stepList = $('stepList'), stepCount = $('stepCount'),
+  pathValue = $('pathValue'), btnCopyPath = $('btnCopyPath'),
+  batchPanel = $('batchPanel'), resultTable = $('resultTable'), previewNote = $('previewNote'),
+  btnDownload = $('btnDownload'), btnCopyCsv = $('btnCopyCsv'), btnCopyPaths = $('btnCopyPaths'),
+  tipModal = $('tipModal'), btnTips = $('btnTips'), btnCloseModal = $('btnCloseModal'),
+  exampleModal = $('exampleModal'), exampleList = $('exampleList'),
+  exampleBanner = $('exampleBanner'),
+  toastEl = $('toast');
+
+let results = []; // { raw, final, steps, path, ok }
+let isExample = false; // 是否处于示例演示状态
+
+/* ---------- 解码流程 ---------- */
+function doDecode() {
+  const lines = inputBox.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) { toast('请输入至少一个 URL', 'warn'); return; }
+
+  results = lines.map(raw => {
+    const { final, steps } = decodeAll(raw);
+    const path = extractViewlet(steps);
+    return { raw, final, steps, path, ok: !!path };
+  });
+  emptyCard.hidden = true;
+  render();
+}
+
+function render() {
+  resultCard.hidden = false;
+  const total = results.length;
+  const ok = results.filter(r => r.ok).length;
+  statTotal.textContent = total;
+  statOk.textContent = ok;
+  statFail.textContent = total - ok;
+
+  if (total === 1) renderSingle(results[0]);
+  else renderBatch();
+
+  exampleBanner.hidden = !isExample;
+}
+
+/* 单条：解码过程 + 路径（仅 textContent，防 XSS） */
+function renderSingle(r) {
+  singlePanel.hidden = false;
+  batchPanel.hidden = true;
+
+  stepList.textContent = '';
+  r.steps.forEach((s, i) => {
+    const row = document.createElement('div'); row.className = 'step';
+    const badge = document.createElement('span'); badge.className = 'step-badge';
+    badge.textContent = (i === 0) ? '原始' : ('第 ' + i + ' 层');
+    const code = document.createElement('code'); code.className = 'step-text';
+    code.textContent = s;
+    row.appendChild(badge); row.appendChild(code);
+    stepList.appendChild(row);
+  });
+  stepCount.textContent = Math.max(r.steps.length - 1, 0);
+
+  pathValue.textContent = r.path || '未识别到 viewlet / reportlet 参数';
+  pathValue.classList.toggle('empty', !r.path);
+}
+
+/* 批量：结果表（限高内部滚动 + 表头吸顶） */
+function renderBatch() {
+  batchPanel.hidden = false;
+  singlePanel.hidden = true;
+
+  resultTable.textContent = '';
+  const thead = document.createElement('thead');
+  const htr = document.createElement('tr');
+  ['#', '原始 URL', '解码后 URL', '帆软文件路径'].forEach(h => {
+    const th = document.createElement('th'); th.textContent = h; htr.appendChild(th);
+  });
+  thead.appendChild(htr);
+  resultTable.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  results.slice(0, PREVIEW_LIMIT).forEach((r, i) => {
+    const tr = document.createElement('tr');
+    const c0 = document.createElement('td'); c0.textContent = i + 1;
+    const c1 = document.createElement('td'); c1.textContent = r.raw;
+    const c2 = document.createElement('td'); c2.textContent = r.final;
+    const c3 = document.createElement('td'); c3.textContent = r.path || '—';
+    if (!r.ok) c3.classList.add('cell-muted');
+    tr.appendChild(c0); tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3);
+    tbody.appendChild(tr);
+  });
+  resultTable.appendChild(tbody);
+
+  const over = results.length > PREVIEW_LIMIT;
+  previewNote.hidden = !over;
+  if (over) previewNote.textContent = '仅预览前 ' + PREVIEW_LIMIT + ' 行，导出包含全部 ' + results.length + ' 条。';
+}
+
+/* ---------- 导出：CSV 转义 + BOM ---------- */
+function csvEscape(v) { return '"' + String(v ?? '').replace(/"/g, '""') + '"'; }
+function toCSV() {
+  const lines = [['序号', '原始URL', '解码后URL', '帆软文件路径'].map(csvEscape).join(',')];
+  results.forEach((r, i) => lines.push([i + 1, r.raw, r.final, r.path || ''].map(csvEscape).join(',')));
+  return lines.join('\r\n');
+}
+function downloadCSV() {
+  if (!results.length) return;
+  const blob = new Blob(['\ufeff' + toCSV()], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'URL解码结果_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+  toast('CSV 已下载（含 BOM）', 'ok');
+}
+function copyText(text, msg) {
+  const done = () => toast(msg, 'ok');
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); }
+    catch (e) { toast('复制失败，请手动复制', 'error'); }
+    ta.remove();
+  };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done).catch(fallback);
+  else fallback();
+}
+
+/* ---------- toast / 弹窗 ---------- */
+let toastTimer;
+function toast(msg, type) {
+  toastEl.textContent = msg;
+  toastEl.className = 'toast show ' + (type || 'ok');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastEl.className = 'toast'; }, 2600);
+}
+
+/* ---------- 导入示例：构建列表 + 加载 ---------- */
+function buildExampleList() {
+  exampleList.textContent = '';
+  EXAMPLES.forEach(ex => {
+    const card = document.createElement('button');
+    card.className = 'example-card';
+    card.type = 'button';
+
+    const head = document.createElement('span');
+    head.className = 'ex-head';
+    const title = document.createElement('span');
+    title.className = 'ex-title';
+    title.textContent = ex.title;
+    const tag = document.createElement('span');
+    tag.className = 'ex-tag';
+    tag.textContent = ex.tag;
+    head.appendChild(title);
+    head.appendChild(tag);
+
+    const desc = document.createElement('span');
+    desc.className = 'ex-desc';
+    desc.textContent = ex.desc;
+
+    card.appendChild(head);
+    card.appendChild(desc);
+    card.addEventListener('click', () => loadExample(ex.id));
+    exampleList.appendChild(card);
+  });
+}
+
+function loadExample(id) {
+  const ex = EXAMPLES.find(e => e.id === id);
+  if (!ex) return;
+  inputBox.value = ex.data;
+  isExample = true;
+  exampleModal.hidden = true;
+  doDecode();
+}
+
+function doReset() {
+  inputBox.value = ''; results = []; isExample = false;
+  resultCard.hidden = true; emptyCard.hidden = false;
+  exampleBanner.hidden = true;
+  toast('已重置');
+}
+
+/* ---------- 事件绑定 ---------- */
+btnDecode.addEventListener('click', () => { isExample = false; doDecode(); });
+btnReset.addEventListener('click', doReset);
+btnClearExample.addEventListener('click', doReset);
+btnExample.addEventListener('click', () => { exampleModal.hidden = false; });
+btnCloseExampleX.addEventListener('click', () => { exampleModal.hidden = true; });
+exampleModal.addEventListener('click', e => { if (e.target === exampleModal) exampleModal.hidden = true; });
+
+btnCopyPath.addEventListener('click', () => {
+  const p = results.length === 1 ? results[0].path : '';
+  if (!p) { toast('未识别到路径，无可复制内容', 'warn'); return; }
+  copyText(p, '路径已复制到剪贴板');
+});
+btnDownload.addEventListener('click', downloadCSV);
+btnCopyCsv.addEventListener('click', () => { if (results.length) copyText(toCSV(), 'CSV 已复制到剪贴板'); });
+btnCopyPaths.addEventListener('click', () => {
+  const paths = results.filter(r => r.ok).map(r => r.path);
+  if (!paths.length) { toast('没有可复制的路径', 'warn'); return; }
+  copyText(paths.join('\n'), '已复制 ' + paths.length + ' 条路径');
+});
+
+btnTips.addEventListener('click', () => { tipModal.hidden = false; });
+btnCloseModal.addEventListener('click', () => { tipModal.hidden = true; });
+tipModal.addEventListener('click', e => { if (e.target === tipModal) tipModal.hidden = true; });
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); isExample = false; doDecode(); }
+  if (e.key === 'Escape') {
+    if (!exampleModal.hidden) exampleModal.hidden = true;
+    if (!tipModal.hidden) tipModal.hidden = true;
+  }
+});
+
+/* ===== 明暗主题切换 ===== */
+const themeToggle = document.getElementById('themeToggle');
+if (themeToggle) {
+  themeToggle.addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme') || 'light';
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('url-helper-theme', next); } catch (e) {}
+  });
+}
+
+/* ===== 弹窗右上角关闭 ===== */
+const btnCloseX = document.getElementById('btnCloseModalX');
+if (btnCloseX) btnCloseX.addEventListener('click', () => { tipModal.hidden = true; });
+
+/* ===== 初始化：构建示例列表 ===== */
+buildExampleList();
+</script>
+</body>
+</html>
