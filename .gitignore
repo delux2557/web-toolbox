@@ -34,3 +34,6 @@ venv/
 Thumbs.db
 *.tmp
 desktop.ini
+
+# 反向实验的断点还原日志（只在运行期间存在，纯临时状态）
+tools/_build/.mutation-journal.json
