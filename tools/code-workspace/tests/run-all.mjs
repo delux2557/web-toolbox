@@ -34,10 +34,21 @@ for (const s of SUITES) {
   process.stdout.write(`\n${"─".repeat(62)}\n▸ ${s.name} — ${s.desc}\n${"─".repeat(62)}\n`);
   let out = "", code = 0;
   try {
-    out = execFileSync(NODE, [join(HERE, s.file), ROOT, ...s.args], { encoding: "utf8" });
+    /* ★ stdin 必须显式钉成 ignore。execFileSync 缺省会去继承父进程的 stdin，
+       而在受限环境里（Windows 沙箱、非常规 stdin 句柄）这一步会直接 EBUSY 派生失败，
+       stdin 一忙，整个子进程就起不来。docs-check.mjs 用的是同一套写法，别改成缺省。 */
+    out = execFileSync(NODE, [join(HERE, s.file), ROOT, ...s.args], {
+      encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]
+    });
   } catch (e) {
     out = (e.stdout || "") + (e.stderr || "");
     code = e.status ?? 1;
+    /* 子进程压根没起来时（EBUSY / ENOENT…），stdout 与 stderr 都是空的，
+       汇总里只会显示「通过 0 · 失败 1」—— 看着像断言失败，其实是环境问题。
+       所以把原始错误补出来，别让它被吞掉。 */
+    if (!out.trim()) {
+      out = `  ⚠ 子进程未能启动（${e.code || "unknown"}）：${String(e.message).split("\n")[0]}\n`;
+    }
   }
   process.stdout.write(out);
 
