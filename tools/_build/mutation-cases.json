@@ -105,7 +105,7 @@
       "file": "tools/excel2sql/js/app.js",
       "find": "settings.tab = next;\n    saveSettings();\n    renderTabs();",
       "replace": "settings.tab = next;\n    renderTabs();",
-      "expect": ["切到「表头预览」（非默认页签）后立刻落盘"]
+      "expect": ["切到「数据预览」（非默认页签）后立刻落盘"]
     },
     {
       "id": "debounce-bypassed",
@@ -142,6 +142,42 @@
       "find": "    else if (genStateOwned) clearGenState();",
       "replace": "    else if (false) clearGenState();",
       "expect": ["降级为手动时状态栏不残留"]
+    },
+    {
+      "id": "modal-li-back-to-flex",
+      "gate": "ui",
+      "why": "★★ 把弹窗列表项改回 display:flex —— 这一条复现的是用户报的「详情内容没对齐、观感乱」。li 一旦是 flex 容器，里面的 <strong>/<kbd>/<code> 各自变成一个 flex item，被 gap:8px 打散成并排的'列'，整段话不再按文本流换行。真机实测：「解析完全在浏览器里完成，文件不会上传到任何服务器。」渲染出 3 个 flex item，<strong> 被甩到 x=737 单独站一列。它在浏览器里布局「成功」、不报任何错，只有量几何或肉眼看才发现，所以必须钉住",
+      "file": "tools/excel2sql/css/styles.css",
+      "find": ".modal-body li { position: relative; padding-left: 15px; }",
+      "replace": ".modal-body li { display: flex; gap: 8px; }",
+      "expect": ["弹窗列表项不是 flex 容器"]
+    },
+    {
+      "id": "drawer-repeats-status-totals",
+      "gate": "ui",
+      "why": "★ 让「详情」抽屉再把状态栏的总量数字抄一遍 —— 这就是用户说的「弹出框里的内容有重复的」。以前抽屉的「处理耗时」组里写着'合计 X ms，产物 N 行 × M 列 / size'，与底栏逐字重复；分组里还有'表头 N 列，数据 M 行'，同样与底栏的'行 × 列'重复。去重规则是：状态栏管总量、抽屉管原因与分项",
+      "file": "tools/excel2sql/js/app.js",
+      "find": "      time.push('预处理 ' + U.fmtMs(state.result.tPrep) +",
+      "replace": "      time.push('合计 ' + U.fmtMs(state.result.totalMs) + '，产物 ' + U.fmtInt(state.result.rowCount) + ' 行 × ' + U.fmtInt(state.result.colCount) + ' 列。');\n      time.push('预处理 ' + U.fmtMs(state.result.tPrep) +",
+      "expect": ["抽屉不再重复状态栏的总量数字"]
+    },
+    {
+      "id": "tabs-order-swapped-back",
+      "gate": "ui",
+      "why": "★ 把页签顺序换回「SQL 产物在前、数据预览在后」—— 用户的阅读习惯是数据源在左、产物在右。这类'顺序'问题最容易写成假守卫：只断言两个页签都存在的话，顺序怎么换都通过。这条守住断言真的在看**出现位置**",
+      "file": "tools/excel2sql/index.html",
+      "find": "              <button type=\"button\" class=\"esq-tab\" id=\"tabHeader\" role=\"tab\"\n                      aria-selected=\"false\" aria-controls=\"headerCard\">数据预览<span\n                      class=\"esq-tab-dot\" id=\"tabHeaderDot\" hidden></span></button>\n              <button type=\"button\" class=\"esq-tab is-active\" id=\"tabResult\" role=\"tab\"\n                      aria-selected=\"true\" aria-controls=\"resultCard\">SQL 产物</button>",
+      "replace": "              <button type=\"button\" class=\"esq-tab is-active\" id=\"tabResult\" role=\"tab\"\n                      aria-selected=\"true\" aria-controls=\"resultCard\">SQL 产物</button>\n              <button type=\"button\" class=\"esq-tab\" id=\"tabHeader\" role=\"tab\"\n                      aria-selected=\"false\" aria-controls=\"headerCard\">数据预览<span\n                      class=\"esq-tab-dot\" id=\"tabHeaderDot\" hidden></span></button>",
+      "expect": ["页签顺序：数据预览在左"]
+    },
+    {
+      "id": "status-note-back-to-statusbar",
+      "gate": "ui",
+      "why": "★ 把「表头取第 N 行…」那句话塞回状态栏 —— 用户报的就是它和抽屉里的内容重复。这条断言是一正一反的：抽屉里必须有、状态栏里必须没有",
+      "file": "tools/excel2sql/index.html",
+      "find": "        <span class=\"esq-stats\" id=\"sqlStats\" hidden>",
+      "replace": "        <span class=\"esq-status-note\" id=\"headerHint\"></span>\n        <span class=\"esq-stats\" id=\"sqlStats\" hidden>",
+      "expect": ["状态栏不再重复表头落点"]
     },
     {
       "id": "mysql-naked-char10",

@@ -52,7 +52,7 @@
        载入数据源后空态退场、workState 登场，表头预览与产物都在它里面。 */
     workState: $('workState'), btnReselect: $('btnReselect'),
 
-    headerCard: $('headerCard'), headerHint: $('headerHint'),
+    headerCard: $('headerCard'),
     headerNotice: $('headerNotice'), headerPicker: $('headerPicker'),
 
     dialectSelect: $('dialectSelect'),
@@ -78,7 +78,7 @@
     statRows: $('statRows'), statCols: $('statCols'),
     statSize: $('statSize'), statTime: $('statTime'),
     resultNotice: $('resultNotice'), resultCode: $('resultCode'),
-    codeHint: $('codeHint'), resultPlaceholder: $('resultPlaceholder'),
+    resultPlaceholder: $('resultPlaceholder'),
     btnCopy: $('btnCopy'), btnDownload: $('btnDownload'),
 
     emptyCard: $('emptyCard'), emptyFeatures: $('emptyFeatures'),
@@ -86,7 +86,8 @@
     btnTips: $('btnTips'), tipModal: $('tipModal'),
     btnCloseModal: $('btnCloseModal'), btnCloseModalX: $('btnCloseModalX'),
 
-    btnDetails: $('btnDetails'), detailsDrawer: $('detailsDrawer'),
+    btnDetails: $('btnDetails'), detailsCount: $('detailsCount'),
+    detailsDrawer: $('detailsDrawer'),
     detailsBody: $('detailsBody'),
     btnCloseDetails: $('btnCloseDetails'), btnCloseDetailsX: $('btnCloseDetailsX'),
 
@@ -154,11 +155,14 @@
     ]
   };
 
+  /* 空态的四条能力。写法对齐 codebase-context 的「4 字标签 + 一句短说明」——
+     标签是名词短语、说明给具体机制，不写"躲开""搞不定"这类口语化动词，
+     也不在标签里塞 UNION ALL 这种上下文才懂的缩写。 */
   const FEATURES = [
     { b: '零上传', t: '解析全在本地完成' },
     { b: '4 种方言', t: 'SQL Server / MySQL / Oracle / PG' },
     { b: '5 万行', t: '实测解析 2.3 秒' },
-    { b: '列级统一', t: '躲开 UNION ALL 隐式转换' }
+    { b: '列级类型统一', t: '避免隐式转换报错' }
   ];
 
   /* ==================================================================
@@ -454,7 +458,6 @@
     state.book = null;
     el.fileRow.hidden = true;
     el.sheetWrap.hidden = true;
-    el.headerHint.textContent = '';
     el.workState.hidden = true;
     el.headerNotice.textContent = '';
     el.headerPicker.textContent = '';
@@ -481,13 +484,11 @@
     el.fileInput.value = '';
     el.fileRow.hidden = true;
     el.sheetWrap.hidden = true;
-    el.headerHint.textContent = '';
     el.headerNotice.textContent = '';
     el.headerPicker.textContent = '';
     el.envNotice.textContent = '';
     closeDetails();
     dropResult();
-    renderStatusNote();
     renderDetails();         /* 清空抽屉内容，并把「详情」按钮一起收起 */
     el.emptyCard.hidden = false;
     el.workState.hidden = true;
@@ -577,7 +578,6 @@
     }
     renderPicker();
     renderHeaderNotices();
-    renderStatusNote();
     renderDetails();
     setBusy(state.busy);
   }
@@ -685,33 +685,30 @@
     flagHeaderTab();
   }
 
-  /* 状态栏右侧那一行摘要：表头为什么落在这一行。
-     只放一行 —— 放不下的（评分、被跳过的行、逐列类型）一律进「详情」抽屉。
-     这里必须用 textContent 覆写，别拼成"含 N 行"这种宽判据的字符串：
-     识别落到"保守取第 1 行"那一支时，说明文本里同样会出现"第 2 行"。 */
-  function renderStatusNote() {
-    if (!state.book) { el.headerHint.textContent = ''; return; }
-    if (state.headerRow) {
-      el.headerHint.textContent = '手动指定第 ' + state.headerRow + ' 行为表头';
-      return;
-    }
-    el.headerHint.textContent = state.detected
-      ? '表头取第 ' + state.detected.row + ' 行：' + state.detected.why
-      : '';
-  }
-
   /* 「详情」抽屉：装那些"必须有、但不该一直占屏"的说明。
-     内容每次都重算 —— 打开时看到的就是当前状态，不是陈旧快照。 */
+     内容每次都重算 —— 打开时看到的就是当前状态，不是陈旧快照。
+
+     ★★ 分工（这一版的核心：以前三处信息互相重复，用户得在三行里读同一件事）
+        · 状态栏底栏  = **总量数字**（行 × 列 / SQL 行数 / 体积 / 耗时）
+        · 本抽屉      = **原因与分项**（表头为什么落这行、哪些列被字符串化、耗时怎么拆、产物的编码约定）
+        · 面板内黄条  = **可操作的动作项**（"用第 1 行做表头"这类带按钮的）
+     所以抽屉里**不再重复总量数字**，也不再复述黄条的原话，只留一句"有几处需要注意"指个路。
+     以前挂在产物区下方的「UTF-8 无 BOM、LF 换行…」和状态栏那句"表头取第 N 行…"
+     都并进这里 —— 它们本来就和本抽屉的内容是同一件事。 */
   function renderDetails() {
     const box = el.detailsBody;
     box.textContent = '';
 
-    if (!state.book) { el.btnDetails.hidden = true; return; }
+    if (!state.book) {
+      el.btnDetails.hidden = true;
+      el.detailsCount.hidden = true;
+      return;
+    }
 
     const pre = state.prepared;
     const groups = [];
 
-    /* ① 表头识别 */
+    /* ① 表头识别 —— 只讲"为什么是这一行"，行列总数归状态栏 */
     const head = [];
     if (state.headerRow) {
       head.push('表头是手动指定的第 ' + state.headerRow + ' 行。');
@@ -727,8 +724,13 @@
       } else {
         head.push('表头之前没有被跳过的行。');
       }
-      if (!pre.check.ok) pre.check.issues.forEach(function (t) { head.push(t); });
-      head.push('表头 ' + pre.header.length + ' 列，数据 ' + pre.data.length + ' 行。');
+      /* ★ 注意：识别问题（列名有空洞 / 重复 / 表头像数字日期）**不复述原话** ——
+         它们在「数据预览」页签上是带动作按钮的黄色提示条。这里只报数并指路，
+         既不隐藏风险，也不把同一句话抄两遍。 */
+      if (!pre.check.ok) {
+        head.push('识别到 ' + pre.check.issues.length +
+                  ' 处需要确认的问题 —— 切到「数据预览」页签看黄色提示。');
+      }
     }
     if (state.prepareError) head.push(state.prepareError);
     groups.push(['表头识别', head]);
@@ -743,16 +745,32 @@
     } else {
       cols.push('先生成一次 SQL，这里会列出哪些列被统一成了字符串以及原因。');
     }
-    groups.push(['列级类型', cols]);
+    groups.push(['列输出类型', cols]);
 
-    /* ③ 处理耗时 */
+    /* ③ 产物约定 —— 原「产物区下方那行小字」，按当前设置给条件性说明 */
+    const conv = ['UTF-8 无 BOM、LF 换行（与命令行版一致）。'];
+    if (state.result) {
+      const dia = D.resolve(settings.dialect);
+      if (state.result.sql.indexOf(dia.newlineExpr) >= 0) {
+        conv.push('源数据含多行文本，换行按 ' + dia.name + ' 的写法拼成 ' + dia.newlineExpr +
+                  '，不是字面换行符。');
+      }
+      if (settings.fmt === 'insert') {
+        conv.push('INSERT 每批 ' + U.fmtInt(settings.batchSize) + ' 行一句。');
+      }
+      if (dia.dual) conv.push(dia.name + ' 的每行 SELECT 会补上' + dia.dual + '。');
+      conv.push('预览只画前 ' + U.fmtInt(PREVIEW_MAX_LINES) +
+                ' 行；「复制」与「下载」拿到的始终是完整产物。');
+    } else {
+      conv.push('尚未生成产物。');
+    }
+    groups.push(['产物约定', conv]);
+
+    /* ④ 处理耗时 —— 只给拆分明细，合计数在状态栏 */
     const time = [];
     if (state.result) {
       time.push('预处理 ' + U.fmtMs(state.result.tPrep) +
                 '（解析表头、统一列类型），渲染 ' + U.fmtMs(state.result.tRender) + '（拼 SQL 文本）。');
-      time.push('合计 ' + U.fmtMs(state.result.totalMs) + '，产物 ' +
-                U.fmtInt(state.result.rowCount) + ' 行 × ' + U.fmtInt(state.result.colCount) + ' 列 / ' +
-                U.fmtBytes(state.result.bytes) + '。');
     } else {
       time.push('尚未生成产物。');
     }
@@ -782,7 +800,11 @@
     });
 
     el.btnDetails.hidden = false;
-    el.btnDetails.textContent = '详情 ' + count;
+    /* 条数做成独立的小胶囊，按钮的可读名保持稳定的「详情」——
+       读屏时由 aria-label 念出条数，免得一个数字在按钮标签里反复变。 */
+    el.detailsCount.hidden = false;
+    el.detailsCount.textContent = String(count);
+    el.btnDetails.setAttribute('aria-label', '详情（' + count + ' 条）');
   }
 
   function pickHeaderRow(n) {
@@ -801,7 +823,6 @@
     staleEl = null;
     el.resultNotice.textContent = '';
     el.resultCode.textContent = '';
-    el.codeHint.textContent = '';
     el.resultPlaceholder.hidden = false;
     el.resultPlaceholder.textContent = '正在生成 SQL，产物会出现在这里。';
     el.btnCopy.disabled = true;
@@ -1000,15 +1021,6 @@
     });
   }
 
-  /* 多行小字提示（用 <br> 分行，同样是 DOM 而不是 innerHTML） */
-  function renderHint(box, lines) {
-    box.textContent = '';
-    lines.forEach(function (h, i) {
-      if (i) box.appendChild(document.createElement('br'));
-      box.appendChild(document.createTextNode(h));
-    });
-  }
-
   /* 产物统计 —— 状态栏那一段。数据源的行列数在文件信息里（fileMeta），
      这里只讲产物：「SQL 行数」才是决定"这份东西要看多久"的数字，
      而它以前恰恰不在常显位置上（只藏在产物区下方的小字里）。 */
@@ -1040,7 +1052,6 @@
       notice(el.resultNotice, w.level === 'danger' ? 'danger' : 'warn', w.text);
     });
 
-    renderStatusNote();
     renderDetails();
 
     const lines = res.sql.split('\n');
@@ -1053,21 +1064,6 @@
       });
     }
     renderTokens(el.resultCode, tokens);
-
-    const dia = D.resolve(settings.dialect);
-    const hints = [];
-    /* 行数 / 字节数已经常驻状态栏了，这里只说编码约定 ——
-       同一条信息不该在同一屏里出现两遍。 */
-    hints.push('UTF-8 无 BOM、LF 换行（与命令行版一致）');
-    if (res.sql.indexOf(dia.newlineExpr) >= 0) {
-      hints.push('源数据含多行文本，换行按 ' + dia.name + ' 的写法拼成 ' + dia.newlineExpr +
-                 '，不是字面换行符');
-    }
-    if (settings.fmt === 'insert') {
-      hints.push('INSERT 每批 ' + U.fmtInt(settings.batchSize) + ' 行一句');
-    }
-    if (dia.dual) hints.push(dia.name + ' 的每行 SELECT 会补上' + dia.dual);
-    renderHint(el.codeHint, hints);
   }
 
   /* ==================================================================
@@ -1297,7 +1293,6 @@
   applySettingsToUI();
   renderEmptyFeatures();
   renderEnvNotice();
-  renderStatusNote();
   renderDetails();
   dropResult();
   el.workState.hidden = true;   /* 启动必然是空态：还没有数据源，没什么可预览的 */

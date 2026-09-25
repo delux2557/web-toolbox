@@ -118,6 +118,11 @@ const byId = (id) => {
 };
 
 const HTML = readFileSync(join(TOOL, 'index.html'), 'utf8');
+/* ★ 剥掉 HTML 注释后的源码，供"某个名字/元素已经不存在了"这类断言使用。
+   和 CSS 契约断言要先剥注释完全同源：注释里为说明历史决策而写的旧名字
+   （例如那段解释"为什么改成页签"的注释里还留着「表头预览」），
+   会让 `!has(HTML, …)` 恒假 —— 读起来像"改名没改干净"，其实只是注释。 */
+const HTML_NO_COMMENT = HTML.replace(/<!--[\s\S]*?-->/g, '');
 
 /** ★ 注册表从真实 HTML 预填：id 抄错 → byId 返回 null → 接线静默失败的守卫 */
 function prefilledRegistry(html) {
@@ -195,6 +200,13 @@ globalThis.URL.revokeObjectURL = () => {};
 
 const NODE_NOISE = /^\(node:\d+\)|Warning:|ExperimentalWarning|DeprecationWarning/;
 process.on('warning', () => {});
+/* ★★ 劫持 console.error 之前先留一份**没被劫持的**引用。
+   否则连"自检自己崩了"这条致命错误也会被收进 errors 数组、永不打印 ——
+   现场表现是「rc=1、输出在一半突然断掉、stderr 空」，看着像被谁 kill 了，
+   而真正的原因（比如断言里读了已删除元素的 .textContent）一个字都看不到。
+   真踩到：这一版把 headerHint 搬进抽屉后忘了同步断言，自检就静默死了。
+   下面 main().catch 必须用 realConsoleError，不能用 console.error。 */
+const realConsoleError = console.error.bind(console);
 console.error = (...a) => { errors.push(a.map(String).join(' ')); };
 process.on('unhandledRejection', (r) => errors.push('unhandledRejection: ' + (r && r.stack ? r.stack : r)));
 const realErrors = () => errors.filter((e) => !NODE_NOISE.test(e));
@@ -224,7 +236,11 @@ const findByText = (el, t) => allDesc(el).find((n) => n.textContent === t) || nu
    完全相同，findByText 会先命中那个**没有 click 处理器**的 div —— 断言「有按钮」
    照样通过，点下去却什么也没发生。这是被真跑一遍才暴露出来的假守卫。 */
 const findButton = (el, t) => allDesc(el).find((n) => n.tagName === 'BUTTON' && n.textContent === t) || null;
-const hasText = (el, t) => has(el.textContent, t);
+/* ★ 两种入参都接受：元素（读它的 textContent）或**已经取好的字符串**。
+   只认元素的话，把 `hasText(byId('x'), …)` 换成 `hasText(someText(), …)` 会静默变成
+   `hasText(undefined, …)` → 读到 "undefined" → 断言恒假（不是恒真，但一样是"测试自己在骗人"）。
+   这一版把两处断言的载体从状态栏换成抽屉文本时就踩到了。 */
+const hasText = (el, t) => has(typeof el === 'string' ? el : (el ? String(el.textContent) : ''), t);
 
 const fireClick = (el) => { if (el && el._h.click) { el._h.click({ stopPropagation() {}, preventDefault() {} }); return true; } return false; };
 const fireChange = (el) => { if (el && el._h.change) { el._h.change({ target: el }); return true; } return false; };
@@ -244,6 +260,10 @@ const pick = (sel, val) => { sel.value = val; fireChange(sel); };
 /* 产物预览现在是真的 DOM 节点（app.js 的 renderTokens），
    所以直接读 textContent 就是**渲染出来的文本**，不必反解析 innerHTML */
 const previewSql = () => byId('resultCode').textContent;
+/* 改版后「表头为什么落这一行」与「产物的编码约定」都搬进了「详情」抽屉 ——
+   它们以前分别在状态栏和产物区下方各占一行，和抽屉里的内容本来就是同一件事。
+   于是"表头理由""编码约定""逐列类型"这些断言的载体统一改成这个。 */
+const detailsText = () => byId('detailsBody').textContent;
 const firstSelect = (s) => String(s).split('\n').find((l) => l.indexOf('SELECT') >= 0) || '';
 const downloadedSql = async (i) => (downloads[i] ? await downloads[i].text() : null);
 
@@ -314,7 +334,7 @@ async function main() {
   /* ★ 选对载体：改版后「表头预览」与「SQL 产物」都住在 workState 内部，
      空态时该断言的是**整个工作态**不可见。继续断言那两个 panel 各自的 hidden
      会变成恒真（HTML 里本就没给它们加 hidden），是一条假守卫。 */
-  ok('工作态初始隐藏（表头预览 / SQL 产物 / 状态栏都在它里面）', byId('workState').hidden === true);
+  ok('工作态初始隐藏（数据预览 / SQL 产物 / 状态栏都在它里面）', byId('workState').hidden === true);
   /* ★ 只断言"占位层可见"这个结构事实。桩不解析 HTML 文本，
      占位层里那句「配置好左侧选项后点生成 SQL」读出来永远是空串 ——
      文案由 [18] 的静态契约层直接读源文件来守。 */
@@ -362,8 +382,8 @@ async function main() {
      也会出现「第 2 行」（它在解释为什么没选第 2 行）—— 只查"含第 2 行"的断言
      在两支下都成立，是个假守卫。 */
   ok('自动识别说明写在第 2 行（跳过了标题行）',
-    hasText(byId('headerHint'), '第 2 行') && !hasText(byId('headerHint'), '保守取第 1 行'),
-    byId('headerHint').textContent);
+    hasText(detailsText(), '第 2 行') && !hasText(detailsText(), '保守取第 1 行'),
+    detailsText());
   ok('提示了「第 1 行会整行跳过」', hasText(byId('headerNotice'), '整行跳过'),
     byId('headerNotice').textContent);
   ok('提示里给了「用第 1 行做表头」的动作入口',
@@ -419,7 +439,7 @@ async function main() {
   ok('★ 常显 SQL 总行数（以前只藏在下方小字里）',
     Number(byId('statSqlLines').textContent) > 0, byId('statSqlLines').textContent);
   ok('★ 提示条不再重复统计数字（同一屏不说两遍）',
-    !/\d+\s*行\s*\/\s*[\d.]+\s*(KB|B)/.test(byId('codeHint').textContent), byId('codeHint').textContent);
+    !/\d+\s*行\s*\/\s*[\d.]+\s*(KB|B)/.test(detailsText()), detailsText());
   ok('生成完成后状态栏闪出耗时反馈',
     hasText(byId('genState'), '已生成') && byId('genState').hidden === false,
     byId('genState').textContent);
@@ -456,23 +476,55 @@ async function main() {
   ok('★ 逐列类型明细不再常驻产物卡（否则会一直占屏）',
     !hasText(byId('resultNotice'), '整列按字符串输出'), byId('resultNotice').textContent.slice(0, 200));
   ok('提示条说明产物编码与换行',
-    hasText(byId('codeHint'), 'UTF-8') && hasText(byId('codeHint'), 'LF'),
-    byId('codeHint').textContent);
+    hasText(detailsText(), 'UTF-8') && hasText(detailsText(), 'LF'),
+    detailsText());
 
   /* ---------------------------------------------------------------
    * [5b] 状态栏与详情抽屉 —— 零碎信息改版后的落点
    * ------------------------------------------------------------- */
   section('5b. 状态栏摘要与详情抽屉');
-  ok('状态栏摘要写明表头落在第几行',
-    hasText(byId('headerHint'), '表头取第 2 行') && !hasText(byId('headerHint'), '保守取第 1 行'),
-    byId('headerHint').textContent);
-  ok('「详情」按钮已出现并带上条数',
-    byId('btnDetails').hidden === false && /详情 \d+/.test(byId('btnDetails').textContent),
-    byId('btnDetails').textContent);
+  /* ★★ 改版后「表头落在第几行」不再占用状态栏那行 —— 它和抽屉里的内容是同一件事。
+     所以这里改成**一正一反**两条：抽屉里必须写清楚，状态栏里必须不再重复。
+     只测"抽屉里有"会漏掉"状态栏又抄了一遍"，只测"状态栏没有"会漏掉"信息被删干净了"。 */
+  ok('★ 表头落点写进抽屉（含理由与跳过的行）',
+    hasText(detailsText(), '自动识别选第 2 行') && hasText(detailsText(), '第 1 行整行跳过'),
+    detailsText().slice(0, 120));
+  /* ★★ 这条要**同时**管住"文字"和"载体"。只查文字的话，把
+     `<span id="headerHint">` 塞回状态栏（哪怕暂时没人往里写）也照样绿 ——
+     而那个空壳就是同类问题的入口。反向实验实测：只查文字时这条漏掉，
+     只有静态的元素检查响了，也就是"红了但不是该红的那条"。 */
+  ok('★ 状态栏不再重复表头落点（解释性文字只留一处）',
+    !hasText(byId('statusBar'), '第 2 行') && !hasText(byId('statusBar'), '表头') &&
+    !/id="headerHint"/.test(HTML_NO_COMMENT),
+    byId('statusBar').textContent);
+  /* ★ 条数改挂在按钮内部的独立小胶囊里（按钮的可读名保持稳定的「详情」），
+     所以断言要读**真正的载体**：detailsCount 的文本 + 按钮的 aria-label。
+     只读 btnDetails.textContent 是读不到的 —— DOM 桩没有 HTML 解析出来的父子树，
+     那句静态的「详情」在 HTML 里、不在 JS 写的节点里。 */
+  ok('「详情」按钮已出现，条数挂在独立小胶囊里',
+    byId('btnDetails').hidden === false && byId('detailsCount').hidden === false &&
+    /^\d+$/.test(byId('detailsCount').textContent),
+    'detailsCount="' + byId('detailsCount').textContent + '"');
+  ok('★ 详情条数写进了 aria-label（读屏也听得到，且标签文字保持稳定）',
+    /详情（\d+ 条）/.test(String(byId('btnDetails').getAttribute('aria-label') || '')),
+    String(byId('btnDetails').getAttribute('aria-label')));
+  ok('★ 「详情」的静态文案在 HTML 里（JS 只往胶囊里填数字）',
+    /id="btnDetails"[^>]*>\s*详情/.test(HTML));
   ok('抽屉初始是关的（内容已备好，只是不上屏）', byId('detailsDrawer').hidden === true);
-  ok('抽屉按「表头识别 / 列级类型 / 处理耗时」三组呈现',
-    hasText(byId('detailsBody'), '表头识别') && hasText(byId('detailsBody'), '列级类型') &&
-    hasText(byId('detailsBody'), '处理耗时'), details().slice(0, 140));
+  ok('抽屉按「表头识别 / 列输出类型 / 产物约定 / 处理耗时」四组呈现',
+    ['表头识别', '列输出类型', '产物约定', '处理耗时'].every((t) => hasText(byId('detailsBody'), t)),
+    details().slice(0, 160));
+  /* ★ 去重也要守住：总量数字归状态栏，抽屉里不许再抄一遍。
+     以前抽屉的「处理耗时」组里有"合计 X ms，产物 N 行 × M 列 / size"，
+     与状态栏逐字重复 —— 用户看到的"弹出框里有重复内容"就是这个。 */
+  ok('★ 抽屉不再重复状态栏的总量数字（行 × 列 / 体积 / 合计耗时）',
+    !/合计\s*[\d.]+\s*(ms|s|秒)/.test(detailsText()) &&
+    !/\d+\s*行\s*×\s*\d+\s*列/.test(detailsText()) &&
+    !/[\d.]+\s*(KB|B)\b/.test(detailsText()),
+    detailsText().slice(0, 200));
+  ok('★ 产物编码约定也搬进抽屉了（原来挂在产物区下方占一整行）',
+    hasText(detailsText(), 'UTF-8 无 BOM') && hasText(detailsText(), 'LF 换行'),
+    detailsText().slice(-160));
 
   fireClick(byId('btnDetails'));
   ok('点「详情」打开抽屉', byId('detailsDrawer').hidden === false);
@@ -532,8 +584,8 @@ async function main() {
   byId('btnSample')._h.click({ stopPropagation() {} });
   await tick(80);
   ok('重新载入示例后回到第 2 行表头',
-    hasText(byId('headerHint'), '第 2 行') && !hasText(byId('headerHint'), '保守取第 1 行'),
-    byId('headerHint').textContent);
+    hasText(detailsText(), '第 2 行') && !hasText(detailsText(), '保守取第 1 行'),
+    detailsText());
 
   /* ---------------------------------------------------------------
    * [7] 换方言 -> Oracle
@@ -562,7 +614,7 @@ async function main() {
   ok('★ 日期走 TO_DATE（格式串与 Python 版一致）',
     has(oraSql, "TO_DATE('2026-03-01 00:00:00','YYYY-MM-DD HH24:MI:SS')"), firstSelect(oraSql));
   ok('多行文本用 CHR(10) 与 || 拼接', has(oraSql, "'常温堆头' || CHR(10) || '买二赠一'"));
-  ok('方言说明写进提示', hasText(byId('codeHint'), 'FROM dual'), byId('codeHint').textContent);
+  ok('方言说明写进提示', hasText(detailsText(), 'FROM dual'), detailsText());
 
   /* ---------------------------------------------------------------
    * [7b] 裸 SELECT（wrap=plain）
@@ -616,8 +668,8 @@ async function main() {
   ok('★ 换行写 CHAR(10 USING utf8mb4)（裸 CHAR(10) 会让 CTAS 落成 varbinary）',
     has(mySql, 'CHAR(10 USING utf8mb4)'));
   ok('MySQL 字符串不加 N 前缀', has(mySql, "'东城店' AS `门店`"), firstSelect(mySql));
-  ok('方言说明已根据 MySQL 更新（不再提 dual）', !hasText(byId('codeHint'), 'FROM dual'),
-    byId('codeHint').textContent);
+  ok('方言说明已根据 MySQL 更新（不再提 dual）', !hasText(detailsText(), 'FROM dual'),
+    detailsText());
 
   /* ---------------------------------------------------------------
    * [10] 切到 INSERT 分批
@@ -637,7 +689,7 @@ async function main() {
   ok('列清单在表名后', has(insSql, '(`门店`, `商品`'), insSql.slice(0, 100));
   ok('用 VALUES 而不是 UNION ALL', has(insSql, 'VALUES') && !has(insSql, 'UNION ALL'));
   ok('每行是一个括号元组', has(insSql, "('东城店', '纯牛奶 250ml'"), insSql.slice(insSql.indexOf('VALUES'), insSql.indexOf('VALUES') + 80));
-  ok('提示里写了每批行数', hasText(byId('codeHint'), 'INSERT 每批 500 行'));
+  ok('提示里写了每批行数', hasText(detailsText(), 'INSERT 每批 500 行'));
 
   pick(fmtSel, 'union');
   ok('切回后「包裹方式」行回来', byId('wrapSegs').hidden === false);
@@ -649,7 +701,7 @@ async function main() {
   section('11. 手动改表头行（点预览里的某一行）');
   fireClick(rowsNow()[0]);
   ok('点第 1 行后提示改成「手动指定」',
-    hasText(byId('headerHint'), '手动指定第 1 行'), byId('headerHint').textContent);
+    hasText(detailsText(), '手动指定的第 1 行'), detailsText().slice(0, 120));
   ok('第 1 行变成 is-head、不再是 is-skipped',
     has(rowsNow()[0].className, 'is-head') && !has(rowsNow()[0].className, 'is-skipped'),
     rowsNow()[0].className);
@@ -667,7 +719,7 @@ async function main() {
 
   fireClick(findButton(byId('headerNotice'), '恢复自动识别'));
   ok('恢复自动识别后回到第 2 行',
-    hasText(byId('headerHint'), '第 2 行'), byId('headerHint').textContent);
+    hasText(detailsText(), '第 2 行'), detailsText());
   fireClick(byId('btnGenerate'));
   await tick();
   ok('恢复后数据回到 7 行', byId('statRows').textContent === '7', byId('statRows').textContent);
@@ -795,7 +847,7 @@ async function main() {
     hasText(byId('fileMeta'), 'UTF-8') && hasText(byId('fileMeta'), '逗号'),
     byId('fileMeta').textContent);
   ok('★ 只有 CSV 才显示「自动推断数字」开关', byId('inferWrap').hidden === false);
-  ok('CSV 表头识别为第 1 行', hasText(byId('headerHint'), '第 1 行'), byId('headerHint').textContent);
+  ok('CSV 表头识别为第 1 行', hasText(detailsText(), '第 1 行'), detailsText());
 
   fireClick(byId('btnGenerate'));
   await tick();
@@ -885,7 +937,7 @@ async function main() {
   ok('空态里没有残留上一次的数据源（文件行收起）', byId('fileRow').hidden === true);
   ok('产物被清掉，复制 / 下载重新禁用',
     byId('btnCopy').disabled === true && byId('btnDownload').disabled === true);
-  ok('状态栏摘要清空（不留上一个文件的识别理由）', byId('headerHint').textContent === '');
+  ok('状态栏摘要清空（不留上一个文件的识别理由）', detailsText() === '');
   ok('「详情」按钮跟着收起', byId('btnDetails').hidden === true);
   ok('CSV 专属开关也收起（回到 xlsx 语境）', byId('inferWrap').hidden === true);
   byId('btnSample')._h.click({ stopPropagation() {} });
@@ -901,15 +953,15 @@ async function main() {
   ok('前提：此刻停在「SQL 产物」页签',
     byId('resultCard').hidden === false && byId('headerCard').hidden === true);
   fireClick(byId('tabHeader'));
-  ok('点「表头预览」切过去', byId('headerCard').hidden === false && byId('resultCard').hidden === true);
-  ok('★ 切过去后表头预览真的在渲染（不是空壳）',
+  ok('点「数据预览」切过去', byId('headerCard').hidden === false && byId('resultCard').hidden === true);
+  ok('★ 切过去后数据预览真的在渲染（不是空壳）',
     !!findTag(byId('headerPicker'), 'TABLE'));
   /* ★★ 持久化断言必须拿**非默认值**判。settings.tab 的默认值就是 'result'，
      而 17g 之前有大量交互（下拉 / 开关 / Alt+Z）都会整份 saveSettings()，
      早把 'result' 写进 localStorage 了 —— 于是「存了没有」根本区分不出来：
      把 switchTab 里那句 saveSettings() 删掉，断言照样绿（反向实验实测抓到的
      第一条假守卫）。切到 'header' 之后立刻读，才真的能咬住。 */
-  ok('★ 切到「表头预览」（非默认页签）后立刻落盘',
+  ok('★ 切到「数据预览」（非默认页签）后立刻落盘',
     JSON.parse(localStorage.getItem('excel2sql-settings') || '{}').tab === 'header',
     String(JSON.parse(localStorage.getItem('excel2sql-settings') || '{}').tab));
   fireClick(byId('tabResult'));
@@ -1077,13 +1129,35 @@ async function main() {
     /\.esq-row\s*\{/.test(cssRules) && /\.esq-select\s*\{/.test(cssRules) && !/\.esq-seg\s*\{/.test(cssRules));
   ok('空态卡片样式存在（.esq-empty-card，且限宽不铺满全屏）',
     /\.esq-empty-card\s*\{[^}]*max-width/.test(cssRules));
-  ok('详情抽屉样式存在（.esq-drawer / .esq-detail-list）',
-    has(css, '.esq-drawer') && has(css, '.esq-detail-list'));
+  /* 抽屉的"列表版式"现在与提示弹窗共用（.modal-body ul/li）——
+     所以这里断言的是承载样式的类，而不是已经不再需要独立规则的那个类名。 */
+  ok('详情抽屉样式存在（.esq-drawer + 分组与分组标题）',
+    has(css, '.esq-drawer') && has(css, '.esq-detail-title') && has(css, '.esq-detail-group'));
   ok('产物占位样式存在（.esq-placeholder）', has(css, '.esq-placeholder'));
 
+  /* ---- ★★ 弹窗列表项的排版模型（这一版修的就是它）----
+     `.modal-body li` 一旦是 flex 容器，li 里的 <strong>/<kbd>/<code> 会**各自变成一个
+     flex item**，被 gap 打散成并排的"列"，整段话不再按文本流换行 —— 真机实测：
+     「解析完全在浏览器里完成，文件不会上传到任何服务器。」渲染出 3 个 flex item，
+     <strong> 被甩到 x=737 单独站一列；另一条渲染出 4 个，两个 <strong> 并排落在同一行。
+     用户看到的就是"详情内容没对齐、观感乱"。这条断言钉住它别再退回去。 */
+  const modalLi = (cssRules.match(/\.modal-body li\s*\{([^}]*)\}/) || [])[1] || '';
+  ok('★★ 弹窗列表项不是 flex 容器（否则行内标记会各自成列）',
+    !!modalLi && !/display\s*:\s*flex/.test(modalLi) && /padding-left/.test(modalLi),
+    modalLi.trim().slice(0, 90));
+  ok('★★ 项目符号用绝对定位 + padding-left（这才是真正的悬挂缩进）',
+    /\.modal-body li::before\s*\{[^}]*position\s*:\s*absolute/.test(cssRules));
+  ok('★ 抽屉的分组标题与提示弹窗同一档规格（两个弹窗是一个体系）',
+    /\.esq-detail-title\s*\{[^}]*font-size\s*:\s*12px/.test(cssRules) &&
+    /\.modal-sec-title\s*\{[^}]*font-size\s*:\s*12px/.test(cssRules));
+  ok('★ 使用提示按「支持范围 / 数据安全 / 使用要点」分了组',
+    ['支持范围', '数据安全', '使用要点'].every((t) => has(HTML, '>' + t + '<')));
+  ok('★ 死样式已清掉（.esq-hint / .esq-status-note / .chip 都不再存在）',
+    !has(cssRules, '.esq-hint') && !has(cssRules, '.esq-status-note') && !has(cssRules, '.chip'));
+
   /* ---- ★ 次级文字对比度：别把 --text-3 的 L 取到 58% ----
-     `--text-3` 承载 11~12px 的次级说明（.esq-field-hint / .esq-hint / .chip .k /
-     .esq-rownum），属"正文尺寸"，必须过 WCAG AA 的 4.5:1。
+     `--text-3` 承载 11~12px 的次级说明（.esq-field-hint / .esq-drop-sub /
+     .esq-file-meta / .esq-detail-empty），属"正文尺寸"，必须过 WCAG AA 的 4.5:1。
      L=58% 恰好是**明暗两条对比度曲线的交点** —— 亮底与暗底都只有 4.21:1，
      两边同时卡线，而且从截图上看不出任何异常。亮色要往下走、暗色要往上走。
      实测阶梯（_ui-shots 的对比度探针 / CDP 真机量）：亮色 56%→4.58、暗色 60%→4.58。 */
@@ -1121,6 +1195,67 @@ async function main() {
     !!phBlock && has(phBlock[1], '生成'),
     phBlock ? phBlock[1].replace(/\s+/g, ' ').trim().slice(0, 80) : '没匹配到占位层');
 
+  /* ---------------------------------------------------------------
+   * [19] 文案与信息架构（这一轮按 UI 反馈做的收敛）
+   * ------------------------------------------------------------- */
+  section('19. 文案去重 / 页签顺序 / 空态记号');
+
+  /* ① 常驻的副标题不该和空态徽标说同一句话 —— 两边都在讲"数据不离开浏览器"，
+        而其中一处（空态）在载入文件后就消失了，等于把常驻位置浪费掉。 */
+  const brandSub = (HTML.match(/<span class="brand-sub">([\s\S]*?)<\/span>/) || [])[1] || '';
+  const badge = (HTML.match(/<div class="empty-badge">([\s\S]*?)<\/div>/) || [])[1] || '';
+  ok('★ 顶栏副标题改说「能力」，不再和空态徽标重复隐私话术',
+    !!brandSub && !has(brandSub, '不离开浏览器') && !has(brandSub, '本地'),
+    brandSub.trim());
+  ok('★ 隐私话术只在「选文件那一刻」说一次（空态徽标）',
+    has(badge, '不会离开浏览器') || has(badge, '不离开浏览器'), badge.trim());
+  ok('★ 空态徽标带放大镜记号（与 codebase-context 的空态同一套记号）',
+    has(badge, '🔎'), badge.trim());
+
+  /* ② 空态那句 lead：说「动作 + 拿到什么」，不列操作步骤。
+        原文是「选一个 Excel / CSV 文件，确认表头行，挑好方言 —— …」——
+        三个微操作堆在标题下面，既啰嗦又和下面的能力条重复。 */
+  const lead = (HTML.match(/<p class="empty-lead">([\s\S]*?)<\/p>/) || [])[1] || '';
+  ok('★ 空态引导语不再罗列操作步骤（"确认表头行 / 挑好方言"这类）',
+    !!lead && !has(lead, '确认表头行') && !has(lead, '挑好方言') && !has(lead, '挑方言'),
+    lead.trim());
+  ok('★ 空态引导语说清了"拿到什么"',
+    has(lead, 'SQL') && (has(lead, '拖') || has(lead, '拖入')), lead.trim());
+
+  /* ③ 能力条第 4 条原来写「列级统一 躲开 UNION ALL 隐式转换」：
+        "躲开"是口语，"UNION ALL" 是上下文才懂的缩写（这里只用了 union 一种形式）。 */
+  const featureBlock = (readFileSync(join(JS, 'app.js'), 'utf8').match(/const FEATURES = \[([\s\S]*?)\];/) || [])[1] || '';
+  ok('★ 能力条不再用口语化动词与缩写（"躲开" / "UNION ALL"）',
+    !!featureBlock && !has(featureBlock, '躲开') && !has(featureBlock, 'UNION ALL') &&
+    has(featureBlock, '列级类型统一'),
+    featureBlock.replace(/\s+/g, ' ').trim().slice(0, 150));
+
+  /* ④ 页签顺序 = 阅读顺序：数据源在左、产物在右。
+        用 HTML 源码里的**出现位置**判断，而不是"元素存不存在"——
+        后者对调顺序也照样通过（这条自己就是个易写成假守卫的地方）。 */
+  const iTabHeader = HTML.indexOf('id="tabHeader"');
+  const iTabResult = HTML.indexOf('id="tabResult"');
+  ok('★ 页签顺序：数据预览在左、SQL 产物在右（数据源在读序的前面）',
+    iTabHeader > 0 && iTabResult > 0 && iTabHeader < iTabResult,
+    'tabHeader@' + iTabHeader + ' vs tabResult@' + iTabResult);
+  /* ★ 注释里那段说明历史决策的文字仍写着「表头预览」，所以这类断言必须读剥过注释的源码 */
+  const htmlNoComment = HTML_NO_COMMENT;
+  ok('★ 页签文案改成「数据预览」（不再叫"表头预览"—— 那只是其中一列的事）',
+    /id="tabHeader"[\s\S]{0,200}?>数据预览</.test(htmlNoComment) &&
+    !has(htmlNoComment, '表头预览'));
+  /* 面板顺序也要跟着：DOM 顺序 = 视觉顺序 = 阅读顺序 */
+  const iPaneHeader = HTML.indexOf('id="headerCard"');
+  const iPaneResult = HTML.indexOf('id="resultCard"');
+  ok('★ 面板顺序与页签顺序一致（headerCard 在 resultCard 之前）',
+    iPaneHeader > 0 && iPaneResult > 0 && iPaneHeader < iPaneResult);
+  ok('★ 默认仍停在「SQL 产物」页签（拿来就是要 SQL；数据有问题时左页签亮圆点）',
+    /class="esq-tab is-active" id="tabResult"/.test(HTML));
+
+  /* ⑤ 两个"随处都在讲同一件事"的元素不许回来：状态栏的解释性文字、产物区的编码小字 */
+  ok('★ index.html 里已无 codeHint / headerHint 元素（内容都归了抽屉）',
+    !has(HTML, 'id="codeHint"') && !has(HTML, 'id="headerHint"'));
+  ok('★ 产物面板里不再挂常驻小字（esq-hint 已清掉）', !has(HTML, 'class="esq-hint"'));
+
   console.log('\n' + '='.repeat(60));
   console.log('断言通过 ' + pass + ' 项，失败 ' + fail + ' 项');
   console.log(fail ? '\n结论：界面接线有问题。' : '全部通过。');
@@ -1128,7 +1263,12 @@ async function main() {
 }
 
 main()
-  .catch((e) => { console.error('\n接线自检异常终止：', e); process.exitCode = 1; })
+  .catch((e) => {
+    /* 走没被劫持的那个 console.error（见上面的 realConsoleError）——
+       否则这段唯一的致命错误报告会被吞进 errors 数组，只留下一个 rc=1 和半截输出。 */
+    realConsoleError('\n接线自检异常终止（这是自检自己的 bug，不是产品的问题）：', e);
+    process.exitCode = 1;
+  })
   .finally(() => {
     /* 清掉 toast / revokeObjectURL 的长定时器，让进程干净退出。
        不用 process.exit()：那可能截断已经写进 stdout 缓冲的输出。 */

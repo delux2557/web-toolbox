@@ -33,7 +33,10 @@
       </div>
       <div class="brand-text">
         <span class="brand-name">Excel / CSV 转 SQL</span>
-        <span class="brand-sub">数据不离开浏览器</span>
+        <!-- 副标题只说「能力」，不说「数据不离开浏览器」——
+             那句是空态徽标的职责（信任信号要在"选文件"那一刻出现）。
+             两边说同一句话，等于把常驻位置浪费掉了。 -->
+        <span class="brand-sub">4 种方言 · 零依赖单文件</span>
       </div>
     </div>
     <div class="topbar-actions">
@@ -63,9 +66,13 @@
          id 仍叫 emptyCard：自检脚本按它判断「是否回到空态」。 -->
     <section class="esq-empty" id="emptyCard">
       <div class="esq-empty-card">
-        <div class="empty-badge">本地运行 · 数据不离开浏览器</div>
+        <!-- 🔎 与 codebase-context 的空态徽标同一个记号，两个工具的空态一眼是"一家人" -->
+        <div class="empty-badge">🔎 本地运行 · 数据不离开浏览器</div>
         <h1 class="empty-title">表格数据，<span class="accent">一键转 SQL</span></h1>
-        <p class="empty-lead">选一个 Excel / CSV 文件，确认表头行，挑好方言 —— 直接拿到可粘贴的 SQL。</p>
+        <!-- 说清「动作 + 拿到什么」，不列操作步骤 ——
+             三步微操作（选文件 / 确认表头 / 挑方言）交给拖放区和下面的能力条去表达，
+             标题下面这句话只负责回答"这东西替我干什么"。 -->
+        <p class="empty-lead">把 Excel / CSV 拖进来，直接得到可粘贴执行的 SQL，不用再手工改格式。</p>
 
         <div class="esq-drop" id="dropZone" role="button" tabindex="0"
              aria-label="拖入或选择 Excel / CSV 文件">
@@ -87,7 +94,7 @@
     </section>
 
     <!-- ============ 工作态：左窄栏 + 右侧页签 + 贴底状态栏 ============
-         右侧不再上下切两半（那会把两侧都压得不可读），改成「SQL 产物 / 表头预览」
+         右侧不再上下切两半（那会把两侧都压得不可读），改成「数据预览 / SQL 产物」
          两个页签分时复用整列空间；复制、下载、更多动作都收进页签行，不另占一行。 -->
     <section class="esq-work" id="workState" hidden>
 
@@ -173,11 +180,14 @@
           <!-- 右侧：页签行（含动作）+ 页签内容 -->
           <section class="panel esq-right" id="rightPanel">
             <div class="esq-tabbar" role="tablist" aria-label="右侧面板">
+              <!-- 页签顺序 = 阅读顺序：数据源在左、产物在右。
+                   默认仍停在「SQL 产物」（settings.tab 默认 'result'），
+                   因为用户来这一趟的目的就是拿 SQL；数据有问题时「数据预览」上会点亮一个圆点。 -->
+              <button type="button" class="esq-tab" id="tabHeader" role="tab"
+                      aria-selected="false" aria-controls="headerCard">数据预览<span
+                      class="esq-tab-dot" id="tabHeaderDot" hidden></span></button>
               <button type="button" class="esq-tab is-active" id="tabResult" role="tab"
                       aria-selected="true" aria-controls="resultCard">SQL 产物</button>
-              <button type="button" class="esq-tab" id="tabHeader" role="tab"
-                      aria-selected="false" aria-controls="headerCard">表头预览<span
-                      class="esq-tab-dot" id="tabHeaderDot" hidden></span></button>
 
               <span class="esq-tabbar-spacer"></span>
 
@@ -200,18 +210,18 @@
             </div>
 
             <div class="esq-tabbody">
+              <!-- 面板顺序与页签顺序一致：DOM 顺序 = 视觉顺序 = 阅读顺序 -->
+              <div class="esq-pane esq-pane-header" id="headerCard" role="tabpanel" aria-labelledby="tabHeader" hidden>
+                <div id="headerNotice"></div>
+                <div class="esq-picker" id="headerPicker"></div>
+              </div>
+
               <div class="esq-pane esq-pane-result" id="resultCard" role="tabpanel" aria-labelledby="tabResult">
                 <div id="resultNotice"></div>
                 <div class="esq-placeholder" id="resultPlaceholder">
                   正在生成 SQL，产物会出现在这里。
                 </div>
                 <div class="esq-code" id="resultCode"></div>
-                <div class="esq-hint" id="codeHint"></div>
-              </div>
-
-              <div class="esq-pane esq-pane-header" id="headerCard" role="tabpanel" aria-labelledby="tabHeader" hidden>
-                <div id="headerNotice"></div>
-                <div class="esq-picker" id="headerPicker"></div>
               </div>
             </div>
           </section>
@@ -219,8 +229,9 @@
         </div>
       </div>
 
-      <!-- 底部状态栏：一行摘要。数据源 / 产物统计 / 表头落点各占一段，
-           放不下的（评分、逐列类型、耗时明细）一律进「详情」抽屉。 -->
+      <!-- 底部状态栏：只放**总量数字**与文件身份，一行。
+           分工：状态栏 = 数字总量；「详情」抽屉 = 原因与分项；面板内黄条 = 可操作的动作项。
+           「表头取第 N 行…」这类解释性文字一律进抽屉 —— 状态栏放它只会和抽屉重复。 -->
       <footer class="esq-status" id="statusBar">
         <span class="esq-file" id="fileRow" hidden>
           <span class="esq-file-dot" id="fileDot"></span>
@@ -238,9 +249,10 @@
           <span class="esq-stats-sep">·</span>
           <b id="statTime">0</b>
         </span>
-        <span class="esq-status-note" id="headerHint"></span>
         <button class="btn btn-ghost btn-sm" id="btnReselect">重新选择文件</button>
-        <button class="btn btn-ghost btn-sm" id="btnDetails" hidden>详情</button>
+        <button class="btn btn-ghost btn-sm" id="btnDetails" hidden>
+          详情<span class="esq-count" id="detailsCount" hidden></span>
+        </button>
       </footer>
     </section>
   </main>
@@ -268,18 +280,35 @@
       <button class="modal-close" id="btnCloseModalX" aria-label="关闭">&times;</button>
     </div>
     <div class="modal-body">
-      <ul>
-        <li>支持 <kbd>.xlsx</kbd> / <kbd>.xlsm</kbd> / <kbd>.csv</kbd>；<strong>不支持 .xls</strong>（老式二进制格式），请先另存为 .xlsx。</li>
-        <li>解析完全在浏览器里完成，文件<strong>不会上传到任何服务器</strong>。</li>
-        <li><strong>表头行</strong>：自动识别，识别理由写在底部状态栏；点「详情」看完整判据。点预览里任意一行即可改判 —— 这是最容易出错的一步，建议扫一眼预览。</li>
-        <li><strong>选项一改就自动重新生成</strong>，无需点击按钮。数据量较大（超过 5000 行）时会切换为手动，点页签行的 <strong>⋯</strong> → 「立即重新生成」出结果。</li>
-        <li><strong>自动换行</strong>：按 <kbd>Alt</kbd>+<kbd>Z</kbd> 切换 SQL 是否折行显示（与 VS Code 同款键位），设置会被记住。</li>
-        <li><strong>列级类型统一</strong>：同一列里只要出现过文本，整列就按字符串输出，避免 UNION ALL 时隐式转换报错。</li>
-        <li><strong>超长数字</strong>（超过 15 位）会保留为文本 —— 浏览器只有双精度浮点，转成数字会悄悄改写末尾几位。</li>
-        <li><strong>CSV 没有类型信息</strong>，默认整列按字符串输出；确认是纯数字列时可打开「CSV 自动推断数字」。</li>
-        <li><strong>UNION ALL 超过 2000 行</strong>会明显变慢，建议改用「INSERT 分批」；超过 2 万行请改用数据库原生导入通道。</li>
-        <li>产物是<strong>纯文本可信脚本</strong>，但数据来自你的表格，请勿对来源不明的文件直接在生产库执行。</li>
-      </ul>
+      <!-- 分组，而不是一坨 10 条的平行长列表 ——
+           扫读时先看到「哪三类事」，再决定要不要细看某一条。 -->
+      <section class="modal-sec">
+        <h3 class="modal-sec-title">支持范围</h3>
+        <ul>
+          <li>支持 <kbd>.xlsx</kbd> / <kbd>.xlsm</kbd> / <kbd>.csv</kbd>；<strong>不支持 .xls</strong>（老式二进制格式），请先另存为 .xlsx。</li>
+          <li><strong>CSV 没有类型信息</strong>，默认整列按字符串输出；确认是纯数字列时可打开「CSV 自动推断数字」。</li>
+          <li><strong>UNION ALL 超过 2000 行</strong>会明显变慢，建议改用「INSERT 分批」；超过 2 万行请改用数据库原生导入通道。</li>
+        </ul>
+      </section>
+
+      <section class="modal-sec">
+        <h3 class="modal-sec-title">数据安全</h3>
+        <ul>
+          <li>解析完全在浏览器里完成，文件<strong>不会上传到任何服务器</strong>。</li>
+          <li>产物是<strong>纯文本脚本</strong>，但数据来自你的表格 —— 请勿对来源不明的文件直接在生产库执行。</li>
+        </ul>
+      </section>
+
+      <section class="modal-sec">
+        <h3 class="modal-sec-title">使用要点</h3>
+        <ul>
+          <li><strong>表头行</strong>自动识别，判据与逐列明细在「详情」里；点预览中任意一行即可改判 —— 这是最容易出错的一步，建议扫一眼。</li>
+          <li><strong>选项一改就自动重新生成</strong>，无需点按钮。数据超过 5000 行时会切换为手动，点页签行的 <strong>⋯</strong> →「立即重新生成」出结果。</li>
+          <li>按 <kbd>Alt</kbd>+<kbd>Z</kbd> 切换 SQL 是否折行显示（与 VS Code 同款键位），设置会被记住。</li>
+          <li><strong>列级类型统一</strong>：同一列只要出现过文本，整列就按字符串输出，避免 UNION ALL 的隐式转换报错。</li>
+          <li><strong>超长数字</strong>（超过 15 位）会保留为文本 —— 浏览器只有双精度浮点，转成数字会悄悄改写末尾几位。</li>
+        </ul>
+      </section>
     </div>
     <div class="modal-foot">
       <button class="btn btn-primary" id="btnCloseModal">知道了</button>
