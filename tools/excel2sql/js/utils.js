@@ -80,18 +80,12 @@ const E2sUtils = (function () {
    * 时序 / 剪贴板 / 下载
    * ------------------------------------------------------------------ */
 
-  /* 等一帧，让"生成中…"这类状态先渲染出来，再跑重活。
-     双 rAF 是为了确保样式真的已经绘制（单 rAF 只保证在绘制前执行）。 */
+  /* 让出一拍，好让"正在生成…"这类状态先渲染出来，再跑重活。
+     ★ 刻意用 setTimeout 而不是 requestAnimationFrame：rAF 在**后台标签页里永不触发**
+     （规范行为，不是 bug）。而改成自动生成之后，重算很容易在用户切走的那一刻被触发 ——
+     那一卡就是永久的：按钮一直停在「正在生成…」，切回来也不好使。setTimeout 没有这个可见性依赖。 */
   function nextFrame() {
-    return new Promise(function (resolve) {
-      if (typeof requestAnimationFrame === 'function') {
-        requestAnimationFrame(function () {
-          requestAnimationFrame(function () { resolve(); });
-        });
-      } else {
-        setTimeout(resolve, 0);
-      }
-    });
+    return new Promise(function (resolve) { setTimeout(resolve, 0); });
   }
 
   /* 老浏览器的复制兜底：临时 textarea + execCommand */

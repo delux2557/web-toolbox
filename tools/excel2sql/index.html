@@ -86,45 +86,66 @@
       </div>
     </section>
 
-    <!-- ============ 工作态：工具栏 + 左右分栏 + 状态栏 ============ -->
+    <!-- ============ 工作态：左窄栏 + 右侧页签 + 贴底状态栏 ============
+         右侧不再上下切两半（那会把两侧都压得不可读），改成「SQL 产物 / 表头预览」
+         两个页签分时复用整列空间；复制、下载、更多动作都收进页签行，不另占一行。 -->
     <section class="esq-work" id="workState" hidden>
 
       <div class="esq-work-top">
-        <!-- 工具栏：复制 / 下载固定可见，不必滚到产物底部才点得到 -->
-        <div class="esq-toolbar">
-          <button class="btn btn-primary btn-sm" id="btnCopy" disabled>复制 SQL</button>
-          <button class="btn btn-ghost btn-sm" id="btnDownload" disabled>下载 .sql</button>
-          <span class="esq-toolbar-spacer"></span>
-          <button class="btn btn-ghost btn-sm" id="btnReselect">重新选择文件</button>
-        </div>
-
         <div class="esq-layout">
 
-          <!-- 左侧窄栏：转换设置 -->
+          <!-- 左侧窄栏：数据源 + 转换设置 -->
           <aside class="panel esq-settings">
             <div class="panel-head">
               <span class="panel-title">转换设置</span>
             </div>
             <div class="panel-body">
-              <div class="esq-label">方言</div>
-              <div class="esq-segs" id="dialectSegs"></div>
+
+              <label class="esq-row" id="sheetWrap" hidden>
+                <span class="esq-row-label">工作表</span>
+                <select class="esq-select" id="sheetSelect"></select>
+              </label>
+
+              <label class="esq-row">
+                <span class="esq-row-label">方言</span>
+                <select class="esq-select" id="dialectSelect">
+                  <option value="sqlserver">SQL Server</option>
+                  <option value="mysql">MySQL</option>
+                  <option value="oracle">Oracle</option>
+                  <option value="postgresql">PostgreSQL</option>
+                </select>
+              </label>
+
+              <label class="esq-row">
+                <span class="esq-row-label">输出形式</span>
+                <select class="esq-select" id="formatSelect">
+                  <option value="union">UNION ALL</option>
+                  <option value="insert">INSERT 分批</option>
+                </select>
+              </label>
+
+              <label class="esq-row" id="wrapSegs">
+                <span class="esq-row-label">包裹方式</span>
+                <select class="esq-select" id="wrapSelect">
+                  <option value="cte">WITH 包裹</option>
+                  <option value="plain">裸 SELECT</option>
+                </select>
+              </label>
+
+              <label class="esq-row" id="batchWrap" hidden>
+                <span class="esq-row-label">每批行数</span>
+                <input type="number" class="esq-input esq-input-inline" id="batchInput"
+                       min="1" max="10000" step="100" value="500" />
+              </label>
+
+              <label class="esq-row">
+                <span class="esq-row-label">目标表名</span>
+                <input type="text" class="esq-input esq-input-inline" id="tableInput"
+                       value="HARDCODE" spellcheck="false" />
+              </label>
 
               <div class="esq-divider"></div>
-              <div class="esq-label">输出形式</div>
-              <div class="esq-segs" id="formatSegs"></div>
-              <div class="esq-segs" id="wrapSegs" style="margin-top:6px"></div>
 
-              <div class="esq-divider"></div>
-              <div class="esq-label">目标表名</div>
-              <input type="text" class="esq-input" id="tableInput" value="HARDCODE" spellcheck="false" />
-
-              <div id="batchWrap" hidden>
-                <div class="esq-divider"></div>
-                <div class="esq-label">每批行数</div>
-                <input type="number" class="esq-input" id="batchInput" min="1" max="10000" step="100" value="500" />
-              </div>
-
-              <div class="esq-divider"></div>
               <label class="esq-field">
                 <span class="esq-field-label">空串视为 NULL
                   <span class="esq-field-hint">CSV 里逗号之间的空字段会写成 NULL</span>
@@ -141,63 +162,65 @@
 
               <label class="esq-field">
                 <span class="esq-field-label">日期兼容模式
-                  <span class="esq-field-hint">
-                    默认对齐命令行版：纯日期也输出成 <code>YYYY-MM-DD 00:00:00</code>。
-                    关闭后按单元格格式精确判定，纯日期输出 <code>YYYY-MM-DD</code>。
-                  </span>
+                  <span class="esq-field-hint">纯日期补 <code>00:00:00</code>，对齐命令行版</span>
                 </span>
                 <span class="switch"><input type="checkbox" id="optLegacyDate" checked /><span class="track"></span></span>
               </label>
 
-              <div class="esq-settings-foot">
-                <button class="btn btn-primary" id="btnGenerate" style="width:100%" disabled>生成 SQL</button>
-              </div>
             </div>
           </aside>
 
-          <div class="esq-right">
-            <!-- 右上：表头预览（宽了才放得下横向的列） -->
-            <section class="panel esq-header-panel" id="headerCard">
-              <div class="panel-head">
-                <span class="panel-title">表头预览</span>
-                <span class="head-spacer"></span>
-                <div class="select-wrap" id="sheetWrap" hidden>
-                  <span>工作表</span>
-                  <select id="sheetSelect"></select>
-                </div>
-              </div>
-              <div class="panel-body">
-                <div id="headerNotice"></div>
-                <div class="esq-picker" id="headerPicker"></div>
-              </div>
-            </section>
+          <!-- 右侧：页签行（含动作）+ 页签内容 -->
+          <section class="panel esq-right" id="rightPanel">
+            <div class="esq-tabbar" role="tablist" aria-label="右侧面板">
+              <button type="button" class="esq-tab is-active" id="tabResult" role="tab"
+                      aria-selected="true" aria-controls="resultCard">SQL 产物</button>
+              <button type="button" class="esq-tab" id="tabHeader" role="tab"
+                      aria-selected="false" aria-controls="headerCard">表头预览<span
+                      class="esq-tab-dot" id="tabHeaderDot" hidden></span></button>
 
-            <!-- 右下：SQL 产物 -->
-            <section class="panel esq-result-panel" id="resultCard">
-              <div class="panel-head">
-                <span class="panel-title">SQL 产物</span>
-                <span class="head-spacer"></span>
-                <div class="chips">
-                  <span class="chip"><span class="k">数据行</span><b class="v" id="statRows">0</b></span>
-                  <span class="chip"><span class="k">列数</span><b class="v" id="statCols">0</b></span>
-                  <span class="chip"><span class="k">产物大小</span><b class="v" id="statSize">0</b></span>
-                  <span class="chip"><span class="k">耗时</span><b class="v" id="statTime">0</b></span>
-                </div>
+              <span class="esq-tabbar-spacer"></span>
+
+              <button class="btn btn-ghost btn-sm" id="btnCopy" disabled>复制</button>
+              <button class="btn btn-ghost btn-sm" id="btnDownload" disabled>下载</button>
+              <button class="icon-btn icon-btn-sm" id="btnMore" title="更多选项"
+                      aria-label="更多选项" aria-haspopup="true" aria-expanded="false">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/>
+                </svg>
+              </button>
+
+              <div class="esq-menu" id="moreMenu" hidden>
+                <button type="button" class="esq-menu-item" id="btnGenerate" disabled>立即重新生成</button>
+                <label class="esq-menu-item">
+                  <span>自动换行 <kbd>Alt</kbd>+<kbd>Z</kbd></span>
+                  <span class="switch"><input type="checkbox" id="optWordWrap" /><span class="track"></span></span>
+                </label>
               </div>
-              <div class="panel-body">
+            </div>
+
+            <div class="esq-tabbody">
+              <div class="esq-pane esq-pane-result" id="resultCard" role="tabpanel" aria-labelledby="tabResult">
                 <div id="resultNotice"></div>
                 <div class="esq-placeholder" id="resultPlaceholder">
-                  表头看着没问题就点左侧的「生成 SQL」，产物会出现在这里。
+                  正在生成 SQL，产物会出现在这里。
                 </div>
                 <div class="esq-code" id="resultCode"></div>
                 <div class="esq-hint" id="codeHint"></div>
               </div>
-            </section>
-          </div>
+
+              <div class="esq-pane esq-pane-header" id="headerCard" role="tabpanel" aria-labelledby="tabHeader" hidden>
+                <div id="headerNotice"></div>
+                <div class="esq-picker" id="headerPicker"></div>
+              </div>
+            </div>
+          </section>
+
         </div>
       </div>
 
-      <!-- 底部状态栏：只放一行摘要，完整理由收进「详情」 -->
+      <!-- 底部状态栏：一行摘要。数据源 / 产物统计 / 表头落点各占一段，
+           放不下的（评分、逐列类型、耗时明细）一律进「详情」抽屉。 -->
       <footer class="esq-status" id="statusBar">
         <span class="esq-file" id="fileRow" hidden>
           <span class="esq-file-dot" id="fileDot"></span>
@@ -205,7 +228,18 @@
           <span class="esq-file-meta" id="fileMeta"></span>
         </span>
         <span class="esq-status-spacer"></span>
+        <span class="esq-gen-state" id="genState" hidden></span>
+        <span class="esq-stats" id="sqlStats" hidden>
+          <b id="statRows">0</b> 行 × <b id="statCols">0</b> 列
+          <span class="esq-stats-sep">·</span>
+          <span>SQL <b id="statSqlLines">0</b> 行</span>
+          <span class="esq-stats-sep">·</span>
+          <b id="statSize">0</b>
+          <span class="esq-stats-sep">·</span>
+          <b id="statTime">0</b>
+        </span>
         <span class="esq-status-note" id="headerHint"></span>
+        <button class="btn btn-ghost btn-sm" id="btnReselect">重新选择文件</button>
         <button class="btn btn-ghost btn-sm" id="btnDetails" hidden>详情</button>
       </footer>
     </section>
@@ -238,6 +272,8 @@
         <li>支持 <kbd>.xlsx</kbd> / <kbd>.xlsm</kbd> / <kbd>.csv</kbd>；<strong>不支持 .xls</strong>（老式二进制格式），请先另存为 .xlsx。</li>
         <li>解析完全在浏览器里完成，文件<strong>不会上传到任何服务器</strong>。</li>
         <li><strong>表头行</strong>：自动识别，识别理由写在底部状态栏；点「详情」看完整判据。点预览里任意一行即可改判 —— 这是最容易出错的一步，建议扫一眼预览。</li>
+        <li><strong>选项一改就自动重新生成</strong>，无需点击按钮。数据量较大（超过 5000 行）时会切换为手动，点页签行的 <strong>⋯</strong> → 「立即重新生成」出结果。</li>
+        <li><strong>自动换行</strong>：按 <kbd>Alt</kbd>+<kbd>Z</kbd> 切换 SQL 是否折行显示（与 VS Code 同款键位），设置会被记住。</li>
         <li><strong>列级类型统一</strong>：同一列里只要出现过文本，整列就按字符串输出，避免 UNION ALL 时隐式转换报错。</li>
         <li><strong>超长数字</strong>（超过 15 位）会保留为文本 —— 浏览器只有双精度浮点，转成数字会悄悄改写末尾几位。</li>
         <li><strong>CSV 没有类型信息</strong>，默认整列按字符串输出；确认是纯数字列时可打开「CSV 自动推断数字」。</li>

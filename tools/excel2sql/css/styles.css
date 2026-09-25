@@ -314,28 +314,56 @@ kbd {
 .esq-work { height: 100%; display: flex; flex-direction: column; }
 .esq-work-top {
   flex: 1; min-height: 0;
-  display: flex; flex-direction: column; gap: 12px;
+  display: flex; flex-direction: column;
   padding: 14px 20px 0;
 }
-.esq-toolbar { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.esq-toolbar-spacer { flex: 1; }
 
-/* 左窄栏放配置，右列上下分「表头预览 / SQL 产物」 */
+/* 左窄栏放配置，右列是「页签行 + 页签内容」的一个整体面板 */
 .esq-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; }
-.esq-right { min-height: 0; display: grid; grid-template-rows: auto minmax(180px, 1fr); gap: 14px; }
-/* 表头预览自适应内容高度，但最多占右列一半 —— 剩下的全部留给需要长读的 SQL */
-.esq-header-panel { min-height: 0; max-height: 52%; }
-.esq-header-panel .panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
-.esq-result-panel { min-height: 0; }
-.esq-result-panel .panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+
+/* ★★ 右侧不再上下切两半。早前那版是
+   `.esq-right { grid-template-rows: auto minmax(180px,1fr) }` 配
+   `.esq-header-panel { max-height: 52% }` —— 两者互不知情：auto 轨道按 headerCard 的
+   **max-content** 定高（436px），而 max-height 的百分比是相对**那条轨道**算的
+   （52% × 436 = 227px）。结果卡片只渲染 227px，却占着 436px 的轨道，
+   中间平白空出 223px（用户真实文件 246px），SQL 只剩 79px ≈ 4 行。
+   ⚠️ 实测：只调这个百分比的数值几乎没用 —— 把 max-height 整个删掉，空隙是没了，
+   但 SQL 可见高度 94px → 94px 一点没变（轨道本身没动）。
+   改成页签分时复用后，同一块空间 SQL 从 4 行涨到 26 行，表头预览也能一次看全。 */
+.esq-right { min-height: 0; display: flex; flex-direction: column; }
+
+/* 页签行同时承担「面板标题 + 动作区」两个职责，省掉原来那条独立工具栏 */
+.esq-tabbar {
+  position: relative;
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 4px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.esq-tabbar-spacer { flex: 1; }
+.esq-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 11px; border-radius: 8px;
+  border: 1px solid transparent; background: transparent;
+  font-size: 12.5px; font-weight: 500; color: var(--text-3);
+  transition: background 140ms var(--ease-out), color 140ms var(--ease-out), border-color 140ms var(--ease-out);
+}
+.esq-tab:hover { background: var(--surface-2); color: var(--text); }
+.esq-tab.is-active { background: var(--surface-3); border-color: var(--border); color: var(--text); font-weight: 600; }
+/* 表头识别有疑问时在页签上点一个圆点 —— 不打断阅读，但一眼看得见 */
+.esq-tab-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex-shrink: 0; }
+
+.esq-tabbody { flex: 1; min-height: 0; display: flex; }
+.esq-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.esq-pane-result { overflow: hidden; }
+.esq-pane-header { overflow: auto; }
+
 .esq-settings .panel-body { flex: 1; min-height: 0; overflow: auto; }
-/* 「生成 SQL」钉在窄栏底部，不随设置项多少上下漂 */
-.esq-settings-foot { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
 
 /* 状态栏：一行摘要，完整理由收进「详情」 */
 .esq-status {
   flex-shrink: 0;
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 10px;
   height: 42px; padding: 0 20px;
   border-top: 1px solid var(--border);
   background: var(--glass);
@@ -343,11 +371,21 @@ kbd {
   font-size: 12px; color: var(--text-3); font-family: var(--font-mono);
 }
 .esq-status-spacer { flex: 1; }
+/* 自动生成需要「它还活着」的反馈 —— 选项一改就重算，用户得知道刚才那下生效了。
+   用状态栏而不是 toast：连续调选项时 toast 会一条盖一条，反而更吵。 */
+.esq-gen-state { flex-shrink: 0; color: var(--accent-strong); }
+.esq-gen-state.is-busy { color: var(--text-3); }
+/* 产物统计。早前是产物卡头部的 4 个 chip：「产物大小」与下方提示条逐字重复，
+   「数据行 / 列数 / 耗时」在详情抽屉里都有 —— 同一屏里说三遍。
+   收成状态栏的一段后，产物卡头部的位置正好让给「复制 / 下载」。 */
+.esq-stats { display: flex; align-items: center; gap: 5px; white-space: nowrap; flex-shrink: 0; }
+.esq-stats b { color: var(--text-2); font-weight: 600; font-variant-numeric: tabular-nums; }
+.esq-stats-sep { color: var(--border-strong); }
 .esq-status-note {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  max-width: 48%; text-align: right; color: var(--text-2);
+  max-width: 30%; text-align: right; color: var(--text-2);
 }
-.esq-file { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 50%; }
+.esq-file { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 44%; }
 .esq-file-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
 .esq-file-dot.is-csv { background: var(--accent); }
 .esq-file-name { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -372,16 +410,42 @@ kbd {
 .esq-picker tbody tr.is-head .esq-rownum { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
 .esq-picker tbody tr.is-skipped td { opacity: 0.6; }
 
-/* ---------- 分段控件 ---------- */
-.esq-segs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.esq-seg {
-  font: inherit; font-size: 12.5px; padding: 7px 6px; cursor: pointer; text-align: center;
-  border: 1px solid var(--border); border-radius: var(--radius-s);
-  background: var(--surface); color: var(--text-2);
-  transition: background 140ms var(--ease-out), color 140ms var(--ease-out), border-color 140ms var(--ease-out);
+/* ---------- 行内字段：标签在左、控件在右，一项一行 ----------
+   早前用「分段控件」平铺选项：方言 4 个按钮排成 2 行占 76px，输出形式再加 2 行，
+   左栏内容 632px 正好顶满面板（余量 0）—— 于是切到 INSERT 时冒出的「每批行数」
+   多出 33px 就让面板出滚动条，观感上就是「卡片高度在跳」。
+   改下拉后每项恒定 34px，仍留出大片余量。 */
+.esq-row { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 2px 0; }
+.esq-row-label { flex-shrink: 0; width: 62px; font-size: 12.5px; color: var(--text-2); }
+.esq-select {
+  flex: 1; min-width: 0; height: 30px; padding: 0 8px;
+  font: inherit; font-size: 12.5px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-s);
+  background: var(--surface); color: var(--text); cursor: pointer; outline: none;
 }
-.esq-seg:hover { border-color: var(--border-strong); color: var(--text); }
-.esq-seg.is-active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.esq-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
+/* 行内输入框：.esq-input 自带 width:100%，在 flex 行里要让位给 flex 伸缩 */
+.esq-input-inline { flex: 1 1 auto; width: auto; min-width: 0; height: 30px; padding: 6px 10px; }
+
+/* ---------- 「⋯」更多菜单 ---------- */
+.icon-btn-sm { width: 28px; height: 28px; border-radius: 8px; }
+.esq-menu {
+  position: absolute; right: 10px; top: calc(100% - 3px); z-index: 20;
+  min-width: 218px; padding: 5px;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-m); box-shadow: var(--shadow-2);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.esq-menu-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 32px; padding: 4px 9px;
+  border: none; background: none; border-radius: var(--radius-s);
+  font: inherit; font-size: 12.5px; color: var(--text); text-align: left; cursor: pointer;
+}
+.esq-menu-item:hover { background: var(--surface-2); }
+.esq-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
+/* 开关本身可点（label 会把点击转发给 input），这里别再抢事件 */
+.esq-menu-item .switch { pointer-events: none; }
 
 /* ---------- 表单字段 ---------- */
 .esq-field { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
@@ -417,6 +481,10 @@ kbd {
   padding: 12px 14px; overflow: auto; flex: 1; min-height: 96px;
   white-space: pre; color: var(--text-2);
 }
+/* 自动换行（Alt+Z，与 VS Code 同款键位）。默认关：
+   开会把长 SELECT 折行显示 —— 横向滚动条消失，但缩进层次会变乱，
+   而「一眼看出 UNION ALL 的结构」正是这个预览区的主要价值。留给用户自己选。 */
+.esq-code.is-wrap { white-space: pre-wrap; word-break: break-word; overflow-x: hidden; }
 .esq-code .c { color: var(--text-3); }
 .esq-code .k { color: var(--accent-strong); }
 .esq-code .s { color: var(--success); }
@@ -449,23 +517,24 @@ kbd {
   .esq-layout {
     grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto;
     /* ★ 必须把 flex:1 收掉。留着 flex:1 的话 .esq-layout 的高度仍被视口均分，
-       三块面板各自被压扁后内部滚动 —— 「生成 SQL」会被挤到面板可视区之外
-       （窄屏实测踩到）。改成按内容撑开，滚动交给下面的 .esq-work-top。 */
+       面板各自被压扁后内部滚动 —— 面板底部的控件会被挤到可视区之外（窄屏实测踩到）。
+       改成按内容撑开，滚动交给下面的 .esq-work-top。 */
     flex: 0 0 auto;
   }
   .esq-work-top { overflow: auto; }
-  .esq-right { grid-template-rows: auto auto; }
-  .esq-header-panel { max-height: none; }
+  /* 页签面板堆叠后按内容撑开，但要给个下限，否则 SQL 预览只剩几行 */
+  .esq-right { min-height: 340px; }
   /* 面板不再被压扁，内部的滚动条就该让位，否则出现"套娃双滚动" */
-  .esq-settings .panel-body, .esq-header-panel .panel-body { overflow: visible; }
+  .esq-settings .panel-body, .esq-pane-header { overflow: visible; }
   /* 这两块仍要各自限高：SQL 可能几千行，不限高会把页面拉成几屏长 */
   .esq-picker, .esq-code { max-height: 46vh; }
 }
 @media (max-width: 640px) {
   .esq-work-top { padding: 12px 12px 0; }
   .esq-status { padding: 0 12px; gap: 8px; }
-  .esq-status-note { max-width: 40%; }
-  .esq-file { max-width: 58%; }
+  /* 窄屏先让位：表头落点这条在「详情」抽屉里有完整版 */
+  .esq-status-note { display: none; }
+  .esq-file { max-width: 52%; }
   .esq-file-meta { display: none; }
-  .esq-toolbar { flex-wrap: wrap; }
+  .esq-tabbar { flex-wrap: wrap; }
 }
