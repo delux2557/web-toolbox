@@ -1,0 +1,111 @@
+{
+  "note": [
+    "反向实验用例表。每条 = 一处变异 + 期望被咬到的断言文案（expect 是『失败行里必须出现的子串』）。",
+    "选点原则：优先覆盖『改坏了却不会报错』的地方 —— 视觉契约、布局前提、静默失效的守卫。",
+    "find 里的换行一律写 \\n，runner 会按目标文件的真实行尾（本仓库是 CRLF）自适应。",
+    "find 必须唯一命中；命中 0 处或 >1 处都会被判为『用例自身无效』。"
+  ],
+  "cases": [
+    {
+      "id": "text3-light-back-to-58",
+      "gate": "ui",
+      "why": "亮色 --text-3 回到 58% —— 那是明暗两条对比度曲线的交点，亮底暗底都只有 4.21:1，跌破 WCAG AA 4.5，而截图上看不出异常",
+      "file": "tools/excel2sql/css/styles.css",
+      "find": "--text-3: oklch(56% 0.012 250);",
+      "replace": "--text-3: oklch(58% 0.012 250);",
+      "expect": ["亮色 --text-3 不过亮"]
+    },
+    {
+      "id": "text3-both-58-crossover",
+      "gate": "ui",
+      "why": "两套主题的 --text-3 同时停在 58% —— 正是那条 4.21:1 的交点。两条单侧断言此时都不该响（各自都在阈值内），只有专门的『交点』断言能拦下它。这条也顺手证明了那条交点断言不是摆设",
+      "file": "tools/excel2sql/css/styles.css",
+      "edits": [
+        { "find": "--text-3: oklch(56% 0.012 250);", "replace": "--text-3: oklch(58% 0.012 250);" },
+        { "find": "--text-3: oklch(60% 0.01 240);", "replace": "--text-3: oklch(58% 0.01 240);" }
+      ],
+      "expect": ["两套主题的 --text-3 没有同时停在 58%"]
+    },
+    {
+      "id": "text3-dark-back-to-58",
+      "gate": "ui",
+      "why": "暗色 --text-3 回到 58% —— 同一条 4.21:1 陷阱的另一侧",
+      "file": "tools/excel2sql/css/styles.css",
+      "find": "--text-3: oklch(60% 0.01 240);",
+      "replace": "--text-3: oklch(58% 0.01 240);",
+      "expect": ["暗色 --text-3 不过暗"]
+    },
+    {
+      "id": "narrow-layout-flex-restored",
+      "gate": "ui",
+      "why": "窄屏堆叠时把 .esq-layout 的 flex 收掉那句还原成 flex:1 —— 高度会被视口均分，三块面板各自压扁后内部滚动，「生成 SQL」被挤出可视区（真机 900×860 实测）",
+      "file": "tools/excel2sql/css/styles.css",
+      "find": "flex: 0 0 auto;",
+      "replace": "flex: 1 1 auto;",
+      "expect": ["窄屏下 .esq-layout 不再均分视口高度"]
+    },
+    {
+      "id": "layout-columns-not-grid",
+      "gate": "ui",
+      "why": "把分栏从 grid 列宽改成别的写法 —— 左右分栏是本次改版的核心结构，必须由 grid 表达式承载，而不是靠 DOM 顺序凑",
+      "file": "tools/excel2sql/css/styles.css",
+      "find": "grid-template-columns: 300px minmax(0, 1fr);",
+      "replace": "display: flex;",
+      "expect": ["分栏结构由 grid 表达"]
+    },
+    {
+      "id": "hidden-important-dropped",
+      "gate": "ui",
+      "why": "去掉 [hidden] 的 !important —— 网格/弹性容器上的 el.hidden 会失效，控件『关不掉』且完全不报错",
+      "file": "tools/excel2sql/css/styles.css",
+      "find": "[hidden] { display: none !important; }",
+      "replace": "[hidden] { display: none; }",
+      "expect": ["[hidden] { display: none !important }"]
+    },
+    {
+      "id": "placeholder-style-removed",
+      "gate": "ui",
+      "why": "占位层样式被删（产物区会退化成一块空白面板）",
+      "file": "tools/excel2sql/css/styles.css",
+      "find": ".esq-placeholder {",
+      "replace": ".zzz-removed-placeholder {",
+      "expect": ["产物占位样式存在"]
+    },
+    {
+      "id": "startup-shows-work-state",
+      "gate": "ui",
+      "why": "启动就亮出工作态 —— 空态/工作态的互斥是这次改版的骨架，破掉之后『拖入文件 → 预览』的流程就没了",
+      "file": "tools/excel2sql/js/app.js",
+      "find": "el.workState.hidden = true;   /* 启动必然是空态：还没有数据源，没什么可预览的 */",
+      "replace": "el.workState.hidden = false;",
+      "expect": ["工作态初始隐藏"]
+    },
+    {
+      "id": "reset-to-empty-loses-renderDetails",
+      "gate": "ui",
+      "why": "★ 这条复现的是改版时真踩到的 bug：resetToEmpty() 漏掉 renderDetails()，「详情」按钮会残留 —— 现场看一眼就会发现，但纯逻辑测试永远抓不到",
+      "file": "tools/excel2sql/js/app.js",
+      "find": "renderDetails();         /* 清空抽屉内容，并把「详情」按钮一起收起 */",
+      "replace": "/* 变异：故意抽掉 renderDetails() */",
+      "expect": ["「详情」按钮跟着收起"]
+    },
+    {
+      "id": "mysql-naked-char10",
+      "gate": "logic",
+      "why": "MySQL 换行退回裸 CHAR(10) —— 在 MySQL 里那是二进制串，会让 CTAS 把列落成 varbinary（真库实测踩到）",
+      "file": "tools/excel2sql/js/dialects.js",
+      "find": "newlineExpr: 'CHAR(10 USING utf8mb4)',",
+      "replace": "newlineExpr: 'CHAR(10)',",
+      "expect": ["MySQL 用 CONCAT + CHAR(10 USING utf8mb4)"]
+    },
+    {
+      "id": "oracle-dual-dropped",
+      "gate": "logic",
+      "why": "Oracle 的 FROM dual 被抽掉 —— 裸 SELECT 在 Oracle 里直接语法错",
+      "file": "tools/excel2sql/js/dialects.js",
+      "find": "dual: ' FROM dual'",
+      "replace": "dual: ''",
+      "expect": ["Oracle 带 FROM dual"]
+    }
+  ]
+}
