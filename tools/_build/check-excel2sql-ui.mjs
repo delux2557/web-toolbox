@@ -121,13 +121,20 @@ const HTML = readFileSync(join(TOOL, 'index.html'), 'utf8');
 
 /** ★ 注册表从真实 HTML 预填：id 抄错 → byId 返回 null → 接线静默失败的守卫 */
 function prefilledRegistry(html) {
-  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
-  for (const id of ids) registry.set(id, makeEl(id));
-  /* 把 HTML 上的 hidden 属性搬进桩。不搬的话「初始隐藏」那几条断言
-     其实是桩的默认值在过关，与 HTML 无关 —— 恒真的假守卫。 */
-  for (const t of html.matchAll(/<[a-zA-Z][^>]*\bid="([^"]+)"[^>]*>/g)) {
-    const el = registry.get(t[1]);
-    if (el && /\shidden(\s|\/|>)/.test(t[0])) el.hidden = true;
+  const ids = [];
+  /* 连 tagName 一起带出来。桩里一律给 'div' 的话，「这个控件是原生 <select>」
+     这类断言永远为假 —— 而它守的正是"别再退回平铺分段按钮"这条改版结论。 */
+  for (const t of html.matchAll(/<([a-zA-Z][\w-]*)([^>]*?)\bid="([^"]+)"([^>]*?)\/?>/g)) {
+    const el = makeEl(t[3], t[1]);
+    /* 把 HTML 上的 hidden 属性搬进桩。不搬的话「初始隐藏」那几条断言
+       其实是桩的默认值在过关，与 HTML 无关 —— 恒真的假守卫。 */
+    if (/\shidden(\s|\/|>)/.test(t[0])) el.hidden = true;
+    registry.set(t[3], el);
+    ids.push(t[3]);
+  }
+  /* 兜底：属性换行等写法没被上面覆盖到的 id 仍要注册，否则 byId 会误报"拼写错" */
+  for (const m of html.matchAll(/\bid="([^"]+)"/g)) {
+    if (!registry.has(m[1])) { registry.set(m[1], makeEl(m[1])); ids.push(m[1]); }
   }
   return ids;
 }
@@ -224,6 +231,15 @@ const fireChange = (el) => { if (el && el._h.change) { el._h.change({ target: el
 const fireInput = (el) => { if (el && el._h.input) { el._h.input({ target: el }); return true; } return false; };
 const fireBlur = (el) => { if (el && el._h.blur) { el._h.blur({ target: el }); return true; } return false; };
 const tick = (ms = 40) => new Promise((r) => realSetTimeout(r, ms));
+/* 自动生成的防抖窗口是 350ms，之后 generate() 自己还有一次 setTimeout 让帧。
+   凡是"改完设置等它自动重算"的地方都等这个值。 */
+const AUTO_WAIT = 420;
+/* 「防抖窗口内先不算」那条断言要的是一个**能区分**的观测量：generate() 是 async，
+   得先让出一个 macrotask 它才会走到渲染。AUTO_PROBE 取 60ms —— 大于 0（够 flush
+   setTimeout(0)），远小于防抖窗口 350ms，所以「立刻算」的变异在这个点上就会露出来。 */
+const AUTO_PROBE = 60;
+/* 下拉/输入框改成 select 之后，"选一个值"变成两步：写 value + 触发 change */
+const pick = (sel, val) => { sel.value = val; fireChange(sel); };
 
 /* 产物预览现在是真的 DOM 节点（app.js 的 renderTokens），
    所以直接读 textContent 就是**渲染出来的文本**，不必反解析 innerHTML */
@@ -307,6 +323,15 @@ async function main() {
     byId('btnCopy').disabled === true && byId('btnDownload').disabled === true);
   ok('「详情」按钮初始隐藏（没有数据源就没有识别详情）', byId('btnDetails').hidden === true);
   ok('生成按钮初始禁用（没有数据源）', byId('btnGenerate').disabled === true);
+  /* ★ 右侧是「SQL 产物 / 表头预览」两个页签分时复用整列空间。
+     早前两块上下各占一半：SQL 只有 79px（约 4 行）、表头 159px，都读不了。
+     真机实测合页签后 SQL 拿到 523px（26 行）、表头 543px。 */
+  ok('右侧默认停在「SQL 产物」页签（表头那页收起）',
+    byId('resultCard').hidden === false && byId('headerCard').hidden === true);
+  ok('产物统计初始隐藏（还没有产物）', byId('sqlStats').hidden === true);
+  ok('生成状态位初始隐藏（没有正在跑的任务）', byId('genState').hidden === true);
+  ok('「⋯」菜单初始收起', byId('moreMenu').hidden === true);
+  ok('表头页签的提示圆点初始不显示', byId('tabHeaderDot').hidden === true);
   ok('工作表下拉初始隐藏', byId('sheetWrap').hidden === true);
   ok('CSV 专属开关初始隐藏', byId('inferWrap').hidden === true);
   ok('空态徽章渲染了 4 个', kids(byId('emptyFeatures')).length === 4,
@@ -386,6 +411,18 @@ async function main() {
   ok('列数 = 10', byId('statCols').textContent === '10', byId('statCols').textContent);
   ok('产物大小非 0', /[1-9]/.test(byId('statSize').textContent), byId('statSize').textContent);
   ok('耗时已回填', /(ms|s)$/.test(byId('statTime').textContent), byId('statTime').textContent);
+  /* ★ 以前这几个数字占着产物卡头部的一整行 chip，而「产物大小」与下方小字逐字重复、
+     「行数列数耗时」在详情抽屉里也有 —— 同一屏里说三遍。
+     现在收进状态栏一段（腾出的位置给了复制/下载），并补上真正缺的那个数字：
+     SQL 总行数（它以前只藏在产物下方的小字里，而它才是决定"要看多久"的量）。 */
+  ok('产物统计段随产物出现', byId('sqlStats').hidden === false);
+  ok('★ 常显 SQL 总行数（以前只藏在下方小字里）',
+    Number(byId('statSqlLines').textContent) > 0, byId('statSqlLines').textContent);
+  ok('★ 提示条不再重复统计数字（同一屏不说两遍）',
+    !/\d+\s*行\s*\/\s*[\d.]+\s*(KB|B)/.test(byId('codeHint').textContent), byId('codeHint').textContent);
+  ok('生成完成后状态栏闪出耗时反馈',
+    hasText(byId('genState'), '已生成') && byId('genState').hidden === false,
+    byId('genState').textContent);
 
   const sql = previewSql();
   ok('头注释写了行数 x 列数', has(sql, '-- 由 excel2sql 生成：7 行 x 10 列'));
@@ -502,32 +539,29 @@ async function main() {
    * [7] 换方言 -> Oracle
    * ------------------------------------------------------------- */
   section('7. 切到 Oracle（TO_DATE / FROM dual / CHR(10) / ||）');
-  /* 先产出一份，否则谈不上"产物失效"（markStale 在没有产物时本就该无动作） */
+  /* 先产出一份，才有"改设置 → 旧产物过期"这件事可谈 */
   fireClick(byId('btnGenerate'));
   await tick();
-  const oracleBtn = findByText(byId('dialectSegs'), 'Oracle');
-  ok('找到 Oracle 分段按钮', !!oracleBtn);
-  fireClick(oracleBtn);
-  ok('Oracle 按钮进入激活态', has(oracleBtn.className, 'is-active'), oracleBtn.className);
-  ok('★ 点选不重建分段按钮（重建会把按钮换成新对象、丢掉键盘焦点）',
-    allDesc(byId('dialectSegs')).indexOf(oracleBtn) >= 0);
-  ok('同组其它按钮取消激活',
-    allDesc(byId('dialectSegs')).filter((n) => has(n.className, 'is-active')).length === 1,
-    allDesc(byId('dialectSegs')).map((n) => n.textContent + ':' + n.className).join(' | '));
-  ok('切了设置会挂出「重新生成」提示（旧产物不能装作是新的）',
-    hasText(byId('resultNotice'), '设置已变更'));
-  ok('提示里给了「重新生成」的动作按钮',
-    !!findButton(byId('resultNotice'), '重新生成'), byId('resultNotice').textContent.slice(0, 90));
 
-  fireClick(byId('btnGenerate'));
-  await tick();
+  const diaSel = byId('dialectSelect');
+  ok('方言是原生下拉（不再是平铺的分段按钮）', diaSel.tagName === 'SELECT', diaSel.tagName);
+  /* ★ 载体换了：改设置不再挂一条「产物已过期，点这里重新生成」的黄条 ——
+     那套东西的**全部前提**就是"要手点才更新"。现在防抖 350ms 自动重算，
+     所以这里等它算完，直接验证产物真的变了。 */
+  pick(diaSel, 'oracle');
+  ok('下拉选中值跟着设置走', diaSel.value === 'oracle', diaSel.value);
+  await tick(AUTO_WAIT);
+  ok('★ 改方言后自动重算（不再需要手点「生成 SQL」）',
+    has(byId('resultCode').textContent, 'WITH "HARDCODE" AS ('), previewSql().split('\n')[0]);
+  ok('自动重算不再挂「设置已变更」黄条（那套提示随手动按钮一起退役）',
+    !hasText(byId('resultNotice'), '设置已变更'), byId('resultNotice').textContent.slice(0, 90));
+
   const oraSql = previewSql();
   ok('标识符改用双引号', has(oraSql, 'WITH "HARDCODE" AS ('));
   ok('每条 SELECT 补上 FROM dual', has(oraSql, ' FROM dual'));
   ok('★ 日期走 TO_DATE（格式串与 Python 版一致）',
     has(oraSql, "TO_DATE('2026-03-01 00:00:00','YYYY-MM-DD HH24:MI:SS')"), firstSelect(oraSql));
   ok('多行文本用 CHR(10) 与 || 拼接', has(oraSql, "'常温堆头' || CHR(10) || '买二赠一'"));
-  ok('重新生成后「设置已变更」提示消失', !hasText(byId('resultNotice'), '设置已变更'));
   ok('方言说明写进提示', hasText(byId('codeHint'), 'FROM dual'), byId('codeHint').textContent);
 
   /* ---------------------------------------------------------------
@@ -536,18 +570,17 @@ async function main() {
    * 反向实验里"把 UNION ALL 的换行去掉"注入到这支上却零报红，才发现是盲区。
    * ------------------------------------------------------------- */
   section('7b. 裸 SELECT 包裹方式（wrap=plain）');
-  fireClick(findByText(byId('wrapSegs'), '裸 SELECT'));
-  fireClick(byId('btnGenerate'));
-  await tick();
+  const wrapSel = byId('wrapSelect');
+  pick(wrapSel, 'plain');
+  await tick(AUTO_WAIT);
   const plainSql = previewSql();
   ok('没有 WITH 包裹', !has(plainSql, 'WITH '), plainSql.split('\n')[5]);
   ok('没有收尾的 SELECT * FROM', !has(plainSql, 'SELECT * FROM'));
   ok('★ UNION ALL 仍独立成行（否则 Oracle 会拼出 FROM dualUNION ALL）',
     has(plainSql, '\nUNION ALL\n'), plainSql.split('\n')[5]);
   ok('每条 SELECT 仍以 FROM dual 收尾', has(plainSql, ' FROM dual\n'), plainSql.split('\n')[5]);
-  fireClick(findByText(byId('wrapSegs'), 'WITH 包裹'));
-  fireClick(byId('btnGenerate'));
-  await tick();
+  pick(wrapSel, 'cte');
+  await tick(AUTO_WAIT);
   ok('切回 WITH 包裹后恢复', has(previewSql(), 'WITH "HARDCODE" AS ('));
 
   /* ---------------------------------------------------------------
@@ -576,9 +609,8 @@ async function main() {
    * [9] 换 MySQL
    * ------------------------------------------------------------- */
   section('9. 切到 MySQL（反引号 / CHAR(10 USING utf8mb4)）');
-  fireClick(findByText(byId('dialectSegs'), 'MySQL'));
-  fireClick(byId('btnGenerate'));
-  await tick();
+  pick(byId('dialectSelect'), 'mysql');
+  await tick(AUTO_WAIT);
   const mySql = previewSql();
   ok('标识符改用反引号', has(mySql, 'WITH `HARDCODE` AS ('));
   ok('★ 换行写 CHAR(10 USING utf8mb4)（裸 CHAR(10) 会让 CTAS 落成 varbinary）',
@@ -591,11 +623,15 @@ async function main() {
    * [10] 切到 INSERT 分批
    * ------------------------------------------------------------- */
   section('10. 切到 INSERT 分批（控件联动 + 产物形态）');
-  fireClick(findByText(byId('formatSegs'), 'INSERT 分批'));
-  ok('「WITH 包裹」控件隐藏（对 INSERT 无意义）', byId('wrapSegs').hidden === true);
-  ok('「每批行数」控件出现', byId('batchWrap').hidden === false);
-  fireClick(byId('btnGenerate'));
-  await tick();
+  const fmtSel = byId('formatSelect');
+  ok('输出形式是原生下拉', fmtSel.tagName === 'SELECT', fmtSel.tagName);
+  /* ★ 这一对显隐互换曾经就是「卡片高度跳动」的源头：左栏内容实测 632px，
+     正好顶满面板（余量 0）—— 切到 INSERT 时冒出来的「每批行数」多出 33px，
+     面板立刻出滚动条，观感上就是高度在跳。改成下拉后每项恒定 34px。 */
+  pick(fmtSel, 'insert');
+  ok('「包裹方式」行隐藏（对 INSERT 无意义）', byId('wrapSegs').hidden === true);
+  ok('「每批行数」行出现', byId('batchWrap').hidden === false);
+  await tick(AUTO_WAIT);
   const insSql = previewSql().split('\n').filter((l) => !l.startsWith('--')).join('\n');
   ok('产物变成 INSERT INTO', insSql.startsWith('INSERT INTO'), insSql.slice(0, 60));
   ok('列清单在表名后', has(insSql, '(`门店`, `商品`'), insSql.slice(0, 100));
@@ -603,9 +639,9 @@ async function main() {
   ok('每行是一个括号元组', has(insSql, "('东城店', '纯牛奶 250ml'"), insSql.slice(insSql.indexOf('VALUES'), insSql.indexOf('VALUES') + 80));
   ok('提示里写了每批行数', hasText(byId('codeHint'), 'INSERT 每批 500 行'));
 
-  fireClick(findByText(byId('formatSegs'), 'UNION ALL'));
-  ok('切回后「WITH 包裹」控件回来', byId('wrapSegs').hidden === false);
-  ok('切回后「每批行数」控件收起', byId('batchWrap').hidden === true);
+  pick(fmtSel, 'union');
+  ok('切回后「包裹方式」行回来', byId('wrapSegs').hidden === false);
+  ok('切回后「每批行数」行收起', byId('batchWrap').hidden === true);
 
   /* ---------------------------------------------------------------
    * [11] 手动改表头行 -> 再恢复自动识别
@@ -736,10 +772,9 @@ async function main() {
   let reloadError = null;
   try { new Function(src)(); } catch (e) { reloadError = e; }
   ok('★ 持久化内容非法时回落默认而不是白屏', !reloadError, reloadError && reloadError.stack);
-  const activeSeg = allDesc(byId('dialectSegs')).find((n) => has(n.className, 'is-active'));
-  ok('非法方言回落 SQL Server', activeSeg && activeSeg.textContent === 'SQL Server',
-    activeSeg && activeSeg.textContent);
-  ok('非法 fmt 回落 union（WITH 包裹控件重新出现）', byId('wrapSegs').hidden === false,
+  const activeDia = byId('dialectSelect').value;
+  ok('非法方言回落 SQL Server', activeDia === 'sqlserver', activeDia);
+  ok('非法 fmt 回落 union（包裹方式行重新出现）', byId('wrapSegs').hidden === false,
     'true 说明 fmt 是 insert，回落失败');
 
   /* ---------------------------------------------------------------
@@ -859,10 +894,141 @@ async function main() {
     byId('workState').hidden === false && byId('emptyCard').hidden === true);
 
   /* ---------------------------------------------------------------
+   * [17g] 右侧页签 / 自动换行 / 「⋯」菜单 / 防抖自动生成
+   * ------------------------------------------------------------- */
+  section('17g. 右侧页签、自动换行、⋯ 菜单与自动生成');
+
+  ok('前提：此刻停在「SQL 产物」页签',
+    byId('resultCard').hidden === false && byId('headerCard').hidden === true);
+  fireClick(byId('tabHeader'));
+  ok('点「表头预览」切过去', byId('headerCard').hidden === false && byId('resultCard').hidden === true);
+  ok('★ 切过去后表头预览真的在渲染（不是空壳）',
+    !!findTag(byId('headerPicker'), 'TABLE'));
+  /* ★★ 持久化断言必须拿**非默认值**判。settings.tab 的默认值就是 'result'，
+     而 17g 之前有大量交互（下拉 / 开关 / Alt+Z）都会整份 saveSettings()，
+     早把 'result' 写进 localStorage 了 —— 于是「存了没有」根本区分不出来：
+     把 switchTab 里那句 saveSettings() 删掉，断言照样绿（反向实验实测抓到的
+     第一条假守卫）。切到 'header' 之后立刻读，才真的能咬住。 */
+  ok('★ 切到「表头预览」（非默认页签）后立刻落盘',
+    JSON.parse(localStorage.getItem('excel2sql-settings') || '{}').tab === 'header',
+    String(JSON.parse(localStorage.getItem('excel2sql-settings') || '{}').tab));
+  fireClick(byId('tabResult'));
+  ok('点回「SQL 产物」', byId('resultCard').hidden === false && byId('headerCard').hidden === true);
+  ok('★ 落盘跟着切回 result（每次切换都写，不是只写第一次）',
+    JSON.parse(localStorage.getItem('excel2sql-settings') || '{}').tab === 'result',
+    String(JSON.parse(localStorage.getItem('excel2sql-settings') || '{}').tab));
+
+  /* Alt+Z 自动换行：用户点名要的那个"避免横向滚动" */
+  ok('自动换行初始关（默认保持缩进层次）',
+    byId('resultCode').classList.contains('is-wrap') === false);
+  docListeners.get('keydown')({ key: 'z', altKey: true, preventDefault() {} });
+  ok('★ Alt+Z 打开自动换行（与 VS Code 同款键位）',
+    byId('resultCode').classList.contains('is-wrap') === true);
+  ok('Alt+Z 之后偏好被记住',
+    JSON.parse(localStorage.getItem('excel2sql-settings') || '{}').wordWrap === true);
+  docListeners.get('keydown')({ key: 'z', altKey: true, preventDefault() {} });
+  ok('再按一次关掉（是开关不是单向打开）',
+    byId('resultCode').classList.contains('is-wrap') === false);
+
+  /* 「⋯」菜单：生成按钮退居于此 */
+  ok('菜单初始收起', byId('moreMenu').hidden === true);
+  fireClick(byId('btnMore'));
+  ok('点「⋯」展开', byId('moreMenu').hidden === false);
+  ok('展开时 aria-expanded 同步', byId('btnMore').getAttribute('aria-expanded') === 'true');
+  docListeners.get('keydown')({ key: 'Escape' });
+  ok('Escape 收掉菜单', byId('moreMenu').hidden === true);
+  fireClick(byId('btnMore'));
+  docListeners.get('click')();
+  ok('点别处也收掉菜单（不留浮层挡着）', byId('moreMenu').hidden === true);
+  fireClick(byId('btnMore'));
+  fireClick(byId('btnGenerate'));
+  await tick();
+  ok('点菜单里的「立即重新生成」会顺手收起菜单', byId('moreMenu').hidden === true);
+
+  /* 防抖自动生成：全程不点任何"生成"按钮 */
+  byId('tableInput').value = 'auto_tbl';
+  fireInput(byId('tableInput'));
+  /* ★★ 这里必须先让出一个 macrotask 再断言。generate() 是 async 的，第一句就是
+     `await U.nextFrame()`；在同步栈里断言时它还没走到渲染 —— 于是把防抖拿掉
+     改成"一变就立刻算"，同步断言照样绿（反向实验实测抓到的第二条假守卫）。
+     让出 AUTO_PROBE（60ms，足够 flush 掉 setTimeout(0)，又远小于 350ms 防抖窗口）
+     之后，"没等窗口就出结果"才真的能被观测到。 */
+  await tick(AUTO_PROBE);
+  ok('★ 防抖窗口内先不算（连打表名不会每敲一个字跑一遍）',
+    !has(byId('resultCode').textContent, 'auto_tbl'), previewSql().split('\n')[0]);
+  await tick(AUTO_WAIT);
+  ok('★★ 防抖结束后自动产出（全程没点过任何生成按钮）',
+    has(byId('resultCode').textContent, 'auto_tbl'), previewSql().split('\n')[0]);
+  byId('tableInput').value = 'HARDCODE';
+  fireInput(byId('tableInput'));
+  await tick(AUTO_WAIT);
+  ok('改回表名同样自动跟上', has(byId('resultCode').textContent, '[HARDCODE]') ||
+    has(byId('resultCode').textContent, '`HARDCODE`') || has(byId('resultCode').textContent, '"HARDCODE"'),
+    previewSql().split('\n')[0]);
+
+  /* ---------------------------------------------------------------
+   * [17h] 分级策略：大文件必须降级为手动
+   * ------------------------------------------------------------- */
+  /* ★★ 这一节是补漏。上面的自动生成全用 7 行小夹具，于是「导入路径」从没被覆盖到 ——
+     真机 6001 行 CSV 实测：本该只给一句提示、不产出 SQL，却直接吐了 12,009 行
+     （778 KB）。根因是 applyBook 末尾图省事写了「延后一拍直接 generate(true)」，
+     整个绕过了 autoEnabled() 的阈值判定；而 232 条断言全绿，因为没人拖过大文件进来。
+     ★ 教训：**「分级」这种按条件分叉的策略，两个分支都要有真夹具打过去**，
+     只测小文件等于只测了一半。 */
+  section('17h. 分级策略：超过阈值的文件降级为手动');
+  errors.length = 0;
+  const bigCsvLines = ['工单号,工序,设备,数量'];
+  for (let i = 1; i <= 6001; i++) bigCsvLines.push('WO' + i + ',SMT-' + (i % 12) + ',EQ-' + (i % 40) + ',' + (i % 97));
+  const bigCsv = makeFile('big-6001.csv', enc(bigCsvLines.join('\n')));
+  byId('dropZone')._h.drop({ preventDefault() {}, dataTransfer: { files: [bigCsv] } });
+  await tick(AUTO_WAIT);
+  ok('拖大文件无未捕获异常', realErrors().length === 0, realErrors().join(' | '));
+  ok('★★ 超过阈值的文件不自动出 SQL（导入路径也要受分级约束）',
+    !has(byId('resultCode').textContent, 'WO1') && byId('sqlStats').hidden === true,
+    '产物行数=' + previewSql().split('\n').length + '，统计段 hidden=' + byId('sqlStats').hidden);
+  ok('★★ 占位层说明了为什么没自动算、以及怎么手动触发',
+    byId('resultPlaceholder').hidden === false &&
+    hasText(byId('resultPlaceholder'), '5,000') &&
+    hasText(byId('resultPlaceholder'), '手动'),
+    byId('resultPlaceholder').textContent.slice(0, 120));
+  ok('降级后复制 / 下载一并禁用（没有产物可导）',
+    byId('btnCopy').disabled === true && byId('btnDownload').disabled === true);
+  /* ★★ 真机还抓到一条：降级时状态栏永久挂着「处理中…」。
+     根因是 applySettingsToUI 里那句 `setBusy(state.busy)` —— 此刻 busy 仍为 true 且没带
+     label，于是状态行被写成「处理中…」；而配对的 setBusy(false) 刻意不动状态行
+     （免得抹掉刚闪出来的「已生成」），这句就再也下不去了。明明什么都没在算。
+     修法是给这行加 owner 标记，让 setBusy 写的由 setBusy 收。 */
+  ok('★★ 降级为手动时状态栏不残留「处理中…」（它曾经永久挂住）',
+    byId('genState').hidden === true, byId('genState').textContent);
+  /* 手动分支必须真的能用，否则"降级"就成了"功能消失" */
+  byId('tableInput').value = 'big_tbl';
+  fireInput(byId('tableInput'));
+  await tick(AUTO_WAIT);
+  ok('降级后改设置不会偷偷恢复自动计算', byId('sqlStats').hidden === true);
+  fireClick(byId('btnGenerate'));
+  await tick(AUTO_WAIT);
+  ok('★ 点了「立即重新生成」照样能出结果（降级不等于禁用）',
+    has(byId('resultCode').textContent, 'big_tbl') && byId('sqlStats').hidden === false,
+    '产物行数=' + previewSql().split('\n').length);
+  /* 回到小文件，确认分级是**逐次判定**而不是一次降级就永久手动 */
+  const backCsv = makeFile('small.csv', enc('门店,销量\n东城店,120\n'));
+  byId('dropZone')._h.drop({ preventDefault() {}, dataTransfer: { files: [backCsv] } });
+  await tick(AUTO_WAIT);
+  ok('★ 换回小文件又自动出结果（分级是逐次判的，不粘住）',
+    has(byId('resultCode').textContent, '东城店') && byId('sqlStats').hidden === false,
+    previewSql().split('\n')[0]);
+
+  /* ---------------------------------------------------------------
    * [18] 静态契约：让界面静默失效的那几处
    * ------------------------------------------------------------- */
   section('18. 静态契约');
   const css = readFileSync(join(TOOL, 'css', 'styles.css'), 'utf8');
+  /* ★★ 断言前先剥掉注释。注释里提到某个选择器（比如"以前是 `.esq-right { … }`"这种
+     说明历史决策的写法）会被 /\.esq-right\s*\{([^}]*)\}/ 先命中，拿到的是**注释里的
+     示例代码**而不是真实规则 —— 于是"旧结构已删掉"这件事断言不出来。
+     这轮改版真踩到了：.esq-right 已经换成 flex，断言却读出 `grid-template-rows`，
+     因为上面那段历史注释里正好留着旧规则的原文。 */
+  const cssRules = css.replace(/\/\*[\s\S]*?\*\//g, '');
   /* app.js 用 `el.hidden = true` 隐藏 .esq-segs（display:grid）与 .esq-field（display:flex）。
      没有这条 !important，class 里的 display 会盖过 hidden —— 症状是控件「关不掉」，
      而且**没有任何报错**。 */
@@ -881,14 +1047,36 @@ async function main() {
      窄屏媒体查询里那条 .esq-layout 同样带 grid-template-columns，
      基础规则被改坏之后它照样让断言通过。这是反向实验（mutation-excel2sql.mjs）
      实测抓到的第一条假守卫，别退回去。 */
-  const baseLayout = (css.match(/\.esq-layout\s*\{([^}]*)\}/) || [])[1] || '';
-  const baseRight = (css.match(/\.esq-right\s*\{([^}]*)\}/) || [])[1] || '';
-  ok('★ 分栏结构由 grid 表达（列宽 + 右列行高都比"靠 DOM 顺序凑"更耐改）',
+  const baseLayout = (cssRules.match(/\.esq-layout\s*\{([^}]*)\}/) || [])[1] || '';
+  ok('★ 分栏结构由 grid 表达（列宽比"靠 DOM 顺序凑"更耐改）',
     /grid-template-columns/.test(baseLayout), baseLayout.trim().slice(0, 72));
-  ok('★ 右列上下分栏同理（.esq-right 基础规则带 grid-template-rows）',
-    /grid-template-rows/.test(baseRight), baseRight.trim().slice(0, 72));
+
+  /* ★★ 右侧从「上下各占一半」改成「页签分时复用」，这一组是配套守卫。
+     旧结构那个坑必须钉住：`.esq-right` 若是 grid 且带 `grid-template-rows: auto minmax(...)`，
+     配上子项的 `max-height: 百分比` —— 两条规则互不知情：auto 轨道按 max-content 定高，
+     而百分比是相对**那条轨道**算的，卡片只渲染一小截却占着整条轨道，
+     中间平白空出 200+ px 的死区（真机 246px），SQL 只剩 79px ≈ 4 行。
+     实测对照：改成页签后 SQL 可视涨到 523px（26 行）。 */
+  const baseRight = (cssRules.match(/\.esq-right\s*\{([^}]*)\}/) || [])[1] || '';
+  ok('★ 右列是纵向弹性容器（页签行 + 页签内容）',
+    /display\s*:\s*flex/.test(baseRight) && /flex-direction\s*:\s*column/.test(baseRight),
+    baseRight.trim().slice(0, 72));
+  ok('★★ 右列不再用「按 max-content 定高的自动轨道 + 百分比限高」组合（那会留死区）',
+    !/grid-template-rows/.test(baseRight), baseRight.trim().slice(0, 90));
+  /* 同上：一律用「选择器 + {」的形式，避免 has() 的子串匹配把
+     .esq-tabbar / .esq-tabbody / .esq-pane-result 当成 .esq-tab / .esq-pane 本身。 */
+  ok('★ 页签三件套样式存在（.esq-tab / .esq-tabbar / .esq-tabbody / .esq-pane）',
+    /\.esq-tabbar\s*\{/.test(cssRules) && /\.esq-tab\s*[\{,]/.test(cssRules) &&
+    /\.esq-tabbody\s*\{/.test(cssRules) && /\.esq-pane\s*\{/.test(cssRules));
+  ok('★ 自动换行样式存在（.esq-code.is-wrap，Alt+Z 靠它消掉横向滚动条）',
+    /\.esq-code\.is-wrap\s*\{[^}]*white-space\s*:\s*pre-wrap/.test(cssRules));
+  /* ★ 用 `\.esq-row\s*\{` 而不是 has(css,'.esq-row') —— 后者是**子串匹配**，
+     `.esq-rownum`（产物左侧的行号列）里照样含 `.esq-row`，
+     于是这个选择器就算被整个删掉，断言也会永远通过。 */
+  ok('★ 左栏改成行内字段（.esq-row + .esq-select），平铺的分段按钮已退场',
+    /\.esq-row\s*\{/.test(cssRules) && /\.esq-select\s*\{/.test(cssRules) && !/\.esq-seg\s*\{/.test(cssRules));
   ok('空态卡片样式存在（.esq-empty-card，且限宽不铺满全屏）',
-    /\.esq-empty-card\s*\{[^}]*max-width/.test(css));
+    /\.esq-empty-card\s*\{[^}]*max-width/.test(cssRules));
   ok('详情抽屉样式存在（.esq-drawer / .esq-detail-list）',
     has(css, '.esq-drawer') && has(css, '.esq-detail-list'));
   ok('产物占位样式存在（.esq-placeholder）', has(css, '.esq-placeholder'));

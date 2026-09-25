@@ -347,21 +347,43 @@ async function main() {
   ok('★ app.js 不使用 innerHTML（一律 textContent / createElement）',
     !/\binnerHTML\s*=/.test(appCode));
 
-  /* settings 的每个键都必须真的传进 sqlOptions()（否则界面上能改、实际没生效，
-     而且不会有任何报错 —— 这类"改了没用"最难发现） */
+  /* settings 里其实有两类键，断言要**双向**做，只判一个方向会两头漏：
+     ① SQL 参数 —— 必须真的传进 sqlOptions()。否则界面上能改、实际没生效，
+        而且不会有任何报错（这类"改了没用"最难发现）。
+     ② 纯界面状态（页签 / 自动换行）—— 只影响观感，**不该**出现在 sqlOptions() 里。
+        混进去的话，读代码的人会以为它们参与 SQL 生成，以后改渲染逻辑时
+        还会被当成有效参数带下去。 */
+  const UI_ONLY_KEYS = ['tab', 'wordWrap'];
   const settingsBlock = appSrc.match(/const settings = \{([\s\S]*?)\n  \};/);
   const settingsKeys = [...(settingsBlock ? settingsBlock[1] : '').matchAll(/^\s{4}(\w+):/gm)].map((m) => m[1]);
   const sqlOptsBody = (appSrc.match(/function sqlOptions\(\) \{([\s\S]*?)\n  \}/) || ['', ''])[1];
-  const notWired = settingsKeys.filter((k) => !new RegExp('\\b' + k + ':').test(sqlOptsBody));
-  ok('settings 的 ' + settingsKeys.length + ' 个键都接进了 sqlOptions()',
-    settingsKeys.length >= 8 && notWired.length === 0, '漏接：' + notWired.join(', '));
+  ok('纯界面状态键确实登记在 settings 里（' + UI_ONLY_KEYS.join(' / ') + '）',
+    UI_ONLY_KEYS.every((k) => settingsKeys.includes(k)),
+    '不在 settings 中：' + UI_ONLY_KEYS.filter((k) => !settingsKeys.includes(k)).join(','));
+  const sqlKeys = settingsKeys.filter((k) => !UI_ONLY_KEYS.includes(k));
+  const notWired = sqlKeys.filter((k) => !new RegExp('\\b' + k + ':').test(sqlOptsBody));
+  ok('settings 的 ' + sqlKeys.length + ' 个 SQL 参数都接进了 sqlOptions()',
+    sqlKeys.length >= 8 && notWired.length === 0, '漏接：' + notWired.join(', '));
+  const misWired = UI_ONLY_KEYS.filter((k) => new RegExp('\\b' + k + ':').test(sqlOptsBody));
+  ok('★ 纯界面状态没有混进 sqlOptions()（它们不影响 SQL，混进去会误导后来人）',
+    misWired.length === 0, '误接：' + misWired.join(', '));
 
   /* 用户可调的键必须都在 settings 里（防止某个开关写死成常量、绕过了持久化） */
   const switchIds = [...html.matchAll(/<input type="checkbox" id="(opt\w+)"/g)].map((m) => m[1]);
-  const switchToKey = { optEmptyNull: 'emptyAsNull', optInferTypes: 'inferTypes', optLegacyDate: 'legacyDateMode' };
-  ok('三个开关都与 settings 键一一对应（' + switchIds.length + ' 个）',
-    switchIds.length === 3 && switchIds.every((id) => has(settingsKeys.join(','), switchToKey[id])),
-    switchIds.join(','));
+  const switchToKey = {
+    optEmptyNull: 'emptyAsNull',
+    optInferTypes: 'inferTypes',
+    optLegacyDate: 'legacyDateMode',
+    optWordWrap: 'wordWrap'
+  };
+  /* 比对的是「开关集合」与「映射表」是否一一对应，而不是写死一个数字：
+     新加开关却忘了登记映射，会算成"未登记"报出来，而不是静默通过。 */
+  const unmapped = switchIds.filter((id) => !switchToKey[id]);
+  const staleMap = Object.keys(switchToKey).filter((id) => !switchIds.includes(id));
+  ok('每个复选框开关都在 settings 里有对应键（' + switchIds.length + ' 个）',
+    unmapped.length === 0 && staleMap.length === 0 &&
+    switchIds.every((id) => settingsKeys.includes(switchToKey[id])),
+    '未登记：' + unmapped.join(',') + '；映射表多余：' + staleMap.join(','));
 
   /* ============ 汇总 ============ */
   console.log('\n' + '='.repeat(60));

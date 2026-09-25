@@ -90,6 +90,60 @@
       "expect": ["「详情」按钮跟着收起"]
     },
     {
+      "id": "right-column-dead-zone-restored",
+      "gate": "ui",
+      "why": "★ 本轮改版的核心：把 .esq-right 还原成「grid + grid-template-rows: auto minmax(...)」。这一条就是那个 246px 死区的配方 —— auto 轨道按子项 max-content 定高，而子项的 max-height 百分比是相对那条轨道算的，两者互不知情，卡片只渲染一小截却占满整条轨道，SQL 只剩 4 行。它在浏览器里**不报任何错**，只有真去量高度才发现，所以必须钉住",
+      "file": "tools/excel2sql/css/styles.css",
+      "find": ".esq-right { min-height: 0; display: flex; flex-direction: column; }",
+      "replace": ".esq-right { min-height: 0; display: grid; grid-template-rows: auto minmax(180px, 1fr); }",
+      "expect": ["右列是纵向弹性容器", "右列不再用"]
+    },
+    {
+      "id": "tab-choice-not-persisted",
+      "gate": "ui",
+      "why": "切页签时漏掉 saveSettings() —— 「记住上次选择」是这个页签方案成立的前提（表头确认是一次性动作、SQL 阅读是反复动作，默认值对谁都不合适）。漏了它页签照样能切，只是每次打开都回到默认页，用户很难察觉是「没存下来」",
+      "file": "tools/excel2sql/js/app.js",
+      "find": "settings.tab = next;\n    saveSettings();\n    renderTabs();",
+      "replace": "settings.tab = next;\n    renderTabs();",
+      "expect": ["切到「表头预览」（非默认页签）后立刻落盘"]
+    },
+    {
+      "id": "debounce-bypassed",
+      "gate": "ui",
+      "why": "自动生成改成「一变就立刻算」，防抖窗口被拿掉 —— 连打表名时会每敲一个字重跑一遍全文渲染，大表直接卡死输入框。这条断言必须能抓到「没等窗口过去就出结果」",
+      "file": "tools/excel2sql/js/app.js",
+      "find": "autoTimer = setTimeout(function () { autoTimer = null; generate(true); },\n      delay == null ? AUTO_DEBOUNCE : delay);",
+      "replace": "generate(true);",
+      "expect": ["防抖窗口内先不算"]
+    },
+    {
+      "id": "auto-threshold-neutered",
+      "gate": "ui",
+      "why": "把 AUTO_MAX_ROWS 压到 0 —— 分级策略被架空，所有文件都走「大文件降级手动」分支，自动生成静默消失，而界面上不会报任何错。这条守住「阈值真的被读」而不是写死",
+      "file": "tools/excel2sql/js/app.js",
+      "find": "const AUTO_MAX_ROWS = 5000;",
+      "replace": "const AUTO_MAX_ROWS = 0;",
+      "expect": ["防抖结束后自动产出"]
+    },
+    {
+      "id": "import-bypasses-auto-threshold",
+      "gate": "ui",
+      "why": "★★ 这条复现的是真机抓到的一个真 bug：applyBook 末尾图省事写成「延后一拍直接 generate(true)」，整个绕过了 autoEnabled() 的阈值判定 —— 6001 行 CSV 拖进去照样自动吐出 12,009 行 SQL（778 KB），界面上完全看不出分级被架空。当时 232 条断言全绿，因为所有自动生成用例都只用 7 行小夹具，没人拖过大文件进来。这条守住「导入路径也受分级约束」",
+      "file": "tools/excel2sql/js/app.js",
+      "find": "    scheduleGenerate(0);",
+      "replace": "    setTimeout(function () { generate(true); }, 0);",
+      "expect": ["超过阈值的文件不自动出 SQL"]
+    },
+    {
+      "id": "busy-state-never-cleared",
+      "gate": "ui",
+      "why": "★★ 真机抓到的第二条残留：让 setBusy(false) 不再回收自己写下的状态行。applySettingsToUI 里那句 `setBusy(state.busy)`（busy 仍为 true、无 label）会把「处理中…」写上去，而没有任何东西会来收 —— 降级为手动生成时最刺眼：界面上什么都没在算，状态栏却一直写着处理中。这类「状态永远停在中间态」不报错、纯逻辑测试也照不到",
+      "file": "tools/excel2sql/js/app.js",
+      "find": "    else if (genStateOwned) clearGenState();",
+      "replace": "    else if (false) clearGenState();",
+      "expect": ["降级为手动时状态栏不残留"]
+    },
+    {
       "id": "mysql-naked-char10",
       "gate": "logic",
       "why": "MySQL 换行退回裸 CHAR(10) —— 在 MySQL 里那是二进制串，会让 CTAS 把列落成 varbinary（真库实测踩到）",
