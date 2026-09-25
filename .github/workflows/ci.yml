@@ -43,6 +43,14 @@ jobs:
       - name: json-format 全量校验
         run: node tools/json-format/tests/format.test.mjs
 
+      # excel2sql 的错误都属于"不报错、数据悄悄变样"那一类（表头判错会整行丢掉、
+      # 超长整数被双精度改写末尾几位），所以分两层守：先说逻辑对不对，再说界面接没接上。
+      - name: excel2sql 纯逻辑校验（解析 / 表头 / 类型 / 渲染）
+        run: node tools/_build/check-excel2sql.mjs
+
+      - name: excel2sql 界面接线校验（DOM 桩 + 真实操作序列）
+        run: node tools/_build/check-excel2sql-ui.mjs
+
       # 打包链路也是共享基础设施，它坏了会静默产出坏快照，所以一并纳入门禁。
       # 构建只读已提交的源文件（含 vendor/codemirror），产物落进 gitignore 的 dist/，
       # 因此这步在 CI 里能从零复现（已验证：重建产物与本地逐字节一致）。
