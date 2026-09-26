@@ -180,6 +180,60 @@
       "expect": ["状态栏不再重复表头落点"]
     },
     {
+      "id": "sqlite-dropped-from-order",
+      "gate": "logic",
+      "why": "★★ 把 SQLite 从 ORDER 里拿掉 —— 模拟「加了方言却漏登记」这类最典型的漂移。ORDER 是方言清单的唯一来源，下拉、编号、报错文案全从它派生；漏一处会让下游静默少一种方言，而不是报错。这条同时守住「ORDER 与 DIALECTS 一致」「下拉与 ORDER 一致」「编号连续」三条",
+      "file": "tools/excel2sql/js/dialects.js",
+      "find": "  const ORDER = ['sqlserver', 'mysql', 'oracle', 'postgresql', 'sqlite'];",
+      "replace": "  const ORDER = ['sqlserver', 'mysql', 'oracle', 'postgresql'];",
+      "expect": ["ORDER 与 DIALECTS 完全一致"]
+    },
+    {
+      "id": "dialect-silent-fallback",
+      "gate": "logic",
+      "why": "★★ 让方言解析退回「认不出来就用 SQL Server」—— 这是 Python 0.4.1 专门修掉的那类失败：产物语法完全正确、只是方言错了，往往要到灌库才暴露，更糟的是被隐式转换掩盖过去、看着像跑通了",
+      "file": "tools/excel2sql/js/dialects.js",
+      "find": "    if (!key) throw UnknownDialect(value);",
+      "replace": "    if (!key) return DIALECTS[ORDER[0]];",
+      "expect": ["未知方言抛 UnknownDialect"]
+    },
+    {
+      "id": "cte-indent-removed",
+      "gate": "logic",
+      "why": "★ 把 CTE 体内缩进去掉（回到 0.3.x 的版式）—— 0.4.0 的行为变化，产物字节会变。这类「格式」问题不报错、只是文本不一样，最容易在某次重构里被顺手改回去",
+      "file": "tools/excel2sql/js/sqlgen.js",
+      "find": "    const sep = '\\n' + CTE_INDENT + 'UNION ALL\\n' + CTE_INDENT;\n    return 'WITH ' + t + ' AS (\\n' + CTE_INDENT + lines.join(sep) +\n           '\\n)\\nSELECT * FROM ' + t + ';\\n';",
+      "replace": "    return 'WITH ' + t + ' AS (\\n' + lines.join('\\nUNION ALL\\n') +\n           '\\n)\\nSELECT * FROM ' + t + ';\\n';",
+      "expect": ["CTE 体内第一行 SELECT 缩进一级"]
+    },
+    {
+      "id": "sig-digits-bound-removed",
+      "gate": "logic",
+      "why": "★★ 去掉「有效数字超过 15 位不转」这条边界 —— 16 位但小于 2^53 的编号会被转成数字（isSafeInteger 会放行），而它大概率是编号；19 位以上还会超出三库的 bigint 范围，硬转成数字字面量会让灌库直接报错",
+      "file": "tools/excel2sql/js/sqlgen.js",
+      "find": "      if (sigDigits(digits) > MAX_SIG_DIGITS) return null;              // 多半是编号\n",
+      "replace": "",
+      "expect": ["16 位编号（< 2^53）保持文本"]
+    },
+    {
+      "id": "all-string-infer-restored",
+      "gate": "logic",
+      "why": "★ 让 all-string 时又去做数字转换 —— 那会把数字列里的空格子改成 NULL，与「全部按字符串输出」自相矛盾（Python 0.4.0 修过的同一条）",
+      "file": "tools/excel2sql/js/sqlgen.js",
+      "find": "    const finalData = (opt.inferTypes && !opt.allString) ? coerceNumericColumns(data) : data;",
+      "replace": "    const finalData = opt.inferTypes ? coerceNumericColumns(data) : data;",
+      "expect": ["all-string + 推断"]
+    },
+    {
+      "id": "infer-types-leaks-to-xlsx",
+      "gate": "ui",
+      "why": "★★ 让推断不看数据源（auto 只对 CSV 生效）—— 界面上那个开关只对 CSV 可见，但设置值会跨数据源保留；渲染时直接读 settings 就会把 xlsx 里用户写死的文本列改掉。Python 0.4.0 明确「Excel 的单元格自带类型，写成文本就是用户有意的文本」",
+      "file": "tools/excel2sql/js/app.js",
+      "find": "    return !!(state.book && state.book.kind === 'csv');",
+      "replace": "    return true;",
+      "expect": ["xlsx 语境下「推断」被解析为关"]
+    },
+    {
       "id": "mysql-naked-char10",
       "gate": "logic",
       "why": "MySQL 换行退回裸 CHAR(10) —— 在 MySQL 里那是二进制串，会让 CTAS 把列落成 varbinary（真库实测踩到）",

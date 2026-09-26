@@ -61,6 +61,13 @@ function makeEl(id, tag) {
        那时红的是桩而不是产品。 */
     _nodes: [],
     _a: {}, _h: {}, _parent: null,
+    /* ★★ <select> 的 `.options` 必须建模。真实 DOM 里 options 是 OPTION 子节点的
+       活集合，代码会直接读 `sel.options`（看有没有选项、读 value/文案）；
+       桩里缺了它，`sel.options` 就是 undefined ——
+       于是"下拉选项对不对"这类断言读不到东西、甚至静默变成空数组。
+       （同族陷阱：桩的空实现让断言恒真 / 桩太弱让断言假阴。）
+       这里在 appendChild 时同步维护，顺序与子节点一致。 */
+    options: [],
     classList: {
       _s: new Set(),
       add(c) { this._s.add(c); },
@@ -83,9 +90,19 @@ function makeEl(id, tag) {
       const i = ref ? this._nodes.indexOf(ref) : -1;
       if (i < 0) this._nodes.push(n); else this._nodes.splice(i, 0, n);
       if (n && typeof n === 'object') n._parent = this;
+      /* <select> 的 options 与 OPTION 子节点保持同步（真实 DOM 的行为） */
+      if (this.tagName === 'SELECT' && n && n.tagName === 'OPTION') this.options.push(n);
       return n;
     },
-    removeChild(n) { const i = this._nodes.indexOf(n); if (i >= 0) this._nodes.splice(i, 1); return n; },
+    removeChild(n) {
+      const i = this._nodes.indexOf(n);
+      if (i >= 0) this._nodes.splice(i, 1);
+      if (this.tagName === 'SELECT' && n && n.tagName === 'OPTION') {
+        const j = this.options.indexOf(n);
+        if (j >= 0) this.options.splice(j, 1);
+      }
+      return n;
+    },
     remove() { if (this._parent) this._parent.removeChild(this); },
     click() { this._clicked = (this._clicked || 0) + 1; if (this._h.click) this._h.click({ stopPropagation() {} }); },
     select() { this._selected = true; },
@@ -288,13 +305,20 @@ async function main() {
   const src = order.map((f) => '/* ==== ' + f + ' ==== */\n' + readFileSync(join(JS, f), 'utf8')).join('\n;\n');
 
   let loadError = null;
+  /* ★ 顺手把命名空间**取出来**给后面用。各文件的顶层 const 是函数作用域的，
+     外面看不见；在**同一次求值**里 return 出来即可 ——
+     千万别为此再 `new Function(src)()` 一次：那会重跑 app.js 的 IIFE（含 init），
+     等于把页面初始化两遍，后面的断言全在错误的状态上跑。 */
+  let NS = null;
   try {
     /* 全部拼进同一个函数体：各文件的顶层 const 落在同一个作用域，
        app.js 的 IIFE 因此能看见 E2sUtils 等命名空间（等价于 index.html 的 script 串联） */
-    new Function(src)();
+    NS = new Function(src + '\n;return { D: E2sDialects, G: E2sSqlGen, R: E2sReaders, H: E2sHeaders };')();
   } catch (e) { loadError = e; }
   ok('7 个脚本顺序加载无异常', !loadError, loadError && loadError.stack);
   ok('加载期没有 console.error', realErrors().length === 0, realErrors().join(' | '));
+  ok('★ 命名空间可在同一次求值里取出（不再为取它而重跑 init）',
+    !!NS && !!NS.D && !!NS.G && !!NS.R && !!NS.H);
 
   /* ★ 免费断言：注册表从 index.html 预填、查不到返回 null，
      于是「app.js 的 $('id') 有没有打错」被自动守住 */
@@ -449,7 +473,9 @@ async function main() {
   ok('头注释写了方言与格式', has(sql, '方言：SQL Server') && has(sql, '输出格式：union'));
   ok('WITH 包裹（SQL Server 用方括号）', has(sql, 'WITH [HARDCODE] AS ('));
   ok('结尾 SELECT * FROM', has(sql, 'SELECT * FROM [HARDCODE];'));
-  ok('UNION ALL 独立成行（Oracle 语法错的老坑）', has(sql, '\nUNION ALL\n'));
+  /* CTE 体内会缩进一级，所以这里放宽容忍前导空白 —— 意图是"UNION ALL 必须独立成行"
+     （防 `... FROM dualUNION ALL` 那种粘连），不是"必须顶格"。 */
+  ok('UNION ALL 独立成行（Oracle 语法错的老坑）', /\n[ \t]*UNION ALL\n/.test(sql));
   ok('列名带 AS 别名且被引用', has(sql, 'AS [门店]') && has(sql, 'AS [订单号]'));
   ok('数字列不加引号', has(sql, '120 AS [销量]'), firstSelect(sql));
   ok('文本列加 N 前缀与引号', has(sql, "N'东城店' AS [门店]"));
@@ -597,6 +623,17 @@ async function main() {
 
   const diaSel = byId('dialectSelect');
   ok('方言是原生下拉（不再是平铺的分段按钮）', diaSel.tagName === 'SELECT', diaSel.tagName);
+  /* ★ 选项必须来自 dialects.ORDER（单一来源）——HTML 里不再手写一份。
+     加方言时只改 ORDER 一处，界面与渲染不会漂移。 */
+  const diaOpts = Array.prototype.map.call(diaSel.options || [], function (o) { return o.value; });
+  ok('★ 下拉选项与 dialects.ORDER 完全一致（单一来源，不是 HTML 里手写的）',
+    diaOpts.join(',') === NS.D.ORDER.join(','), diaOpts.join(','));
+  ok('★ 下拉包含 SQLite（0.4.0 新增的第五种方言）',
+    diaOpts.indexOf('sqlite') >= 0 && diaOpts.length === 5, diaOpts.join(','));
+  ok('★ 下拉文案用方言的 name 而不是 key',
+    Array.prototype.map.call(diaSel.options || [], function (o) { return o.textContent; }).join('/') ===
+      NS.D.ORDER.map(function (k) { return NS.D.DIALECTS[k].name; }).join('/'),
+    Array.prototype.map.call(diaSel.options || [], function (o) { return o.textContent; }).join('/'));
   /* ★ 载体换了：改设置不再挂一条「产物已过期，点这里重新生成」的黄条 ——
      那套东西的**全部前提**就是"要手点才更新"。现在防抖 350ms 自动重算，
      所以这里等它算完，直接验证产物真的变了。 */
@@ -607,6 +644,25 @@ async function main() {
     has(byId('resultCode').textContent, 'WITH "HARDCODE" AS ('), previewSql().split('\n')[0]);
   ok('自动重算不再挂「设置已变更」黄条（那套提示随手动按钮一起退役）',
     !hasText(byId('resultNotice'), '设置已变更'), byId('resultNotice').textContent.slice(0, 90));
+
+  /* ★ 端到端：界面上选到 SQLite，产物要真的是 SQLite 语法
+     （双引号标识符 + 无 N 前缀 + 无 TO_DATE 包装）——
+     只测"下拉里有这一项"是不够的，那只能证明清单加了、不能证明渲染接上了。
+     ⚠️ 这一段结束后必须把方言**还原成 Oracle**：本节 [7] 剩下的断言全在 Oracle 语境下，
+        顺手切回 SQL Server 会让它们集体变红 —— 而报错内容（这条 SELECT 长什么样）
+        离原因很远，很容易误判成渲染坏了。 */
+  pick(diaSel, 'sqlite');
+  await tick(AUTO_WAIT);
+  ok('★ 下拉选 SQLite 后产物是 SQLite 语法（双引号标识符）',
+    has(previewSql(), 'WITH "HARDCODE" AS ('), previewSql().split('\n')[0]);
+  ok('★ SQLite 产物不带 N 前缀', !/N'/.test(previewSql()), firstSelect(previewSql()));
+  ok('★ SQLite 产物没有 TO_DATE 包装',
+    !has(previewSql(), 'TO_DATE'), firstSelect(previewSql()));
+  /* CTE 缩进（0.4.0 行为变化）：真产物里也要能看到 */
+  ok('★ 产物里 CTE 体内缩进一级（0.4.0 版式）',
+    /AS \(\n    SELECT /.test(previewSql()), previewSql().split('\n').slice(0, 3).join('⏎'));
+  pick(diaSel, 'oracle');
+  await tick(AUTO_WAIT);
 
   const oraSql = previewSql();
   ok('标识符改用双引号', has(oraSql, 'WITH "HARDCODE" AS ('));
@@ -813,9 +869,13 @@ async function main() {
   ok('设置被写进 localStorage', Object.keys(saved).length >= 8, JSON.stringify(saved).slice(0, 140));
   ok('方言被记住（MySQL）', saved.dialect === 'mysql', saved.dialect);
   ok('表名被记住（回落后的 HARDCODE）', saved.table === 'HARDCODE', saved.table);
+  /* ★ inferTypes 的默认值在 v2 改成了 true（对齐 Python 0.4.0 的 auto），
+     所以这里断言的是新默认值 —— 旧写法断 false 会把这次行为变化当成"没存住"。 */
   ok('三个开关都被记住',
-    saved.emptyAsNull === false && saved.inferTypes === false && saved.legacyDateMode === true,
+    saved.emptyAsNull === false && saved.inferTypes === true && saved.legacyDateMode === true,
     JSON.stringify([saved.emptyAsNull, saved.inferTypes, saved.legacyDateMode]));
+  ok('★ 持久化里带上设置版本号（供以后做迁移）', saved.settingsVersion >= 2,
+    String(saved.settingsVersion));
 
   /* ★ 反例：localStorage 里塞非法值时不能白屏，要回落默认 */
   localStorage.setItem('excel2sql-settings', JSON.stringify({
@@ -826,6 +886,16 @@ async function main() {
   ok('★ 持久化内容非法时回落默认而不是白屏', !reloadError, reloadError && reloadError.stack);
   const activeDia = byId('dialectSelect').value;
   ok('非法方言回落 SQL Server', activeDia === 'sqlserver', activeDia);
+  /* ★★ 对齐 Python 0.4.1「不再静默回退成 SQL Server」：
+     悄悄换方言会产出一份语法完全正确、只是方言错了的 SQL ——
+     往往要到灌库才暴露，更糟的是被隐式转换掩盖过去、看着像"跑通了"。
+     所以回落必须有**显式提示**，而且提示里要列出可选值。 */
+  ok('★★ 非法方言回落时给出了显式提示（不是静默替换）',
+    hasText(byId('envNotice'), 'db2') && hasText(byId('envNotice'), '无法识别'),
+    byId('envNotice').textContent.slice(0, 120));
+  ok('★ 提示里列出可选方言清单',
+    hasText(byId('envNotice'), 'sqlserver(1)') && hasText(byId('envNotice'), 'sqlite(5)'),
+    byId('envNotice').textContent.slice(0, 200));
   ok('非法 fmt 回落 union（包裹方式行重新出现）', byId('wrapSegs').hidden === false,
     'true 说明 fmt 是 insert，回落失败');
 
@@ -849,21 +919,31 @@ async function main() {
   ok('★ 只有 CSV 才显示「自动推断数字」开关', byId('inferWrap').hidden === false);
   ok('CSV 表头识别为第 1 行', hasText(detailsText(), '第 1 行'), detailsText());
 
+  /* ★ 这一条是**行为变化**（对齐 Python 0.4.0 把 infer_types 默认设为 auto）：
+     以前 CSV 默认整列按字符串，`SUM()` 在三库都报错；现在默认会把
+     「整列都能无损解析成数字」的列还原成数字字面量。
+     开关本身默认是勾上的 —— 也就是界面上看到的状态与产物一致。 */
+  ok('★ 默认开关是「开」（对齐 auto，不是过去的不推断）',
+    byId('optInferTypes').checked === true);
+
   fireClick(byId('btnGenerate'));
   await tick();
-  ok('CSV 默认整列按字符串（没有类型信息）',
-    has(previewSql(), "'120'") && has(previewSql(), "'3.5'"), firstSelect(previewSql()));
+  ok('★★ CSV 默认就还原数字列（auto：需要且安全时才推断）',
+    has(previewSql(), '120 AS') && has(previewSql(), '3.5 AS'), firstSelect(previewSql()));
+  ok('★ 默认下 CSV 不再整列字符串化（旧行为会让 SUM() 报错）',
+    !has(previewSql(), "'120' AS"), firstSelect(previewSql()));
 
-  byId('optInferTypes').checked = true;
-  fireChange(byId('optInferTypes'));
-  fireClick(byId('btnGenerate'));
-  await tick();
-  ok('打开「自动推断数字」后数字列不加引号',
-    has(previewSql(), '120 AS') && !has(previewSql(), "'120'"), firstSelect(previewSql()));
-
-  /* 17b. 空串 / NULL（CSV 才测得出：逗号之间的空字段） */
+  /* 关掉之后回到旧行为：整列按字符串、头注释说明原因是 CSV 无类型信息 */
   byId('optInferTypes').checked = false;
   fireChange(byId('optInferTypes'));
+  fireClick(byId('btnGenerate'));
+  await tick();
+  ok('关闭后：整列按字符串输出', has(previewSql(), "'120'") && has(previewSql(), "'3.5'"),
+    firstSelect(previewSql()));
+  ok('关闭后：头注释说明原因是 CSV 无类型信息',
+    has(previewSql(), 'CSV 无类型信息'));
+
+  /* 17b. 空串 / NULL（CSV 才测得出：逗号之间的空字段） */
   byId('fileInput').files = [makeFile('空值.csv', enc('a,b\nx,\n,7\n'))];
   fireChange(byId('fileInput'));
   await tick(80);
@@ -879,6 +959,18 @@ async function main() {
     previewSql().split('\n').find((l) => l.indexOf('SELECT') >= 0));
 
   /* 17c. .xls 必须给可操作的提示，而不是硬解析或静默失败 */
+  /* ★★ 先把"推断"打开并留下现场 —— 下一节要验证它**不会**泄漏到 xlsx。
+     必须在 CSV 语境下点，因为真实用户只能在 CSV 时看到这个开关。 */
+  byId('fileInput').files = [makeFile('前置.csv', enc('n\n1\n2\n'))];
+  fireChange(byId('fileInput'));
+  await tick(80);
+  byId('optInferTypes').checked = true;
+  fireChange(byId('optInferTypes'));
+  await tick(AUTO_WAIT);
+  ok('前置：CSV 下「推断」已打开并落盘',
+    JSON.parse(localStorage.getItem('excel2sql-settings') || '{}').inferTypes === true,
+    String(JSON.parse(localStorage.getItem('excel2sql-settings') || '{}').inferTypes));
+
   errors.length = 0;
   byId('fileInput').files = [makeFile('老表.xls', new Uint8Array([0xD0, 0xCF, 0x11, 0xE0]))];
   fireChange(byId('fileInput'));
@@ -897,6 +989,29 @@ async function main() {
   ok('真 xlsx 解析无未捕获异常', realErrors().length === 0, realErrors().join(' | '));
   ok('xlsx 标记为 XLSX', hasText(byId('fileMeta'), 'XLSX'), byId('fileMeta').textContent);
   ok('xlsx 不显示「自动推断数字」开关（本来就有类型信息）', byId('inferWrap').hidden === true);
+  /* ★★ 这是 auto 语义里最容易漏的一半：「只对 CSV 生效」。
+     上一节刚在 CSV 语境下把「推断」打开了，设置值（true）会跨数据源保留下来；
+     开关在界面上对 xlsx 是隐藏的，但**状态本身**是可观测的 ——
+     若渲染时直接读 settings.inferTypes 而不是经过 resolveInferTypes()，
+     这里就会是 checked，xlsx 的文本列也会被改掉。
+     对齐 Python 0.4.0：「Excel 的单元格自带类型，写成文本就是用户有意的文本」。 */
+  ok('★★ xlsx 语境下「推断」被解析为关（auto 只对 CSV 生效，不泄漏到 Excel）',
+    byId('optInferTypes').checked === false, 'checked=' + byId('optInferTypes').checked);
+  ok('★★ 但用户在 CSV 下的选择没被清掉（是"解析后为假"，不是"被重置"）',
+    JSON.parse(localStorage.getItem('excel2sql-settings') || '{}').inferTypes === true,
+    String(JSON.parse(localStorage.getItem('excel2sql-settings') || '{}').inferTypes));
+  /* 再切回 CSV：推断又生效 —— 逐次判定，不是"一次降到 Excel 就粘住" */
+  byId('fileInput').files = [makeFile('再切回.csv', enc('n\n1\n2\n'))];
+  fireChange(byId('fileInput'));
+  await tick(80);
+  ok('★★ 切回 CSV 后推断又生效（逐次判定，不是一次失效就粘住）',
+    byId('optInferTypes').checked === true, 'checked=' + byId('optInferTypes').checked);
+
+  /* 回到 xlsx 现场继续后面的用例 */
+  byId('fileInput').files = [makeFile('excel-style.xlsx', new Uint8Array(readFileSync(join(TOOL, 'test-fixtures', 'excel-style.xlsx'))))];
+  fireChange(byId('fileInput'));
+  await tick(150);
+  ok('xlsx 解出了表头与数据（生成按钮可用）', byId('btnGenerate').disabled === false);
   ok('xlsx 解出了表头与数据（生成按钮可用）', byId('btnGenerate').disabled === false);
   fireClick(byId('btnGenerate'));
   await tick();
