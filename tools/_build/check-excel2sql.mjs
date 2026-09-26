@@ -155,10 +155,37 @@ async function main() {
   ok('Oracle 用 CHR(10)', has(ora, 'CHR(10)'));
   ok('Oracle 带 FROM dual', has(ora, ' FROM dual'));
 
+  /* ---- SQLite（对齐 Python 0.4.0）----
+     双引号标识符、|| 拼接、CHAR(10)、无 N 前缀、无反斜杠转义、无 dual、日期不包装。 */
+  const lite = SqlGen.buildSql(bRows, { dialect: Dialects.DIALECTS.sqlite, wrap: 'plain' }).sql;
+  ok('SQLite 标识符用双引号', has(lite, 'AS "订单 ID"'));
+  ok('SQLite 无 N 前缀', has(lite, "'CA-2014-AB1001' AS \"订单 ID\""));
+  ok('SQLite 用 || 拼接', has(lite, " || "));
+  ok('SQLite 换行用 CHAR(10)', has(lite, 'CHAR(10)'));
+  ok('SQLite 无 dual', !has(lite, 'dual'));
+  /* ★ 日期不包装：SQLite 没有日期类型，ISO-8601 文本就是它的规范表示，
+     date() / strftime() 能直接识别。规律是「只有真正需要包装的方言才加前缀」——
+     目前仍只有 Oracle 需要 TO_DATE。 */
+  ok('★ SQLite 日期不加 TO_DATE 包装', !has(lite, 'TO_DATE'));
+  ok('★ SQLite 日期就是 ISO-8601 文本', /'2024-11-11[^']*' AS "订购日期"/.test(lite));
+  /* 反斜杠不转义：与 MySQL 区分（MySQL 要把 \ 写成 \\） */
+  ok('SQLite 反斜杠不转义（与 MySQL 区分）',
+    !Dialects.DIALECTS.sqlite.backslashEscape && Dialects.DIALECTS.mysql.backslashEscape === true);
+
   /* ============ 8. UNION ALL 必须独立成行（防 Oracle 语法错） ============ */
   section('8. UNION ALL 换行（历史 P0）');
   ok('不存在 dualUNION 粘连', !has(ora, 'dualUNION'));
   ok('UNION ALL 独立成行', has(ora, '\nUNION ALL\n'));
+
+  /* ---- CTE 体内缩进（对齐 Python 0.4.0 / sqlfluff 默认风格）----
+     plain **不缩进** —— 那是给「嵌进已有 SQL」用的，缩进交给调用方按所在层级对齐。
+     这是行为变化：产物文本与 0.3.x 不再逐字节相同，语义完全一致。 */
+  const ssCte = SqlGen.buildSql(bRows, { dialect: Dialects.DIALECTS.sqlserver, wrap: 'cte' }).sql;
+  const ssPlain = SqlGen.buildSql(bRows, { dialect: Dialects.DIALECTS.sqlserver, wrap: 'plain' }).sql;
+  ok('★ CTE 体内第一行 SELECT 缩进一级', has(ssCte, 'AS (\n    SELECT '));
+  ok('★ CTE 体内 UNION ALL 缩进一级（独立成行且带缩进）', has(ssCte, '\n    UNION ALL\n    SELECT '));
+  ok('★ CTE 闭合括号回到行首', has(ssCte, '\n)\nSELECT * FROM [HARDCODE];'));
+  ok('★ plain **不**缩进（给嵌入已有 SQL 用）', has(ssPlain, '\nSELECT ') && !has(ssPlain, '\n    SELECT '));
 
   /* ============ 9. UNION 裸块（--wrap plain） ============ */
   section('9. 包裹方式');
@@ -236,6 +263,54 @@ async function main() {
   }).sql;
   ok('前导零列不参与数字推断', has(lzSql, "N'007' AS [编号]"));
 
+  /* ---- ★★ 推断的两条安全边界（对齐 Python 0.4.0 的 MAX_SIG_DIGITS = 15）----
+     这条比 Number.isSafeInteger（2^53 ≈ 16 位）**更严**：一个 16 位但小于 2^53 的
+     编号，isSafeInteger 会放行、JS 也能精确表示，但它是"编号"的概率远大于"数量"。
+     越过 15 位几乎一定是编号/账号，且 19 位以上会超出三库的 bigint 范围 ——
+     硬转成数字字面量会让灌库直接报错。 */
+  const sigSql = (csv) => {
+    const sh = Readers.readCsvBytes(new TextEncoder().encode(csv), 'x').sheets;
+    return SqlGen.buildSql(sh[0].rows, {
+      dialect: Dialects.DIALECTS.sqlserver, source: 'csv', inferTypes: true
+    }).sql;
+  };
+  /* 15 位：仍按数字（在安全线内） */
+  ok('边界内：15 位数字列按数字输出', has(sigSql('编号\n123456789012345\n'), '123456789012345 AS'));
+  /* 16 位但 < 2^53：isSafeInteger 会放行 —— 必须靠 15 位规则拦下 */
+  ok('★★ 16 位编号（< 2^53）保持文本', has(sigSql('编号\n1234567890123456\n'), "'1234567890123456' AS"));
+  ok('★★ 19 位编号（超 bigint）保持文本',
+    has(sigSql('编号\n1234567890123456789\n'), "'1234567890123456789' AS"));
+  /* 超过 15 位有效数字的小数同样不转（JS 双精度会丢尾数） */
+  ok('★ 有效数字超 15 位的小数保持文本',
+    has(sigSql('金额\n0.1234567890123456789\n'), "'0.1234567890123456789' AS"));
+  ok('★ 15 位以内的小数仍按数字输出', has(sigSql('金额\n0.125\n'), '0.125 AS'));
+  /* 尾随零算有效数字（对齐 Decimal('1.50') → 3 位） */
+  ok('前导零不算有效数字（0.0015 是 2 位）', has(sigSql('比例\n0.0015\n'), '0.0015 AS'));
+
+  /* ---- ★ --all-string 时不再做数字转换（对齐 Python 0.4.0）----
+     ★ 这里必须挑**能区分**的观测量。第一版我用 '数量,备注\n2,\n3,x\n' 断言
+     `N'2'` 仍是字符串 —— 那是假守卫：数字列就算被转成 num、再被 allString
+     强制字符串化，渲染出来还是 `N'2'`，两条路径产物逐字节相同，把守卫拿掉也照样绿。
+     真正能区分的只有**数字列里的空白格**：
+       · 有守卫：不转换 → 空白格保持空串 → `N''`
+       · 无守卫：先转换 → 空白格被改成 NULL → `NULL`
+     （反向实验实测：拿掉守卫后原断言全绿，换成下面这组才咬住。） */
+  const allStrCsv = '数量,备注\n2,a\n,b\n3,c\n';
+  const asSh = Readers.readCsvBytes(new TextEncoder().encode(allStrCsv), 'x').sheets;
+  const asSql = SqlGen.buildSql(asSh[0].rows, {
+    dialect: Dialects.DIALECTS.sqlserver, source: 'csv', inferTypes: true, allString: true
+  }).sql;
+  ok('★ all-string + 推断：不转数字（列仍是字符串）', has(asSql, "N'2' AS [数量]"));
+  ok('★★ all-string + 推断：数字列里的空白仍是空串，没被改成 NULL',
+    has(asSql, "N'' AS [数量]") && !has(asSql, 'NULL AS [数量]'), asSql.split('\n').find((l) => l.indexOf('SELECT') >= 0));
+  /* 对照：没有 allString 时，同一份数据**应该**转换、空白**应该**变 NULL ——
+     否则上面那条"没变 NULL"可能只是因为整个转换从来没生效（另一种假守卫）。 */
+  const noAllStr = SqlGen.buildSql(asSh[0].rows, {
+    dialect: Dialects.DIALECTS.sqlserver, source: 'csv', inferTypes: true
+  }).sql;
+  ok('★★ 对照：不带 all-string 时同一列确实被转换、空白变成 NULL',
+    has(noAllStr, '2 AS [数量]') && has(noAllStr, 'NULL AS [数量]'), noAllStr.split('\n').find((l) => l.indexOf('SELECT') >= 0));
+
   /* ============ 14. 表头体检与修复 ============ */
   section('14. 表头体检与修复');
   const messy = [
@@ -268,7 +343,38 @@ async function main() {
   section('16. 方言解析');
   ok('-d 1 -> SQL Server', Dialects.resolve('1').key === 'sqlserver');
   ok('-d pg -> PostgreSQL', Dialects.resolve('pg').key === 'postgresql');
-  ok('未知值回落 SQL Server', Dialects.resolve('zzz').key === 'sqlserver');
+  ok('-d sqlite3 -> SQLite', Dialects.resolve('sqlite3').key === 'sqlite');
+  ok('-d 5 -> SQLite', Dialects.resolve('5').key === 'sqlite');
+  /* ★ 未知值**抛错**，不静默回落成 SQL Server（对齐 Python 0.4.1）。
+     静默回退是最坏的一类失败：产物语法完全正确、只是方言错了 ——
+     往往要到灌库才暴露，更糟的是被隐式转换掩盖过去，看起来像"跑通了"。
+     所以这条断言不是"等于 sqlserver"，而是"必须抛"。 */
+  let threw = null;
+  try { Dialects.resolve('zzz'); } catch (e) { threw = e; }
+  ok('★ 未知方言抛 UnknownDialect（不再静默回退）', !!threw && threw.name === 'UnknownDialect',
+    threw ? threw.message : '没有抛，静默得到了 ' + Dialects.resolve('zzz').name);
+  ok('★ 报错文案里列出全部可选值（从 ORDER 派生）',
+    !!threw && Dialects.ORDER.every(function (k, i) {
+      return has(threw.message, k + '(' + (i + 1) + ')');
+    }), threw ? threw.message : '');
+  /* 空串也要抛 —— 对齐 Python「-d '' 现在报错」：
+     shell 里 -d "$VAR" 而变量为空，恰恰是最容易静默用错方言的场景 */
+  let threwEmpty = null;
+  try { Dialects.resolve(''); } catch (e) { threwEmpty = e; }
+  ok('★ 空方言值也抛（不能当成"没给"）', !!threwEmpty, threwEmpty ? '已抛' : '没抛');
+  ok('isValid 对合法/非法值分别返回 true/false',
+    Dialects.isValid('mysql') === true && Dialects.isValid('zzz') === false &&
+    Dialects.isValid('5') === true && Dialects.isValid('') === false);
+  /* 方言清单单一来源：ORDER 与 DIALECTS / 下拉选项三者必须一致 */
+  ok('★ ORDER 与 DIALECTS 完全一致（清单单一来源）',
+    Dialects.ORDER.length === Object.keys(Dialects.DIALECTS).length &&
+    Dialects.ORDER.every(function (k) { return !!Dialects.DIALECTS[k]; }),
+    Dialects.ORDER.join(','));
+  ok('★ 下拉选项从 ORDER 派生且顺序一致',
+    Dialects.options().map(function (o) { return o.key; }).join(',') === Dialects.ORDER.join(','));
+  /* 编号必须正好是 ORDER 的 1..N —— 别名表里漏一个编号，'-d 5' 就会静默失效 */
+  ok('★ 每个方言都有编号别名，且编号连续',
+    Dialects.ORDER.every(function (k, i) { return Dialects.ALIASES[String(i + 1)] === k; }));
 
   /* ============ 17. 转义安全（防注入破坏语句结构） ============ */
   section('17. 标识符与字符串转义');
@@ -350,10 +456,10 @@ async function main() {
   /* settings 里其实有两类键，断言要**双向**做，只判一个方向会两头漏：
      ① SQL 参数 —— 必须真的传进 sqlOptions()。否则界面上能改、实际没生效，
         而且不会有任何报错（这类"改了没用"最难发现）。
-     ② 纯界面状态（页签 / 自动换行）—— 只影响观感，**不该**出现在 sqlOptions() 里。
-        混进去的话，读代码的人会以为它们参与 SQL 生成，以后改渲染逻辑时
-        还会被当成有效参数带下去。 */
-  const UI_ONLY_KEYS = ['tab', 'wordWrap'];
+     ② 纯界面状态（页签 / 自动换行 / 设置版本号）—— 只影响观感或持久化迁移，
+        **不该**出现在 sqlOptions() 里。混进去的话，读代码的人会以为它们参与 SQL 生成，
+        以后改渲染逻辑时还会被当成有效参数带下去。 */
+  const UI_ONLY_KEYS = ['tab', 'wordWrap', 'settingsVersion'];
   const settingsBlock = appSrc.match(/const settings = \{([\s\S]*?)\n  \};/);
   const settingsKeys = [...(settingsBlock ? settingsBlock[1] : '').matchAll(/^\s{4}(\w+):/gm)].map((m) => m[1]);
   const sqlOptsBody = (appSrc.match(/function sqlOptions\(\) \{([\s\S]*?)\n  \}/) || ['', ''])[1];

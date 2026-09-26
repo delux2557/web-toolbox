@@ -26,6 +26,17 @@ const E2sSqlGen = (function () {
   /* 超过该行数直接拒绝，避免生成一个谁也打不开的 SQL 文件 */
   const MAX_ROWS = 200000;
 
+  /* CTE 体内每行缩进的宽度（对齐 Python 版 CTE_INDENT） */
+  const CTE_INDENT = '    ';
+
+  /* 有效数字上限。取 15 是因为 Excel 本身只保证 15 位有效数字：
+     越过这条线的"数字"几乎一定是编号/账号而不是数量，而且 19 位以上还会超出
+     SQL Server / MySQL / PostgreSQL 的 bigint 范围 —— 硬转成数字字面量会直接报错。
+     ★ 这条比 Number.isSafeInteger（2^53 ≈ 16 位）**更严**：一个 16 位但小于 2^53 的
+       编号，isSafeInteger 会放行、JS 也能精确表示，但它是"编号"的概率远大于"数量"，
+       所以按 15 位拦下、留作文本。 */
+  const MAX_SIG_DIGITS = 15;
+
   const REASON_ALL_STRING = '用户选择全部按字符串输出';
   const REASON_MIXED = '同列混有数字/日期与文本，整列统一为字符串';
   const REASON_TEXT_CSV = '源数据是文本（CSV 无类型信息）';
@@ -86,16 +97,29 @@ const E2sSqlGen = (function () {
   /* 把「整列都是数字文本」的列换成真正的数字（--infer-types）
      保守起见只做「整列可解析」才转换：只要有一格不是数字（含前导零、
      超 2^53、NaN/inf）就整列保持文本，绝不逐格猜。 */
+  /* 数字文本的有效位数（对齐 Python 版 _sig_digits 的 Decimal 口径）。
+     去符号、去小数点、去**前导**零，剩下的都算有效数字 —— 尾随零算
+     （Decimal('1.50') → 3 位），指数记号只取尾数部分。
+     解析不了就返回一个大于任何阈值的大数，让调用方按「不安全」处理。 */
+  function sigDigits(text) {
+    const m = /^[+-]?(\d*\.?\d*)(?:[eE][+-]?\d+)?$/.exec(String(text).trim());
+    if (!m || !m[1]) return MAX_SIG_DIGITS + 1;
+    const mant = m[1].replace(/\./g, '').replace(/^0+/, '');
+    return mant.length;
+  }
+
   function asNumber(text) {
     const t = String(text).trim();
     if (!t) return null;
     if (INT_RE.test(t)) {
       const digits = t.replace(/^[+-]/, '');
       if (digits.length > 1 && digits.charAt(0) === '0') return null;   // '007' 保持文本
+      if (sigDigits(digits) > MAX_SIG_DIGITS) return null;              // 多半是编号
       const n = Number(t);
       return Number.isSafeInteger(n) ? n : null;                        // 超 2^53 不转
     }
     if (FLOAT_RE.test(t)) {
+      if (sigDigits(t) > MAX_SIG_DIGITS) return null;                   // 超出可无损表达的范围
       const n = Number(t);
       return isFinite(n) ? n : null;
     }
@@ -189,7 +213,10 @@ const E2sSqlGen = (function () {
     });
     if (opt.wrap === 'plain') return lines.join('\nUNION ALL\n') + '\n';
     const t = D.quoteIdent(dia, opt.table);
-    return 'WITH ' + t + ' AS (\n' + lines.join('\nUNION ALL\n') +
+    /* CTE 体内缩进一级、闭合括号回到行首（对齐 Python 0.4.0 / sqlfluff 的默认风格）。
+       plain **不缩进** —— 那是给「嵌进已有 SQL」用的，缩进交给调用方按所在层级对齐。 */
+    const sep = '\n' + CTE_INDENT + 'UNION ALL\n' + CTE_INDENT;
+    return 'WITH ' + t + ' AS (\n' + CTE_INDENT + lines.join(sep) +
            '\n)\nSELECT * FROM ' + t + ';\n';
   }
 
@@ -320,7 +347,10 @@ const E2sSqlGen = (function () {
 
     if (!data.length) throw new Error('表头下方没有任何数据行，无法生成 SQL');
 
-    const finalData = opt.inferTypes ? coerceNumericColumns(data) : data;
+    /* ★ allString 时不再做数字转换（对齐 Python 版 0.4.0）：
+       先转数字、再全部字符串化，顺带会把数字列里的空格子改成 NULL ——
+       与"全部按字符串输出"自相矛盾。 */
+    const finalData = (opt.inferTypes && !opt.allString) ? coerceNumericColumns(data) : data;
     const force = inferColumnTypes(header, finalData, opt);
     /* 体检基于「修复前」的表头 —— 空列名/重名会被自动修好，但必须如实告知用户 */
     const check = H.check(rawNames, finalData);

@@ -36,7 +36,7 @@
         <!-- 副标题只说「能力」，不说「数据不离开浏览器」——
              那句是空态徽标的职责（信任信号要在"选文件"那一刻出现）。
              两边说同一句话，等于把常驻位置浪费掉了。 -->
-        <span class="brand-sub">4 种方言 · 零依赖单文件</span>
+        <span class="brand-sub">5 种方言 · 零依赖单文件</span>
       </div>
     </div>
     <div class="topbar-actions">
@@ -115,12 +115,9 @@
 
               <label class="esq-row">
                 <span class="esq-row-label">方言</span>
-                <select class="esq-select" id="dialectSelect">
-                  <option value="sqlserver">SQL Server</option>
-                  <option value="mysql">MySQL</option>
-                  <option value="oracle">Oracle</option>
-                  <option value="postgresql">PostgreSQL</option>
-                </select>
+                <!-- 选项由 js 从 dialects.ORDER 生成（单一来源）——
+                     以前这里手写一份，加 SQLite 时就得记着改两处 -->
+                <select class="esq-select" id="dialectSelect"></select>
               </label>
 
               <label class="esq-row">
@@ -162,7 +159,7 @@
 
               <label class="esq-field" id="inferWrap" hidden>
                 <span class="esq-field-label">CSV 自动推断数字
-                  <span class="esq-field-hint">整列都是数字时才按数字输出；前导零、超长数字保持文本</span>
+                  <span class="esq-field-hint">整列都是数字时才按数字输出；前导零、超过 15 位有效数字的保持文本（对齐命令行版 0.4.0 的 auto）</span>
                 </span>
                 <span class="switch"><input type="checkbox" id="optInferTypes" /><span class="track"></span></span>
               </label>

@@ -110,6 +110,10 @@
 
   let staleEl = null;  /* "设置已变更"提示条，避免重复堆叠（只在大文件降级手动时才用） */
   let autoTimer = null; /* 自动生成的防抖定时器 */
+  /* 持久化设置的版本号。改过某个键的默认值就 +1，并在 loadSettings 里写迁移。 */
+  const SETTINGS_VERSION = 2;
+  /* 持久化里的方言认不出来时，把它记在这里，启动后给用户一句显式提示 */
+  let unknownDialect = null;
 
   /* 用户可调的转换设置（持久化到 localStorage） */
   const settings = {
@@ -119,8 +123,15 @@
     table: 'HARDCODE',
     batchSize: 500,
     emptyAsNull: false,
-    inferTypes: false,
+    /* ★ 默认 true —— 对齐 Python 版 0.4.0 把 infer_types 默认设为 auto。
+       但 auto 的含义是"只在**需要且安全**时才推断"，所以真正生效还要过两道关：
+       ① 需要：源必须无类型信息（CSV）；xlsx/xls 的单元格自带类型，写成文本就是
+          用户有意的文本，不动（见 resolveInferTypes）。
+       ② 安全：交给 sqlgen.coerceNumericColumns 把关（整列可无损解析才转，
+          前导零、超过 15 位有效数字的列保持文本）。 */
+    inferTypes: true,
     legacyDateMode: true,
+    settingsVersion: SETTINGS_VERSION,
     /* 右侧停在哪个页签：'result' | 'header'。记住上次选择 ——
        表头确认是「一次性」动作，SQL 阅读是「反复」动作，默认值对谁都不合适。 */
     tab: 'result',
@@ -160,7 +171,7 @@
      也不在标签里塞 UNION ALL 这种上下文才懂的缩写。 */
   const FEATURES = [
     { b: '零上传', t: '解析全在本地完成' },
-    { b: '4 种方言', t: 'SQL Server / MySQL / Oracle / PG' },
+    { b: '5 种方言', t: 'SQL Server / MySQL / Oracle / PG / SQLite' },
     { b: '5 万行', t: '实测解析 2.3 秒' },
     { b: '列级类型统一', t: '避免隐式转换报错' }
   ];
@@ -294,12 +305,24 @@
     try { o = JSON.parse(raw); } catch (e) { return; }
     if (!o || typeof o !== 'object') return;
 
+    /* ★ 设置版本迁移。v1 的 inferTypes 默认是 false（"不推断"），
+       v2 起默认改成 true —— 对齐 Python 0.4.0 把 infer_types 默认设为 auto。
+       老键是布尔、区分不出"用户显式关过"与"从没动过"，所以整体丢掉让新默认生效；
+       用户显式关过的那次选择会一并失效，这是这次行为变化的一部分（宁可按新默认走，
+       也不要让所有人停在旧默认上、以为同步没生效）。其余偏好一律保留。 */
+    if (!o.settingsVersion) delete o.inferTypes;
+
     Object.keys(settings).forEach(function (k) {
       if (o[k] === undefined || o[k] === null) return;
       settings[k] = o[k];
     });
-    /* 防御：持久化内容可能是旧版本或手改过的，非法值一律回落到默认 */
-    if (!D.DIALECTS[settings.dialect]) settings.dialect = 'sqlserver';
+    /* 防御：持久化内容可能是旧版本或手改过的，非法值一律回落到默认。
+       ★ 方言单独处理：不是"悄悄换成默认"，而是记下来给用户一句显式提示（见 loadSettings 的返回）。 */
+    unknownDialect = null;
+    if (!D.isValid(settings.dialect)) {
+      unknownDialect = String(settings.dialect == null ? '' : settings.dialect);
+      settings.dialect = D.ORDER[0];
+    }
     if (G.FORMATS.indexOf(settings.fmt) < 0) settings.fmt = 'union';
     if (G.WRAPS.indexOf(settings.wrap) < 0) settings.wrap = 'cte';
     settings.batchSize = Math.max(1, Math.min(10000, Number(settings.batchSize) || 500));
@@ -309,6 +332,7 @@
     settings.wordWrap = !!settings.wordWrap;
     settings.tab = settings.tab === 'header' ? 'header' : 'result';
     settings.table = String(settings.table || 'HARDCODE');
+    settings.settingsVersion = SETTINGS_VERSION;
   }
 
   /* 把 settings 回填到控件。
@@ -316,6 +340,7 @@
      加上输出形式的 2 行，左栏内容 632px 正好顶满面板（余量 0）—— 于是切到 INSERT 时
      冒出来的「每批行数」多出 33px 就让面板出滚动条，观感上就是"卡片高度在跳"。 */
   function applySettingsToUI() {
+    renderDialectOptions();
     el.dialectSelect.value = settings.dialect;
     el.formatSelect.value = settings.fmt;
     el.wrapSelect.value = settings.wrap;
@@ -327,7 +352,8 @@
     el.tableInput.value = settings.table;
     el.batchInput.value = settings.batchSize;
     el.optEmptyNull.checked = settings.emptyAsNull;
-    el.optInferTypes.checked = settings.inferTypes;
+    /* 勾选状态反映**解析后**的结果：auto 在 CSV 语境下就是"开" */
+    el.optInferTypes.checked = resolveInferTypes();
     el.optLegacyDate.checked = settings.legacyDateMode;
 
     /* CSV 自动推断数字只对 CSV 有意义 —— xlsx 本来就有类型信息 */
@@ -337,12 +363,39 @@
     renderTabs();
   }
 
+  /* 方言下拉：选项从 dialects.ORDER 派生（单一来源，别在 HTML 里再手写一份） */
+  function renderDialectOptions() {
+    const want = D.ORDER;
+    const have = Array.prototype.map.call(el.dialectSelect.options || [], function (o) { return o.value; });
+    if (have.join(',') === want.join(',')) return;      /* 已经是对的就不重建（保住焦点/展开态） */
+    el.dialectSelect.textContent = '';
+    D.options().forEach(function (o) {
+      const opt = document.createElement('option');
+      opt.value = o.key;
+      opt.textContent = o.name;
+      el.dialectSelect.appendChild(opt);
+    });
+  }
+
+  /* 推断数字列的**唯一**判定入口（对齐 Python 版 cli.resolve_infer_types）。
+     `auto` 的含义是「只在需要且安全时才推断」：
+       · 需要 = 源没有类型信息（CSV）。xlsx/xls 的单元格自带类型，写成文本的单元格
+         是用户有意的选择，工具不该改写它已经明确表达过的意图。
+       · 安全 = 交给 sqlgen 的 coerceNumericColumns 把关。
+     ★ 判定放在这里而不是直接读 settings.inferTypes 的原因：界面上那个开关只对 CSV 可见，
+       但持久化里的值会跨数据源保留 —— 只读 settings 会让"CSV 打开过、随后换成 xlsx"
+       也去做推断，把用户写死的文本列改掉。 */
+  function resolveInferTypes() {
+    if (!settings.inferTypes) return false;
+    return !!(state.book && state.book.kind === 'csv');
+  }
+
   /* 转换相关的选项（prepare 只关心这几个） */
   function prepareOpts() {
     return {
       source: state.book ? state.book.kind : 'xlsx',
       emptyAsNull: settings.emptyAsNull,
-      inferTypes: settings.inferTypes
+      inferTypes: resolveInferTypes()
     };
   }
 
@@ -354,7 +407,7 @@
       fmt: settings.fmt,
       wrap: settings.wrap,
       emptyAsNull: settings.emptyAsNull,
-      inferTypes: settings.inferTypes,
+      inferTypes: resolveInferTypes(),
       batchSize: settings.batchSize,
       legacyDateMode: settings.legacyDateMode,
       source: state.book ? state.book.kind : 'xlsx',
@@ -1297,4 +1350,14 @@
   dropResult();
   el.workState.hidden = true;   /* 启动必然是空态：还没有数据源，没什么可预览的 */
   setBusy(false);
+
+  /* 持久化里的方言认不出来（手改过 localStorage / 跨版本残留）时**显式说一句** ——
+     对齐 Python 0.4.1「不再静默回退成 SQL Server」那条修复：
+     悄悄换掉方言会产出一份语法完全正确、只是方言错了的 SQL，
+     往往要到灌库才暴露，更糟的是被隐式转换掩盖过去，看着像"跑通了"。 */
+  if (unknownDialect !== null) {
+    notice(el.envNotice, 'warn',
+      '本地保存的方言「' + unknownDialect + '」无法识别，已重置为 ' +
+      D.DIALECTS[D.ORDER[0]].name + '。可选值：' + D.choicesText() + '。');
+  }
 })();
