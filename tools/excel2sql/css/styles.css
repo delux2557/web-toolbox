@@ -420,8 +420,15 @@ kbd {
   background: var(--surface-2); color: var(--text-3); font-family: var(--font-mono);
   text-align: right; position: sticky; left: 0; z-index: 1; width: 46px; min-width: 46px;
 }
-.esq-picker tbody tr { cursor: pointer; }
+/* ★★「设为表头」的入口只在行号槽，数据格是惰性的。
+   以前整行都给 pointer + 整行 hover 高亮 —— 那等于在**邀请**用户点格子；
+   而点格子（包括"拖选一段文字再松手"）会改判表头，表头一变整份产物就变了。
+   现在的分工：
+     · 整行 hover 仍淡亮（surface-2）—— 表示"这是同一行"，是**读**的提示；
+     · 只有行号槽显示 pointer，且 hover 时再加一档背景色 —— 那是**写**的提示。 */
 .esq-picker tbody tr:hover td { background: var(--surface-2); }
+.esq-picker tbody tr .esq-rownum { cursor: pointer; }
+.esq-picker tbody tr .esq-rownum:hover { background: var(--surface-3); color: var(--text); }
 .esq-picker tbody tr.is-head td { background: var(--accent-soft); color: var(--text); font-weight: 600; }
 .esq-picker tbody tr.is-head .esq-rownum { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
 .esq-picker tbody tr.is-skipped td { opacity: 0.6; }

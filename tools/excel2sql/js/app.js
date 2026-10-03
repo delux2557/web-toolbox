@@ -666,11 +666,20 @@
       const tr = document.createElement('tr');
       if (r + 1 === hr) tr.className = 'is-head';
       else if (r + 1 < hr) tr.className = 'is-skipped';
-      tr.title = '点这一行，把它设为表头';
 
+      /* ★★「设为表头」的唯一入口是**行号槽**，数据格保持惰性。
+         以前监听挂在整个 <tr> 上：点任意格子都会改判表头 ——
+         而"在格子里拖选一段文字、松手"同样会触发 click，误触率比想象中高得多；
+         表头一变，整份产物 SQL 就跟着变了（第一行从"跳过"变成"表头"），而且是静默的。
+         数据预览区是用户**只读查看**的地方，不该把"改结构"的写操作绑在数据区。
+         行号槽做把手是表格类产品的通行惯例（Excel / Google Sheets / AG Grid 等），
+         数据区留给单元格级操作。收窄到这里不损失任何功能 ——
+         数据格原本除了触发改表头，没有任何其他行为。 */
       const numTd = document.createElement('td');
       numTd.className = 'esq-rownum';
       numTd.textContent = String(r + 1);
+      numTd.title = '点这里把第 ' + (r + 1) + ' 行设为表头';
+      numTd.addEventListener('click', function () { pickHeaderRow(r + 1); });
       tr.appendChild(numTd);
 
       for (let c = 0; c < ncol; c++) {
@@ -683,7 +692,6 @@
         tr.appendChild(td);
       }
 
-      tr.addEventListener('click', function () { pickHeaderRow(r + 1); });
       tbody.appendChild(tr);
     }
     table.appendChild(tbody);
