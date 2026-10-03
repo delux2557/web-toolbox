@@ -754,9 +754,57 @@ async function main() {
   /* ---------------------------------------------------------------
    * [11] 手动改表头行 -> 再恢复自动识别
    * ------------------------------------------------------------- */
-  section('11. 手动改表头行（点预览里的某一行）');
-  fireClick(rowsNow()[0]);
-  ok('点第 1 行后提示改成「手动指定」',
+  section('11. 手动改表头行（点预览左侧的行号，不是点格子）');
+  /* ★★ 本轮的核心不变量：**点数据格不能改表头**。
+     以前监听挂在整个 <tr> 上，点任意格子都会改判表头；更糟的是
+     "在格子里拖选一段文字、松手"同样会触发 click —— 而数据预览区正是
+     用户只读查看的地方，表头一变整份产物 SQL 就静默变了。
+     ★ 这条断言必须能区分"监听在行上"与"监听只在行号槽"：所以**两次都点**——
+       先点数据格（必须什么都不发生），再点行号槽（必须改判）。
+       只验后者的话，把监听挂回整行照样绿 —— 那就是假守卫。 */
+  const tdsOf = (tr) => kids(tr).filter((n) => n && n.tagName === 'TD');
+  const gutterOf = (tr) => tdsOf(tr)[0];
+  const dataCellOf = (tr) => tdsOf(tr)[1];
+  ok('预览行里第 1 个 td 是行号槽、第 2 个才是数据格',
+    gutterOf(rowsNow()[0]).className === 'esq-rownum' &&
+    dataCellOf(rowsNow()[0]).className !== 'esq-rownum',
+    gutterOf(rowsNow()[0]).className + ' / ' + dataCellOf(rowsNow()[0]).className);
+
+  /* ★★ 真正咬住这条不变量的断言：**监听挂在哪一级**。
+     ⚠️ 为什么不用"点一下数据格看有没有变"来当主守卫？—— 反向实验实测：
+        `row-listener-restored`（把监听挂回整个 <tr>）跑了之后这条行为断言的
+        结果**没变**，红的是别的 6 条。根因是**桩的 fireClick 不做事件冒泡**
+        （只触发目标自身的处理器），而真实浏览器里点 td 会冒泡到 tr ——
+        也就是说"监听挂在祖先上"这类 bug 在桩里**复现不出来**。
+        所以主守卫必须是这条**结构断言**（直接验处理器挂在哪个元素上），
+        行为层面的证据由真机（Chrome 里真的点一下）来补。
+        同族教训：桩缺少某个真实语义时，依赖该语义的断言会**假阴**。 */
+  ok('★★ 「设为表头」的 click 监听只在行号槽上，行上不挂（结构断言）',
+    typeof gutterOf(rowsNow()[0])._h.click === 'function' &&
+    typeof rowsNow()[0]._h.click !== 'function',
+    'tr 上有处理器=' + (typeof rowsNow()[0]._h.click === 'function') +
+    ' / 行号槽上有处理器=' + (typeof gutterOf(rowsNow()[0])._h.click === 'function'));
+
+  /* 行为层：桩里只能验证"数据格自己没挂处理器 → 点它什么都不发生"。
+     "点数据格经冒泡影响表头"这条由上面那条结构断言 + 真机复验共同覆盖。 */
+  const headBefore = detailsText();
+  fireClick(dataCellOf(rowsNow()[0]));
+  await tick(80);
+  ok('★★ 点数据格不改表头（仍是自动识别，解释性文字一字未变）',
+    !hasText(detailsText(), '手动指定') && detailsText() === headBefore,
+    detailsText().slice(0, 110));
+  ok('★★ 点数据格后 is-head 的归属没变',
+    has(rowsNow()[1].className, 'is-head') && !has(rowsNow()[0].className, 'is-head'),
+    rowsNow()[0].className + ' / ' + rowsNow()[1].className);
+  ok('★★ 「设为表头」的提示只在行号槽上，数据格没有',
+    hasText(String(gutterOf(rowsNow()[0]).title || ''), '设为表头') &&
+    !hasText(String(dataCellOf(rowsNow()[0]).title || ''), '设为表头'),
+    '行号槽=' + String(gutterOf(rowsNow()[0]).title).slice(0, 30) +
+    ' / 数据格=' + String(dataCellOf(rowsNow()[0]).title).slice(0, 30));
+
+  /* 对照：行号槽才是入口 */
+  fireClick(gutterOf(rowsNow()[0]));
+  ok('点行号槽后提示改成「手动指定」',
     hasText(detailsText(), '手动指定的第 1 行'), detailsText().slice(0, 120));
   ok('第 1 行变成 is-head、不再是 is-skipped',
     has(rowsNow()[0].className, 'is-head') && !has(rowsNow()[0].className, 'is-skipped'),
@@ -1206,6 +1254,20 @@ async function main() {
   ok('产物预览样式存在（.esq-code）', has(css, '.esq-code'));
   ok('表头选择表样式存在（.esq-picker + is-head）',
     has(css, '.esq-picker') && has(css, '.esq-picker tbody tr.is-head'));
+  /* ★★「可点」的视觉信号必须只在行号槽 —— 这条和上面那条行为断言是一对。
+     以前整行都是 `cursor: pointer` + 整行 hover 高亮，等于在**邀请**用户点格子；
+     而点格子会改判表头、连"拖选一段文字再松手"也会触发，表头一变整份产物就变了。
+     光改行为（把监听挪到槽位）不够：整行还显示 pointer 的话，用户仍会去点数据格，
+     只是这次"点了没反应"—— 那是另一种难用。 */
+  ok('★★ 预览行不再整行显示 pointer（可点信号只给行号槽）',
+    !/\.esq-picker tbody tr \{[^}]*cursor\s*:\s*pointer/.test(cssRules) &&
+    /\.esq-picker tbody tr \.esq-rownum\s*\{[^}]*cursor\s*:\s*pointer/.test(cssRules),
+    '检查 .esq-picker tbody tr 与 tr .esq-rownum 的 cursor 归属');
+  /* 把手从整行缩到 46px 的槽位，必须有**独立的** hover 反馈才不会变得找不到 */
+  ok('★ 行号槽有独立的 hover 反馈（不依附整行高亮）',
+    /\.esq-picker tbody tr \.esq-rownum:hover\s*\{/.test(cssRules));
+  ok('★ 整行 hover 仍保留（那是"同一行"的读提示，与"可点"是两回事）',
+    /\.esq-picker tbody tr:hover td\s*\{/.test(cssRules));
   /* 新版布局：左窄栏 + 右列上下分栏 + 贴底状态栏，靠 grid 表达结构 */
   ok('工作态外壳样式存在（.esq-work / .esq-work-top / .esq-layout / .esq-status）',
     has(css, '.esq-work') && has(css, '.esq-work-top') && has(css, '.esq-layout') && has(css, '.esq-status'));
