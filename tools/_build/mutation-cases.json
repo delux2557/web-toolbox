@@ -180,6 +180,33 @@
       "expect": ["状态栏不再重复表头落点"]
     },
     {
+      "id": "row-listener-restored",
+      "gate": "ui",
+      "why": "★★ 把「设为表头」的 click 监听挂回整个 <tr>（回到本轮改之前的样子）—— 点任意数据格都会改判表头，而且「在格子里拖选一段文字再松手」同样会触发 click。数据预览区是用户只读查看的地方，表头一变整份产物 SQL 就静默变了。★ 这条用例的关键在于断言要**两次都点**：只验「点行号槽会改判」的话，监听挂回整行照样绿（事件冒泡让槽位仍然有效）—— 那是假守卫",
+      "file": "tools/excel2sql/js/app.js",
+      "find": "      numTd.addEventListener('click', function () { pickHeaderRow(r + 1); });",
+      "replace": "      tr.addEventListener('click', function () { pickHeaderRow(r + 1); });",
+      "expect": ["click 监听只在行号槽上，行上不挂"]
+    },
+    {
+      "id": "row-cursor-pointer-restored",
+      "gate": "ui",
+      "why": "★ 把整行的 `cursor: pointer` 加回来（只把行为收窄、不把视觉信号收窄）—— 整行仍显示可点，用户还是会去点数据格，只是这次「点了没反应」。行为与观感必须一起改，否则等于换一种难用",
+      "file": "tools/excel2sql/css/styles.css",
+      "find": ".esq-picker tbody tr:hover td { background: var(--surface-2); }",
+      "replace": ".esq-picker tbody tr { cursor: pointer; }\n.esq-picker tbody tr:hover td { background: var(--surface-2); }",
+      "expect": ["预览行不再整行显示 pointer"]
+    },
+    {
+      "id": "gutter-hover-feedback-removed",
+      "gate": "ui",
+      "why": "★ 去掉行号槽的独立 hover 反馈（只留整行淡亮）—— 把手从整行缩到 46px 的槽位之后，没有独立反馈就变得「找不到入口」。这条守的是可发现性，不是功能",
+      "file": "tools/excel2sql/css/styles.css",
+      "find": ".esq-picker tbody tr .esq-rownum:hover { background: var(--surface-3); color: var(--text); }\n",
+      "replace": "",
+      "expect": ["行号槽有独立的 hover 反馈"]
+    },
+    {
       "id": "sqlite-dropped-from-order",
       "gate": "logic",
       "why": "★★ 把 SQLite 从 ORDER 里拿掉 —— 模拟「加了方言却漏登记」这类最典型的漂移。ORDER 是方言清单的唯一来源，下拉、编号、报错文案全从它派生；漏一处会让下游静默少一种方言，而不是报错。这条同时守住「ORDER 与 DIALECTS 一致」「下拉与 ORDER 一致」「编号连续」三条",
