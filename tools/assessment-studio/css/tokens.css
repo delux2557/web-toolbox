@@ -1,0 +1,58 @@
+                /* ===== CSS 变量 · 业内最佳实践配色 (清爽专注蓝白灰) ===== */
+                :root {
+                    color-scheme: light;
+                    --primary: #1a5cff;
+                    --primary-light: #e9edff;
+                    --primary-dark: #0a3bb5;
+                    --success: #22a65e;
+                    --success-dark: #1b8f4e;
+                    --danger: #e34f4f;
+                    --danger-dark: #c73a3a;
+                    --warning: #f5a623;
+                    --gray-1: #f7f9fc;
+                    --gray-2: #edf0f5;
+                    --gray-3: #d0d7e2;
+                    --gray-4: #8c9aa8;
+                    --gray-5: #4a5a6a;
+                    --text-primary: #1e2a3a;
+                    --shadow-card: 0 8px 30px rgba(0, 20, 40, 0.08);
+                    --radius: 16px;
+                    --transition: 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+                    /* V3: 语义表面色 (支撑暗色模式) */
+                    --surface: #ffffff;
+                    --surface-hover: #eef3fa;
+                    --btn-hover: #d5dee9;
+                    --reveal-ok: #e3f5eb;
+                    --reveal-err: #fde8e8;
+                    --flag-bg: #fff7e6;
+                    --overlay: rgba(0, 0, 0, 0.25);
+                    --overlay-strong: rgba(0, 0, 0, 0.45);
+                }
+        
+                /* V3.1: 暗色模式 (手动切换，默认亮色，偏好存 localStorage) */
+                :root[data-theme="dark"] {
+                    color-scheme: dark;
+                    --primary: #6c8cff;
+                    --primary-light: #1e2b4d;
+                    --primary-dark: #9db4ff;
+                    --success: #2fbf71;
+                    --success-dark: #2aa764;
+                    --danger: #f26d6d;
+                    --danger-dark: #e05c5c;
+                    --warning: #ffb84d;
+                    --gray-1: #11161d;
+                    --gray-2: #1b232e;
+                    --gray-3: #2e3a49;
+                    --gray-4: #8b99a8;
+                    --gray-5: #c3cdd8;
+                    --text-primary: #e6edf5;
+                    --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.4);
+                    --surface: #18202b;
+                    --surface-hover: #232e3c;
+                    --btn-hover: #2c3848;
+                    --reveal-ok: #12311f;
+                    --reveal-err: #3a1d1d;
+                    --flag-bg: #33280f;
+                    --overlay: rgba(0, 0, 0, 0.55);
+                    --overlay-strong: rgba(0, 0, 0, 0.7);
+                }
