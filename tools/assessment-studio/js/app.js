@@ -294,6 +294,9 @@
                     totalQDisplay.textContent = `${qs.length} 题`;
                     // V3.2: 显示试卷名称 (方案 A)；超长由 CSS 省略号截断
                     if (examName) examName.textContent = examData.title || '考试系统';
+                    // 浏览器标签页标题同步为卷名：导出的考生端若沿用导出时的静态 <title>，
+                    // 换卷后标签页仍写着上一份卷子的名字，容易误判成「打开的还是旧卷」。
+                    if (examData.title) document.title = examData.title;
         
                     // 构建 slider 卡片 (content/options 均需转义，防 XSS)
                     slider.innerHTML = qs.map((q, idx) => {
@@ -1091,8 +1094,13 @@
                         }
                     }
         
-                    // 恢复存储；没有可用的备份时载入内置默认题库（英语题），进入页面即可开始答题
-                    if (!tryRestoreFromStorage()) {
+                    // 启动优先级：① 导出的嵌入试卷（考生端单文件）> ② 本地进度 > ③ 内置默认题库。
+                    // ① 放最前是必须的：导出的考生端**这份卷子本身就是权威**，不能被本地进度或内置题库顶掉
+                    // （历史 bug：嵌入数据因注入顺序问题没加载，页面回落到内置题库，导出文件打开是别的卷子）。
+                    if (window.__EMBEDDED_EXAM__ && Array.isArray(window.__EMBEDDED_EXAM__.questions) &&
+                        typeof loadEmbedded === 'function') {
+                        loadEmbedded(window.__EMBEDDED_EXAM__);
+                    } else if (!tryRestoreFromStorage()) {
                         loadDefaultExam();
                     }
         

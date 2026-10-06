@@ -100,25 +100,14 @@
                     // 关键：将 "<" 统一替换为 "\u003c"，防止题目内容中的 "<\/script>" 提前闭合脚本标签
                     const dataStr = JSON.stringify(examData).replace(/</g, '\\u003c');
                     const scriptTag = `<script>window.__EMBEDDED_EXAM__ = ${dataStr};window.__EXAM_CLIENT_MODE__ = true;window.__EXAM_MODE__ = '${mode}';<\/script>`;
-                    // 在 head 后注入
-                    const newHtml = injectAfterHead(clone.outerHTML, scriptTag);
-                    // 添加加载嵌入数据的逻辑 (在原始脚本执行前)
-                    const injectLoader = `
-                                <script>
-                                    // 载入嵌入数据
-                                    (function(){
-                                        if(window.__EMBEDDED_EXAM__){
-                                            // 等待主脚本加载
-                                            window.addEventListener('DOMContentLoaded', function(){
-                                                if(typeof window.loadEmbedded === 'function'){
-                                                    window.loadEmbedded(window.__EMBEDDED_EXAM__);
-                                                }
-                                            });
-                                        }
-                                    })();
-                                <\/script>
-                            `;
-                    const finalHtml = injectAfterHead(newHtml, injectLoader);
+                    // 只注入「数据」这一段，不另注入加载器：
+                    // 载入时机交给 app.js 的启动分支统一决定（嵌入试卷优先级最高）。
+                    // 历史坑：这里曾再注入一段 loader，用 (function(){ if(window.__EMBEDDED_EXAM__){ 注册 DOMContentLoaded }})
+                    // 的形式等待加载。但 injectAfterHead 两次插在同一位置 → 后插的 loader 跑到数据脚本**前面**，
+                    // 外层 if 在数据还没定义时就求值 → 恒为假 → 监听器从未注册 → 嵌入试卷被静默忽略，
+                    // 页面回落到「本地进度 / 内置题库」，表现为「导出的客户端打开还是别的卷子」。
+                    // 教训：**判据不要在脚本刚执行时求值，除非能保证它已定义**；顺序敏感的注入本来就该避免。
+                    const finalHtml = injectAfterHead(clone.outerHTML, scriptTag);
         
                     // 下载
                     const blob = new Blob([doctype + finalHtml], { type: 'text/html;charset=utf-8' });
@@ -133,13 +122,14 @@
                     return finalHtml;
                 }
         
-                // 暴露 loadEmbedded 给导出的 HTML 使用
+                // 暴露 loadEmbedded 给导出的 HTML 使用（由 app.js 的启动分支调用）
                 window.loadEmbedded = function(data) {
                     if (data && data.questions) {
                         // V3.3: 应用导出时固化的答题模式
                         if (window.__EXAM_MODE__ === 'exam' || window.__EXAM_MODE__ === 'practice') {
                             setMode(window.__EXAM_MODE__, false);
                         }
-                        loadExamData(data);
+                        // 带上题库自带版本号：导出的卷子也有 bankVersion 时，本地进度才能按同一份卷子校验
+                        loadExamData(data, data.bankVersion);
                     }
                 };
