@@ -823,7 +823,14 @@
                     if (answeredSw) answeredSw.classList.toggle('hidden', practice);
                 }
         
-                function openDrawer() { drawerOverlay.classList.add('open'); }
+                // 打开题号抽屉。题目多时面板封顶、由网格内部滚动（见 css/app.css .grid-questions），
+                // 这里顺手把「当前题」滚进可视区 —— 否则 70 题时打开抽屉还得自己在 14 行里找。
+                function openDrawer() {
+                    drawerOverlay.classList.add('open');
+                    const cur = gridContainer && gridContainer.querySelector('.grid-item.current');
+                    // display 刚从 none 变 flex，这里同步取布局即可（会强制一次 layout）
+                    if (cur) cur.scrollIntoView({ block: 'center', inline: 'nearest' });
+                }
         
                 function closeDrawer() { drawerOverlay.classList.remove('open'); }
         
@@ -1134,6 +1141,12 @@
                         if (e.key === 'Escape' && reviewModal && reviewModal.classList.contains('open')) {
                             e.preventDefault();
                             closeReview();
+                            return;
+                        }
+                        // 题号抽屉同样支持 Esc 关闭，与其它弹层行为一致
+                        if (e.key === 'Escape' && drawerOverlay && drawerOverlay.classList.contains('open')) {
+                            e.preventDefault();
+                            closeDrawer();
                             return;
                         }
                         const targetOpt = e.target && e.target.classList && e.target.classList.contains('option-item');

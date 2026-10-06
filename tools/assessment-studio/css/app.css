@@ -565,6 +565,13 @@
                     padding: 28px 24px 32px;
                     box-shadow: 0 30px 60px rgba(0, 0, 0, 0.2);
                     animation: drawerIn 0.2s ease;
+                    /* 题目多时不能顶出屏幕：给面板封顶，改由题号网格内部滚动。
+                       40px = .drawer-overlay 的上下 padding(20px×2)。
+                       面板本身用列向 flex，以便「标题/图例常驻、只有网格滚动」。 */
+                    display: flex;
+                    flex-direction: column;
+                    max-height: calc(100vh - 40px);
+                    max-height: calc(100dvh - 40px);   /* 移动端地址栏会压缩可视高度；不支持 dvh 时上一行生效 */
                 }
                 @keyframes drawerIn {
                     from {
@@ -582,6 +589,7 @@
                     justify-content: space-between;
                     align-items: center;
                     margin-bottom: 20px;
+                    flex-shrink: 0;   /* 常驻顶部：不被网格压缩，滚动时也不跟着走 */
                 }
                 .drawer-header h3 {
                     font-size: 17px;
@@ -600,6 +608,48 @@
                     display: grid;
                     grid-template-columns: repeat(5, 1fr);
                     gap: 12px;
+                    /* 面板里唯一可滚动的区域（70 题 = 14 行，必然超屏）。
+                       min-height:0 是必须的：flex 子项默认按内容高度撑开（min-height:auto），
+                       不给 0 就永远比容器高，overflow:auto 也就永远不触发。 */
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    overflow-y: auto;
+                    overscroll-behavior: contain;   /* 滚到底不回传给背后的页面 */
+                    /* 给 .grid-item.current 的 6px 外发光留空间，否则会被滚动容器裁掉；
+                       margin 负值抵消 padding，保证格子尺寸与改动前完全一致 */
+                    padding: 6px;
+                    margin: -6px;
+                    /* 常驻滚动条沟槽：否则题目少时格子 85px、多到出现滚动条时变 82px，
+                       同一份试卷的格子大小会随题量漂移 */
+                    scrollbar-gutter: stable;
+                }
+
+                /* 题号网格滚动条：与 tools/json-format 同款做法（接管后用 --gray-3 起、hover 提亮到 --gray-4，
+                   两套主题都走令牌，自动跟随明暗）。刻意不加 transition —— 伪元素上的过渡跨引擎不可靠。 */
+                .grid-questions::-webkit-scrollbar {
+                    width: 10px;
+                    height: 10px;
+                }
+                .grid-questions::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .grid-questions::-webkit-scrollbar-thumb {
+                    background: var(--gray-3);
+                    border-radius: 6px;
+                    /* 透明边框 + padding-box = 拇指视觉上变细内缩 2px，不顶满沟槽 */
+                    border: 2px solid transparent;
+                    background-clip: padding-box;
+                }
+                .grid-questions:hover::-webkit-scrollbar-thumb,
+                .grid-questions:focus-within::-webkit-scrollbar-thumb {
+                    background: var(--gray-4);
+                }
+                /* Firefox 只有标准属性、且没有 hover 态，用 @supports 兜底 */
+                @supports not selector(::-webkit-scrollbar) {
+                    .grid-questions {
+                        scrollbar-width: thin;
+                        scrollbar-color: var(--gray-3) transparent;
+                    }
                 }
                 .grid-item {
                     aspect-ratio: 1/1;
@@ -792,6 +842,7 @@
                 /* 题号抽屉图例 (色块 swatch) */
                 .legend {
                     margin-top: 18px;
+                    flex-shrink: 0;   /* 常驻底部：颜色说明不参与滚动，也不被网格压没 */
                     display: flex;
                     gap: 18px;
                     font-size: 13px;
