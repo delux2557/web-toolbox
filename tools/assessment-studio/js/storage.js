@@ -76,10 +76,40 @@
                     localStorage.removeItem('exam_backup');
                 }
         
-                // 检查是否有存储恢复
-                function tryRestoreFromStorage() {
+                // 「这份备份是不是这份卷子的？」—— 只有「候选卷子明确」时才用得上（导出的考生端）。
+                // 比 title + 题数 + 首尾各 3 题的「id+题干」指纹。
+                // ★ 为什么必须比：file:// 下所有考生端文件共享同一个 localStorage origin，
+                //   同一个 origin 里可能躺着另一份卷子的备份；不比对就会串卷
+                //   —— 打开 B 卷却显示 A 卷的作答，而且 B 卷首次保存就会把 A 卷的备份覆盖掉。
+                function isBackupOfExam(backup, candidateExam) {
+                    const be = backup && backup.examData;
+                    if (!be || !candidateExam) return false;
+                    if (!Array.isArray(be.questions) || !Array.isArray(candidateExam.questions)) return false;
+                    // title 与题数是最便宜的强判据；指纹再兜住「同名同题数但换了内容」
+                    if ((be.title || '') !== (candidateExam.title || '')) return false;
+                    if (be.questions.length !== candidateExam.questions.length) return false;
+                    // ★ 指纹必须带上 options：作答按「选项下标」存（userAnswers[qIdx] = [optIdx]），
+                    //   而「把选项打散」这种改版只动选项顺序、不动题干 ——
+                    //   不带 options 就会把打散前后的两份卷子认成同一份，恢复后答案整体错位。
+                    const fp = (qs) => qs.slice(0, 3).concat(qs.slice(-3))
+                        .map((q) => [
+                            String((q && q.id) || ''),
+                            String((q && q.content) || '').slice(0, 40),
+                            Array.isArray(q && q.options) ? q.options.join('\u0003') : ''
+                        ].join('\u0001'))
+                        .join('\u0002');
+                    return fp(be.questions) === fp(candidateExam.questions);
+                }
+
+                // 检查是否有存储恢复。
+                // candidateExam 仅在「导出的考生端」传入：那里候选卷子唯一且明确（来自嵌入数据），
+                // 必须先确认备份属于这份卷子才恢复，否则用嵌入卷子开新一场。
+                // 普通页面不传该参数 —— 内置题库与「用户此前导入的试卷」仍按 loadFromStorage 的原有守卫处理，
+                // 行为与改动前完全一致（导入的卷子备份不带 bankVersion，照常恢复）。
+                function tryRestoreFromStorage(candidateExam) {
                     const backup = loadFromStorage();
                     if (backup && backup.examData && Array.isArray(backup.examData.questions)) {
+                        if (candidateExam && !isBackupOfExam(backup, candidateExam)) return false;
                         examData = backup.examData;
                         // 恢复题库版本标记：否则再次备份时该字段会丢，题库版本校验将失效（刷新后旧题库进度会永久留存）
                         activeBankVersion = backup.bankVersion || null;

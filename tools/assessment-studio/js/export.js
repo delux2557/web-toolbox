@@ -129,7 +129,12 @@
                         if (window.__EXAM_MODE__ === 'exam' || window.__EXAM_MODE__ === 'practice') {
                             setMode(window.__EXAM_MODE__, false);
                         }
-                        // 带上题库自带版本号：导出的卷子也有 bankVersion 时，本地进度才能按同一份卷子校验
-                        loadExamData(data, data.bankVersion);
+                        // ★ 不要传 data.bankVersion：在 storage.js 的语义里，「备份带不带 bankVersion」
+                        // 是「这份备份来自内置题库 还是 来自导入/导出的卷子」的标记 ——
+                        // 带 bankVersion 的备份会被拿去和 DEFAULT_EXAM.bankVersion（内置英语题库）比对，
+                        // 导出卷子的版本几乎必然不等 → 备份被误判为"过期进度"丢弃 → 刷新丢作答。
+                        // 导出/导入的卷子一律 loadExamData(data)（activeBankVersion=null），
+                        // 它是否该被恢复改由 storage.js 的 isBackupOfExam() 按卷子身份判定。
+                        loadExamData(data);
                     }
                 };
