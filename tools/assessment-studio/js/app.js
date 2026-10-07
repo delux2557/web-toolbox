@@ -1094,12 +1094,20 @@
                         }
                     }
         
-                    // 启动优先级：① 导出的嵌入试卷（考生端单文件）> ② 本地进度 > ③ 内置默认题库。
-                    // ① 放最前是必须的：导出的考生端**这份卷子本身就是权威**，不能被本地进度或内置题库顶掉
-                    // （历史 bug：嵌入数据因注入顺序问题没加载，页面回落到内置题库，导出文件打开是别的卷子）。
-                    if (window.__EMBEDDED_EXAM__ && Array.isArray(window.__EMBEDDED_EXAM__.questions) &&
-                        typeof loadEmbedded === 'function') {
-                        loadEmbedded(window.__EMBEDDED_EXAM__);
+                    // 启动优先级：把「卷子从哪来」和「作答要不要恢复」分开看，别混成一件事。
+                    //
+                    // ① 导出的考生端（有嵌入数据）：候选卷子唯一且明确 = 嵌入的那一份。
+                    //    先看本地进度是否**属于这份卷子** —— 属于就恢复（刷新不丢作答），
+                    //    不属于（或压根没有）才用嵌入卷子开新一场。
+                    //    ★ 这里曾经写成 `if (嵌入) loadEmbedded() else if (!tryRestore()) ...`，
+                    //      于是考生端永远走不到恢复分支：每开一次就重置 userAnswers、还把旧备份覆盖掉，
+                    //      表现为「刷新即丢作答，而且退不回上一题」。卷子是权威 ≠ 作答记录也要丢。
+                    // ② 普通页面（无嵌入数据）：仍是 本地进度 > 内置默认题库。
+                    const embeddedExam = (window.__EMBEDDED_EXAM__ &&
+                        Array.isArray(window.__EMBEDDED_EXAM__.questions) &&
+                        typeof loadEmbedded === 'function') ? window.__EMBEDDED_EXAM__ : null;
+                    if (embeddedExam) {
+                        if (!tryRestoreFromStorage(embeddedExam)) loadEmbedded(embeddedExam);
                     } else if (!tryRestoreFromStorage()) {
                         loadDefaultExam();
                     }
