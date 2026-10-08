@@ -1168,12 +1168,21 @@
                     border-radius: 20px;
                     max-width: 640px;
                     width: 100%;
-                    max-height: 88vh;
                     display: flex;
                     flex-direction: column;
                     padding: 26px 26px 20px;
                     box-shadow: 0 30px 60px rgba(0, 0, 0, 0.25);
                     animation: drawerIn 0.25s ease;
+                    /* V3.7: 高度改为「确定值」—— 原来是「内容撑开 + max-height 封顶」，
+                       于是切到「只看错题」时错题少/为空就整块塌掉（实测 900px 高窗口 456→288，
+                       移动端 844px 高窗口 515→326，列表一律塌到 89px）。
+                       注意：光给 .review-list 加 flex:1 是没用的 —— 面板高度既然是 auto，
+                       flex 容器就没有剩余空间可分配，flex-grow 永不生效。必须面板先有确定高度。
+                       88vh 在前、88dvh 在后：不支持 dvh 的浏览器落到上一行（与 .drawer-panel 同源）。 */
+                    height: 88vh;
+                    height: 88dvh;
+                    max-height: 88vh;
+                    max-height: 88dvh;
                 }
                 .review-header {
                     display: flex;
@@ -1255,7 +1264,16 @@
                     border-radius: 14px;
                     background: var(--gray-1);
                     padding: 8px;
-                    min-height: 60px;
+                    /* V3.7: 面板里唯一可滚动的区域，必须吃掉剩余高度。
+                       flex:1 1 auto → 内容不足时也被拉伸，不再随内容塌下去；
+                       min-height:0 必须显式写 —— flex 子项默认 min-height:auto（按内容撑开），
+                       不给 0 就永远比容器高，overflow:auto 也永不触发（题号网格踩过同一个坑）。
+                       列向 flex 是为了让空态能靠 margin:auto 居中。 */
+                    display: flex;
+                    flex-direction: column;
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    overscroll-behavior: contain;   /* 滚到底不回传给背后的页面 */
                 }
                 .review-item {
                     display: flex;
@@ -1346,10 +1364,31 @@
                 .rd-explain .rd-value { color: var(--gray-5); }
                 .rd-none { font-style: normal; color: var(--gray-3); }
                 .review-empty {
+                    margin: auto;   /* V3.7: 列向 flex 容器里吸收剩余空间 → 空态落在列表区正中，不再顶在顶部一条 */
                     padding: 26px;
                     text-align: center;
                     color: var(--gray-4);
                     font-size: 14px;
+                }
+                /* V3.7: 回顾弹层窄屏占满全屏（原来是 88vh 居中卡片，左右还白吃 40px padding）。
+                   高度交给 100%（父 .review-modal 是 fixed inset:0，高度即视口），
+                   列表再靠 flex:1 吃满剩余 —— 于是「全部 / 只看错题」在移动端高度天然恒定。
+                   ★ 必须独立成块放在这里，不能塞进上面的 @media(max-width:600px)：
+                     媒体查询本身不提升优先级，同特异度下后出现的规则胜出，
+                     而 .review-panel 基础规则在 1166 行（更靠后），塞进上面的块会被 88dvh 反向覆盖。 */
+                @media (max-width: 600px) {
+                    .review-modal {
+                        padding: 0;
+                        align-items: stretch;
+                    }
+                    .review-panel {
+                        max-width: none;
+                        width: 100%;
+                        height: 100%;
+                        max-height: 100%;
+                        border-radius: 0;
+                        padding: 18px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+                    }
                 }
                 /* V3.6: 确认框必须始终最顶层 (高于 result-modal 1000 / review-modal 1001)，
                   否则从任何弹层内点出的确认框会被其下一层的遮罩盖住而不可见 */
