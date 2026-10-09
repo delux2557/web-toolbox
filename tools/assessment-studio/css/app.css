@@ -233,10 +233,13 @@
                     flex-direction: column;
                     justify-content: center;
                 }
-                /* V3.8: 只有练习模式会在卡内出现解析条，此时才预留槽位；
-                   考试模式的解析走「回顾」面板，不占卡内空间。 */
+                /* V3.9: 只有练习模式会在卡内出现解析条，此时才预留槽位；
+                   考试模式的解析走「回顾」面板，不占卡内空间。
+                   槽高实测依据（390×844，Doris 50 题）：解析条自然高 min 96 / p50 120 / max 120。
+                   原来取 96px 会让 p50 那半数题的末行被裁、出现内部滚动条 —— 故取 120px。
+                   若将来题目解析变长，这里要跟着放大（或看下面的窄屏分支）。 */
                 body.mode-practice .question-card {
-                    --fb-slot: 96px;
+                    --fb-slot: 120px;
                 }
                 .question-card.active {
                     opacity: 1;
@@ -856,6 +859,29 @@
                         max-height: 100%;
                         border-radius: 0;
                         padding: 18px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+                    }
+                }
+
+                /* V3.9: 窄屏（≤384px）题卡兜底。
+                   背景：题目变窄 → 解析文字换行更多 → 解析条自然高从 120px 涨到 143~167px，
+                   而卡片可用高只有约 550~600px。此时：
+                     ① 槽位需放大到 168px 才放得下最长解析；
+                     ② 槽位放大后「题干+选项+解析」可能超过卡片可用高 ——
+                        必须给卡片自己滚动，否则内容会被 .question-stage 的 overflow:clip
+                        静默裁掉（不出滚动条、也不报错，比滚动条更危险）。
+                   ③ justify-content 用 safe center：内容放得下时保持垂直居中（沿用原观感），
+                      放不下时自动退化为顶对齐 —— 避免"居中溢出"导致顶部内容被切走且滚不上去。
+                      （.question-stage 的 overflow:clip 会裁掉溢出部分，故此处必须显式给 auto。）
+                   本块放在 600px 断点块之后，同特异度后者胜出。 */
+                @media (max-width: 384px) {
+                    body.mode-practice .question-card {
+                        --fb-slot: 168px;
+                    }
+                    .question-card {
+                        max-height: 100%;
+                        overflow-y: auto;
+                        overscroll-behavior: contain;
+                        justify-content: safe center;
                     }
                 }
         
