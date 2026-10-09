@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SQL 格式化 — web-toolbox</title>
+<meta name="description" content="粘贴 SQL → 格式化 / 压缩 / 校验。纯静态单文件，零依赖零后端，数据不出浏览器。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230ea5e9'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='12' font-weight='700' fill='%23fff' text-anchor='middle'%3ESQL%3C/text%3E%3C/svg%3E">
+<style>
+/* ============================================================
+ * 设计令牌。亮色为默认，暗色走 [data-theme="dark"]。
+ * 颜色一律用 oklch（感知均匀，调色不会出现脏灰）。
+ * 刻意不引 Google Fonts：本工具要能 file:// 双击离线用，
+ * 字体全部走系统字体栈。
+ * ============================================================ */
+:root {
+  color-scheme: light;
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --bg: oklch(98.4% 0.003 250);
+  --surface: oklch(100% 0 0);
+  --surface-2: oklch(96.8% 0.006 250);
+  --text: oklch(26% 0.02 255);
+  --text-2: oklch(47% 0.016 255);
+  --text-3: oklch(62% 0.012 255);
+  --border: oklch(90.5% 0.007 250);
+  --border-strong: oklch(84% 0.011 250);
+  --accent: oklch(56% 0.16 240);
+  --accent-strong: oklch(46% 0.17 240);
+  --accent-soft: oklch(94.5% 0.04 240);
+  --ok: oklch(52% 0.13 155);
+  --ok-soft: oklch(95% 0.045 155);
+  --warn: oklch(58% 0.12 70);
+  --warn-soft: oklch(96% 0.05 85);
+  --danger: oklch(54% 0.19 25);
+  --danger-soft: oklch(95.5% 0.042 25);
+
+  /* 输出区高亮配色。亮色侧统一压到 44%~58% 明度：白底上都能过 4.5:1。 */
+  --tok-kw: oklch(45% 0.16 250);      /* 关键字：偏冷蓝 */
+  --tok-fn: oklch(50% 0.15 300);      /* 函数：紫 */
+  --tok-str: oklch(44% 0.13 150);     /* 字符串：绿 */
+  --tok-num: oklch(48% 0.15 55);      /* 数字：琥珀 */
+  --tok-cmt: oklch(56% 0.02 255);     /* 注释：压暗的灰 */
+
+  --radius-l: 12px;
+  --radius: 9px;
+  --radius-s: 7px;
+  --shadow-1: 0 1px 2px oklch(0% 0 0 / .05), 0 1px 3px oklch(0% 0 0 / .04);
+  --shadow-2: 0 10px 32px oklch(0% 0 0 / .10);
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: oklch(17.5% 0.012 255);
+  --surface: oklch(21% 0.014 255);
+  --surface-2: oklch(25% 0.015 255);
+  --text: oklch(93% 0.008 250);
+  --text-2: oklch(76% 0.012 250);
+  --text-3: oklch(60% 0.014 250);
+  --border: oklch(30% 0.014 255);
+  --border-strong: oklch(38% 0.016 255);
+  --accent: oklch(72% 0.13 230);
+  --accent-strong: oklch(80% 0.12 230);
+  --accent-soft: oklch(30% 0.05 240);
+  --ok: oklch(72% 0.13 155);
+  --ok-soft: oklch(28% 0.05 155);
+  --warn: oklch(78% 0.12 80);
+  --warn-soft: oklch(30% 0.05 80);
+  --danger: oklch(70% 0.16 25);
+  --danger-soft: oklch(30% 0.06 25);
+
+  --tok-kw: oklch(78% 0.12 235);
+  --tok-fn: oklch(80% 0.11 305);
+  --tok-str: oklch(78% 0.11 150);
+  --tok-num: oklch(80% 0.11 70);
+  --tok-cmt: oklch(58% 0.02 255);
+
+  --shadow-1: 0 1px 2px oklch(0% 0 0 / .3), 0 1px 3px oklch(0% 0 0 / .25);
+  --shadow-2: 0 12px 36px oklch(0% 0 0 / .45);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 14px;
+  padding: 12px 18px; border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand .title { font-size: 15px; font-weight: 650; letter-spacing: .01em; white-space: nowrap; }
+.brand .sub { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spacer { flex: 1 1 auto; }
+.tools { display: flex; align-items: center; gap: 4px; }
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: var(--radius-s);
+  border: 1px solid transparent; background: transparent; color: var(--text-2);
+  cursor: pointer; transition: background .14s, color .14s, border-color .14s;
+}
+.icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.icon-btn:disabled { opacity: .4; cursor: default; }
+.icon-btn.on { color: var(--accent-strong); background: var(--accent-soft); }
+
+/* ---------- 主体：双栏 ---------- */
+main.dual {
+  flex: 1 1 auto; min-height: 0;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+}
+.pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.pane + .pane { border-left: 1px solid var(--border); }
+.pane-head {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px; border-bottom: 1px solid var(--border);
+  background: var(--surface); font-size: 12px; color: var(--text-2);
+}
+.pane-head .label { font-weight: 600; letter-spacing: .04em; text-transform: uppercase; font-size: 11px; color: var(--text-3); }
+.pane-head .meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+.pane-head .right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.busy-chip {
+  font-size: 11px; color: var(--accent-strong); background: var(--accent-soft);
+  padding: 2px 8px; border-radius: 999px; font-family: var(--font-mono);
+}
+
+#input {
+  flex: 1 1 auto; width: 100%; resize: none; border: none; outline: none;
+  padding: 14px 16px; background: var(--surface); color: var(--text);
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.6;
+  white-space: pre; overflow: auto; tab-size: 2;
+}
+#input::placeholder { color: var(--text-3); }
+
+pre#output {
+  flex: 1 1 auto; margin: 0; padding: 14px 16px; overflow: auto;
+  background: var(--surface); color: var(--text);
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.6;
+  white-space: pre; tab-size: 2; outline: none;
+}
+pre#output.wrap { white-space: pre-wrap; word-break: break-word; }
+pre#output[data-placeholder]:empty::before {
+  content: attr(data-placeholder); color: var(--text-3);
+}
+
+.tok-kw { color: var(--tok-kw); font-weight: 600; }
+.tok-fn { color: var(--tok-fn); }
+.tok-str { color: var(--tok-str); }
+.tok-num { color: var(--tok-num); }
+.tok-cmt { color: var(--tok-cmt); font-style: italic; }
+
+/* 渐进渲染进度条 + 说明条 */
+.hl-track { flex: 0 0 auto; height: 3px; background: var(--surface-2); overflow: hidden; }
+.hl-fill { height: 100%; width: 0; background: var(--accent); transition: width .1s linear; }
+.view-note {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+  padding: 7px 14px; border-top: 1px solid var(--border);
+  background: var(--warn-soft); color: var(--text-2); font-size: 12px;
+}
+.vn-num { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+
+/* ---------- 底栏 ---------- */
+footer { flex: 0 0 auto; border-top: 1px solid var(--border); background: var(--surface); }
+.bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 18px;
+}
+.bar label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+select {
+  font: inherit; font-size: 13px; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-s); padding: 5px 8px;
+}
+.btn {
+  font: inherit; font-size: 13px; font-weight: 500;
+  padding: 7px 14px; border-radius: var(--radius-s); cursor: pointer;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+  transition: background .14s, border-color .14s, color .14s;
+}
+.btn:hover { background: var(--surface-2); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+.btn-mini { padding: 3px 10px; font-size: 12px; }
+
+.status {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 9px 18px; border-top: 1px solid var(--border);
+  font-size: 12.5px; color: var(--text-2); min-height: 38px;
+}
+.status .mark { flex: 0 0 auto; font-weight: 700; }
+.status .body { flex: 1 1 auto; line-height: 1.55; word-break: break-word; }
+.status[data-kind="error"] { color: var(--danger); }
+.status[data-kind="warn"] { color: var(--warn); }
+.status[data-kind="ok"] { color: var(--ok); }
+.status .reason {
+  display: block; margin-top: 4px; font-family: var(--font-mono); font-size: 11.5px;
+  color: var(--text-3); white-space: pre-wrap; word-break: break-all;
+}
+
+/* ---------- 提示 ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(8px);
+  background: oklch(24% 0.02 255); color: oklch(97% 0 0);
+  padding: 9px 16px; border-radius: 999px; font-size: 12.5px;
+  box-shadow: var(--shadow-2); opacity: 0; pointer-events: none;
+  transition: opacity .18s, transform .18s; z-index: 50; max-width: 80vw;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast[data-kind="error"] { background: var(--danger); }
+
+.drop-hint {
+  position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+  background: oklch(0% 0 0 / .45); color: #fff; font-size: 18px; font-weight: 600;
+  z-index: 60; pointer-events: none;
+}
+body.dragging .drop-hint { display: flex; }
+
+@media (max-width: 820px) {
+  main.dual { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .pane + .pane { border-left: none; border-top: 1px solid var(--border); }
+  .brand .sub { display: none; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="title">SQL 格式化</span>
+    <span class="sub">格式化 / 压缩 / 校验 · 零依赖单文件 · 数据不出浏览器</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="tools">
+    <button class="icon-btn" id="btnOpenFile" type="button" title="打开本地 .sql 文件" aria-label="打开文件">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 6.5A1.5 1.5 0 0 1 5.5 5h4l2 2h6.5A1.5 1.5 0 0 1 19.5 8.5v9A1.5 1.5 0 0 1 18 19H5.5A1.5 1.5 0 0 1 4 17.5z"/>
+      </svg>
+    </button>
+    <button class="icon-btn" id="btnWrap" type="button" title="自动换行（Alt+Z）" aria-label="自动换行">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 6h16M4 12h12M4 12a3 3 0 1 1 3 3H4M4 18h16"/>
+      </svg>
+    </button>
+    <button class="icon-btn" id="btnTheme" type="button" title="切换明暗主题" aria-label="切换主题">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="4.2"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="dual">
+  <section class="pane">
+    <div class="pane-head">
+      <span class="label">输入</span>
+      <span class="meta" id="inMeta">—</span>
+      <span class="right">
+        <button class="btn btn-mini" id="btnClear" type="button">清空</button>
+      </span>
+    </div>
+    <textarea id="input" spellcheck="false" placeholder="把 SQL 粘贴到这里；也可以把 .sql 文件直接拖进页面。按 Ctrl + Enter 格式化。"></textarea>
+  </section>
+
+  <section class="pane">
+    <div class="pane-head">
+      <span class="label">结果</span>
+      <span class="meta" id="outMeta">—</span>
+      <span class="right">
+        <span class="busy-chip" id="outBusy" hidden>正在着色…</span>
+        <button class="icon-btn" id="btnCopy" type="button" title="复制结果" aria-label="复制结果" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5.5A1.5 1.5 0 0 1 4 13.5v-8A1.5 1.5 0 0 1 5.5 4h8A1.5 1.5 0 0 1 15 5.5V6"/>
+          </svg>
+        </button>
+        <button class="icon-btn" id="btnDownload" type="button" title="下载结果为 .sql 文件" aria-label="下载结果" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 4.2v10.4M7.8 10.4 12 14.6l4.2-4.2M4.6 18.4h14.8"/>
+          </svg>
+        </button>
+      </span>
+    </div>
+    <div class="hl-track" id="hlTrack" hidden><div class="hl-fill" id="hlFill"></div></div>
+    <div class="view-note" id="viewNote" hidden>
+      <span class="vn-text" id="viewNoteText"></span>
+      <button class="btn btn-mini" id="btnShowAll" type="button"></button>
+    </div>
+    <pre id="output" tabindex="0" spellcheck="false"
+      data-placeholder="结果会出现在这里（Ctrl + A 全选，或用右上角复制按钮）。"></pre>
+  </section>
+</main>
+
+<footer>
+  <div class="bar">
+    <label for="indent">缩进
+      <select id="indent">
+        <option value="2" selected>2 空格</option>
+        <option value="4">4 空格</option>
+        <option value="tab">Tab</option>
+      </select>
+    </label>
+    <label for="caseMode">关键字
+      <select id="caseMode">
+        <option value="upper" selected>大写</option>
+        <option value="lower">小写</option>
+        <option value="preserve">保持原样</option>
+      </select>
+    </label>
+    <button class="btn btn-primary" id="btnFormat" type="button">格式化</button>
+    <button class="btn" id="btnMinify" type="button">压缩成一行</button>
+    <button class="btn" id="btnValidate" type="button">只校验</button>
+  </div>
+  <div class="status" id="status" role="status" aria-live="polite" data-kind="">
+    <span class="mark">·</span>
+    <span class="body">就绪。粘贴 SQL 后按 <b>Ctrl + Enter</b> 直接格式化。</span>
+  </div>
+</footer>
+
+<div class="drop-hint" aria-hidden="true">松开鼠标 —— 读入这个文件</div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+<input type="file" id="fileInput" hidden>
+
+<script>
+/* ============================================================
+ * 一、核心：纯函数（零依赖，与宿主无关）
+ * ------------------------------------------------------------
+ * 这一段是**可搬运**的部分：想搬进 code-workspace 的编辑器命令、
+ * 或者包一层 CLI，复制这一段就够了 —— 下面的 UI 代码一行都不用带。
+ * tests/format.test.mjs 直接把这一段抠出来在 vm 里跑，
+ * 所以被测的就是真正交付的这份代码，不存在「测试版 / 生产版」两份。
+ *
+ * 格式化不是「数空格」而是「先词法、再按子句排版」：
+ *   1) tokenize：把源码切成一串词法单元（字符串 / 注释 / 数字 / 词 / 标点），
+ *      引号内的换行、`--` 注释里的分号都不会被误当成结构；
+ *   2) 合并多词关键字（GROUP BY / LEFT JOIN / NOT IN …），避免被拆开排版；
+ *   3) 逐 token 排版：子句另起一行，逗号断行，子查询括号内整体缩进。
+ * 刻意不做完整语法分析 —— 本工具面对的是「任意方言的一段 SQL」，
+ * 追求的是稳定可读，而不是 AST 级正确。
+ * ============================================================ */
+(function () {
+  "use strict";
+
+  var MAX_BYTES = 2 * 1024 * 1024;   // 超过先提示，不偷偷卡死
+
+  var TT = {
+    WS: "ws",
+    LINE_COMMENT: "line_comment",
+    BLOCK_COMMENT: "block_comment",
+    STRING: "string",
+    NUMBER: "number",
+    WORD: "word",
+    PUNCT: "punct"
+  };
+
+  /* ---------- 关键字 / 函数 / 多词序列 ---------- */
+
+  var KEYWORDS = new Set([
+    "ABORT","ADD","AFTER","ALL","ALTER","ANALYZE","AND","ANY","AS","ASC","BEFORE","BEGIN","BETWEEN",
+    "BOTH","BY","CASCADE","CASE","CAST","CHECK","COLLATE","COLUMN","COMMIT","CONFLICT","CONSTRAINT",
+    "CONVERT","CREATE","CROSS","CURRENT","CURRENT_DATE","CURRENT_TIME","CURRENT_TIMESTAMP","DATABASE",
+    "DECLARE","DEFAULT","DELETE","DESC","DISTINCT","DO","DROP","ELSE","END","ESCAPE","EXCEPT","EXISTS",
+    "EXPLAIN","EXTRACT","FALSE","FETCH","FIRST","FOLLOWING","FOR","FOREIGN","FROM","FULL","FUNCTION",
+    "GRANT","GROUP","GROUPS","HAVING","IF","ILIKE","IN","INDEX","INNER","INSERT","INTERSECT","INTERVAL",
+    "INTO","IS","JOIN","KEY","LAST","LATERAL","LEADING","LEFT","LIKE","LIMIT","LOCALTIME","LOCALTIMESTAMP",
+    "MATCHED","MERGE","MINUS","NATURAL","NEXT","NOT","NULL","NULLS","OFFSET","ON","ONLY","OR","ORDER",
+    "OTHERS","OUTER","OVER","PARTITION","PRAGMA","PRIMARY","PROCEDURE","RANGE","RECURSIVE","REFERENCES",
+    "REGEXP","RENAME","REPLACE","RETURNING","REVOKE","RIGHT","ROLLBACK","ROW","ROWS","SAVEPOINT","SCHEMA",
+    "SELECT","SEQUENCE","SET","SOME","START","TABLE","THEN","TO","TOP","TRAILING","TRANSACTION","TRIGGER",
+    "TRIM","TRUE","TRUNCATE","TYPE","UNBOUNDED","UNION","UNIQUE","UNKNOWN","UPDATE","UPSERT","USE","USING",
+    "VACUUM","VALUES","VIEW","WHEN","WHERE","WINDOW","WITH","WORK",
+    /* 合并后的多词关键字也要在这里，否则大小写转换会漏掉它们 */
+    "GROUP BY","ORDER BY","PARTITION BY","UNION ALL","UNION DISTINCT","INSERT INTO","DELETE FROM",
+    "IS NOT","NOT IN","NOT LIKE","NOT ILIKE","NOT REGEXP","NOT BETWEEN","NOT EXISTS",
+    "LEFT JOIN","RIGHT JOIN","FULL JOIN","INNER JOIN","CROSS JOIN","NATURAL JOIN",
+    "LEFT OUTER JOIN","RIGHT OUTER JOIN","FULL OUTER JOIN","NATURAL LEFT JOIN","NATURAL RIGHT JOIN"
+  ]);
+
+  /* 常见内置函数（仅用于大小写与着色；不是硬性白名单） */
+  var FUNCS = new Set([
+    "ABS","AVG","CEIL","CEILING","COALESCE","CONCAT","CONCAT_WS","COUNT","DATEADD","DATEDIFF","DATE_TRUNC",
+    "DENSE_RANK","FLOOR","FORMAT","GETDATE","GREATEST","GROUP_CONCAT","IFNULL","IIF","ISNULL","JSON_QUERY",
+    "JSON_VALUE","LAG","LAST_VALUE","LEAD","LEAST","LENGTH","LEN","LOWER","LPAD","LTRIM","MAX","MIN","MOD",
+    "NOW","NTILE","NVL","NULLIF","OVERLAY","POSITION","POWER","RANK","ROUND","ROW_NUMBER","RPAD","RTRIM",
+    "SQRT","STRING_AGG","SUBSTR","SUBSTRING","SUM","SYSDATE","TO_CHAR","TO_DATE","TO_NUMBER","UPPER"
+  ]);
+
+  /* 这些词后面即使源码里贴着括号，格式化也补一个空格（IN(1,2) → IN (1, 2)） */
+  var SPACE_BEFORE_PAREN = new Set([
+    "IN","EXISTS","VALUES","AND","OR","NOT","ON","THEN","ELSE","WHEN","AS","BY","USING","ALL","ANY","SOME",
+    "DISTINCT","IS","LIKE","ILIKE","BETWEEN","OVER","PARTITION","FROM","WHERE","SELECT","HAVING","SET",
+    "RETURNING","UNION","CASE","THEN","INTO","JOIN"
+  ]);
+
+  var TOP_LEVEL = new Set([
+    "SELECT","FROM","WHERE","GROUP BY","ORDER BY","HAVING","LIMIT","OFFSET","FETCH","WINDOW",
+    "UNION","UNION ALL","UNION DISTINCT","INTERSECT","EXCEPT","MINUS","VALUES","SET","RETURNING",
+    "UPDATE","MERGE","TRUNCATE","CREATE","ALTER","DROP","WITH","EXPLAIN","ANALYZE","VACUUM","PRAGMA",
+    "USE","GRANT","REVOKE","BEGIN","COMMIT","ROLLBACK","SAVEPOINT","DECLARE","CALL","REPLACE",
+    "INSERT","INSERT INTO","DELETE","DELETE FROM","UPSERT"
+  ]);
+
+  /* 这些子句的内容要缩进一层（SELECT 的列、FROM 的表、WHERE 的条件…） */
+  var LIST_CLAUSES = new Set(["SELECT","FROM","WHERE","GROUP BY","ORDER BY","HAVING","SET","VALUES","RETURNING"]);
+
+  var JOIN_WORDS = new Set([
+    "JOIN","INNER JOIN","LEFT JOIN","RIGHT JOIN","FULL JOIN","CROSS JOIN","NATURAL JOIN",
+    "LEFT OUTER JOIN","RIGHT OUTER JOIN","FULL OUTER JOIN","NATURAL LEFT JOIN","NATURAL RIGHT JOIN"
+  ]);
+
+  /* ---------- 词法 ---------- */
+
+  function isDigit(ch) { return ch >= "0" && ch <= "9"; }
+  function isHex(ch) { return isDigit(ch) || (ch >= "a" && ch <= "f") || (ch >= "A" && ch <= "F"); }
+  function isIdentStart(ch) {
+    if (!ch) return false;
+    return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") ||
+      ch === "_" || ch === "@" || ch === "$" || ch.charCodeAt(0) >= 128;
+  }
+  function isIdentChar(ch) {
+    if (!ch) return false;
+    return isIdentStart(ch) || isDigit(ch) || ch === "#";
+  }
+
+  /* 扫描一段被引号包起来的内容。quote 为 ' / " / `。
+     noBackslash=true（反引号）时只认「重复引号」这一种转义。 */
+  function scanQuote(s, start, quote, noBackslash) {
+    var i = start + 1, n = s.length, closed = false;
+    while (i < n) {
+      var ch = s[i];
+      if (!noBackslash && ch === "\\") { i += 2; continue; }
+      if (ch === quote) {
+        if (s[i + 1] === quote) { i += 2; continue; }   // '' / "" / `` 转义
+        i += 1; closed = true; break;
+      }
+      i++;
+    }
+    return { end: i > n ? n : i, closed: closed };
+  }
+
+  var PUNCT3 = ["->>", "#>>"];
+  var PUNCT2 = ["<=", ">=", "<>", "!=", "||", "::", ":=", "->", "#>", "<<", ">>", "==", "=>", "!<", "!>", "|/", "**"];
+
+  function tokenize(src) {
+    var s = src == null ? "" : String(src);
+    var n = s.length, i = 0, out = [];
+    while (i < n) {
+      var c = s[i];
+      if (c === " " || c === "\t" || c === "\r" || c === "\n" || c === "\f" || c === "\v") {
+        var ws = i;
+        while (i < n && (s[i] === " " || s[i] === "\t" || s[i] === "\r" || s[i] === "\n" || s[i] === "\f" || s[i] === "\v")) i++;
+        out.push({ type: TT.WS, raw: s.slice(ws, i), start: ws, end: i });
+        continue;
+      }
+      if (c === "-" && s[i + 1] === "-") {
+        var lc = i; i += 2;
+        while (i < n && s[i] !== "\n") i++;
+        out.push({ type: TT.LINE_COMMENT, raw: s.slice(lc, i), start: lc, end: i });
+        continue;
+      }
+      if (c === "/" && s[i + 1] === "*") {
+        var bc = i; i += 2; var bClosed = false;
+        while (i < n) {
+          if (s[i] === "*" && s[i + 1] === "/") { i += 2; bClosed = true; break; }
+          i++;
+        }
+        out.push({ type: TT.BLOCK_COMMENT, raw: s.slice(bc, i), start: bc, end: i, closed: bClosed });
+        continue;
+      }
+      if (c === "'" || c === '"') {
+        var q = scanQuote(s, i, c, false);
+        out.push({ type: TT.STRING, raw: s.slice(i, q.end), start: i, end: q.end, closed: q.closed, kind: c === "'" ? "single" : "double" });
+        i = q.end;
+        continue;
+      }
+      if (c === "`") {
+        var bt = scanQuote(s, i, "`", true);
+        out.push({ type: TT.STRING, raw: s.slice(i, bt.end), start: i, end: bt.end, closed: bt.closed, kind: "backtick" });
+        i = bt.end;
+        continue;
+      }
+      if (c === "[") {                          // SQL Server 的 [方括号标识符]
+        var br = i; i += 1; var brClosed = false;
+        while (i < n) {
+          if (s[i] === "]") { if (s[i + 1] === "]") { i += 2; continue; } i += 1; brClosed = true; break; }
+          i++;
+        }
+        out.push({ type: TT.STRING, raw: s.slice(br, i), start: br, end: i, closed: brClosed, kind: "bracket" });
+        continue;
+      }
+      if (isDigit(c) || (c === "." && isDigit(s[i + 1]))) {
+        var num = i;
+        if (c === "0" && (s[i + 1] === "x" || s[i + 1] === "X")) {
+          i += 2; while (i < n && isHex(s[i])) i++;
+        } else {
+          while (i < n && isDigit(s[i])) i++;
+          if (s[i] === ".") { i++; while (i < n && isDigit(s[i])) i++; }
+          if (s[i] === "e" || s[i] === "E") {
+            var j = i + 1; if (s[j] === "+" || s[j] === "-") j++;
+            if (isDigit(s[j])) { i = j; while (i < n && isDigit(s[i])) i++; }
+          }
+        }
+        out.push({ type: TT.NUMBER, raw: s.slice(num, i), start: num, end: i });
+        continue;
+      }
+      if (isIdentStart(c)) {
+        var w = i; i += 1;
+        while (i < n && isIdentChar(s[i])) i++;
+        var raw = s.slice(w, i);
+        out.push({ type: TT.WORD, raw: raw, upper: raw.toUpperCase(), start: w, end: i });
+        continue;
+      }
+      var p = null;
+      for (var k3 = 0; k3 < PUNCT3.length; k3++) if (s.substr(i, 3) === PUNCT3[k3]) { p = PUNCT3[k3]; break; }
+      if (!p) for (var k2 = 0; k2 < PUNCT2.length; k2++) if (s.substr(i, 2) === PUNCT2[k2]) { p = PUNCT2[k2]; break; }
+      if (!p) p = c;
+      out.push({ type: TT.PUNCT, raw: p, text: p, start: i, end: i + p.length });
+      i += p.length;
+    }
+    return out;
+  }
+
+  /* ---------- 小工具 ---------- */
+
+  function stripBOM(s) { return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s; }
+
+  /* 缩进档位 → **一层的空白串**（不是列数）。排版时按层重复这个串。 */
+  function indentOf(v) {
+    if (v === "tab" || v === "\t") return "\t";
+    var n = Number(v) || 2;
+    return new Array(n + 1).join(" ");
+  }
+
+  function countLines(s) { return s ? s.split("\n").length : 0; }
+
+  function byteSize(s) {
+    try { return new TextEncoder().encode(s).length; } catch (_) { return s.length; }
+  }
+
+  /* offset（0-based 字符下标）→ 1-based 行列 */
+  function lineCol(src, offset) {
+    var s = src || "";
+    if (offset < 0) offset = 0;
+    if (offset > s.length) offset = s.length;
+    var line = 1, col = 1;
+    for (var i = 0; i < offset; i++) {
+      if (s[i] === "\n") { line++; col = 1; } else col++;
+    }
+    return { line: line, column: col };
+  }
+
+  function emptyError() {
+    return { message: "输入为空", hint: "请先粘贴一段 SQL。", line: null, column: null, empty: true };
+  }
+
+  /* 结构性检查：字符串 / 块注释是否闭合、括号是否配平。
+     这是「能不能安全排版」的前置——不通过就不排版，避免把结构画错。 */
+  function structuralError(src) {
+    var toks = tokenize(src);
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i];
+      if (t.type === TT.STRING && t.closed === false) {
+        var lc = lineCol(src, t.start);
+        var closer = t.kind === "bracket" ? "]" : (t.kind === "backtick" ? "`" : t.raw.charAt(0));
+        return {
+          message: "字符串没有闭合",
+          hint: "第 " + lc.line + " 行第 " + lc.column + " 列开始的引号没有等到配对的 " + closer + "。",
+          line: lc.line, column: lc.column
+        };
+      }
+      if (t.type === TT.BLOCK_COMMENT && t.closed === false) {
+        var l2 = lineCol(src, t.start);
+        return {
+          message: "块注释 /* 没有闭合",
+          hint: "第 " + l2.line + " 行开始的 /* 没有找到对应的 */，它后面的内容都会被当成注释。",
+          line: l2.line, column: l2.column
+        };
+      }
+    }
+    var stack = [];
+    for (var m = 0; m < toks.length; m++) {
+      var tk = toks[m];
+      if (tk.type !== TT.PUNCT) continue;
+      if (tk.raw === "(") stack.push(tk);
+      else if (tk.raw === ")") {
+        if (!stack.length) {
+          var l3 = lineCol(src, tk.start);
+          return { message: "多了一个右括号 )", hint: "第 " + l3.line + " 行第 " + l3.column + " 列的 ) 没有对应的 (。", line: l3.line, column: l3.column };
+        }
+        stack.pop();
+      }
+    }
+    if (stack.length) {
+      var un = stack[stack.length - 1];
+      var l4 = lineCol(src, un.start);
+      return { message: "括号没有闭合", hint: "第 " + l4.line + " 行第 " + l4.column + " 列的 ( 没有等到对应的 )。", line: l4.line, column: l4.column };
+    }
+    return null;
+  }
+
+  /* ---------- 多词关键字合并 ---------- */
+
+  var SEQ_CACHE = null;
+  function seqList() {
+    if (SEQ_CACHE) return SEQ_CACHE;
+    var raw = [
+      "LEFT OUTER JOIN","RIGHT OUTER JOIN","FULL OUTER JOIN","NATURAL LEFT JOIN","NATURAL RIGHT JOIN",
+      "GROUP BY","ORDER BY","PARTITION BY","UNION ALL","UNION DISTINCT",
+      "INSERT INTO","DELETE FROM","IS NOT","NOT IN","NOT LIKE","NOT ILIKE","NOT REGEXP","NOT BETWEEN","NOT EXISTS",
+      "LEFT JOIN","RIGHT JOIN","FULL JOIN","INNER JOIN","CROSS JOIN","NATURAL JOIN"
+    ];
+    SEQ_CACHE = raw.map(function (w) { return { words: w.split(" "), upper: w }; })
+      .sort(function (a, b) { return (b.words.length - a.words.length) || (b.upper.length - a.upper.length); });
+    return SEQ_CACHE;
+  }
+
+  function mergeSequences(sig) {
+    var seqs = seqList();
+    var out = [], i = 0;
+    while (i < sig.length) {
+      var hit = null;
+      for (var k = 0; k < seqs.length; k++) {
+        var words = seqs[k].words;
+        if (i + words.length > sig.length) continue;
+        var good = true;
+        for (var w = 0; w < words.length; w++) {
+          var t = sig[i + w];
+          if (t.type !== TT.WORD || t.upper !== words[w]) { good = false; break; }
+        }
+        if (good) {
+          var first = sig[i], last = sig[i + words.length - 1], txt = "";
+          for (var q = 0; q < words.length; q++) txt += (q ? " " : "") + sig[i + q].raw;
+          hit = { type: "merged", raw: txt, upper: seqs[k].upper, text: seqs[k].upper, start: first.start, end: last.end };
+          i += words.length;
+          break;
+        }
+      }
+      if (hit) out.push(hit); else { out.push(sig[i]); i++; }
+    }
+    return out;
+  }
+
+  /* ---------- 大小写 ---------- */
+
+  function textOf(tok, caseMode) {
+    var up = tok.upper;
+    if (caseMode === "preserve" || !up) return tok.raw;
+    if (KEYWORDS.has(up) || FUNCS.has(up)) return caseMode === "lower" ? up.toLowerCase() : up;
+    return tok.raw;
+  }
+
+  /* ---------- 排版 ---------- */
+
+  function formatTokens(tokens, indentUnit, caseMode) {
+    var lines = [], cur = "", lineIndent = 0;
+    var base = 0, contentIndent = 0;
+    var parenStack = [];
+    var caseStack = [];
+    var pendingBreak = -1;
+    var tightNext = false;
+    var prevTok = null;
+
+    function ind(n) { var s = ""; for (var k = 0; k < n; k++) s += indentUnit; return s; }
+    function flush() { var t = cur.replace(/[ \t]+$/, ""); if (t) lines.push(t); cur = ""; }
+    function newline(n) { flush(); cur = ind(n); lineIndent = n; tightNext = true; }
+    function inInline() { return parenStack.length > 0 && !parenStack[parenStack.length - 1].expanded; }
+
+    function isUnary(pt) {
+      if (!pt) return true;
+      var x = pt.text || pt.raw;
+      if (x === "(" || x === "," || x === "." || x === "::") return true;
+      if (pt.type === TT.PUNCT) return true;                 // 前面是运算符
+      if (pt.upper && (pt.upper === "AND" || pt.upper === "OR" || pt.upper === "NOT" || pt.upper === "IN" ||
+        pt.upper === "SELECT" || pt.upper === "BY" || pt.upper === "WHEN" || pt.upper === "THEN" ||
+        pt.upper === "ELSE" || pt.upper === "ON" || pt.upper === "SET" || pt.upper === "VALUES" ||
+        pt.upper === "WHERE" || pt.upper === "HAVING" || pt.upper === "RETURNING")) return true;
+      return false;
+    }
+
+    function appendTok(tok) {
+      var s = textOf(tok, caseMode);
+      var p = prevTok ? (prevTok.text || prevTok.raw) : null;
+      var t = tok.text || tok.raw;
+      var unary = (t === "-" || t === "+") && isUnary(prevTok);
+      var spaceBefore;
+      if (!prevTok) spaceBefore = false;
+      else if (t === "(") {
+        spaceBefore = (prevTok.type === TT.WORD && SPACE_BEFORE_PAREN.has(prevTok.upper))
+          ? true : (prevTok.end !== tok.start);
+      } else if (t === "," || t === ")" || t === ";" || t === "." || t === "::") spaceBefore = false;
+      else if (p === "(" || p === "." || p === "::") spaceBefore = false;
+      else if (unary) spaceBefore = false;
+      else spaceBefore = true;
+
+      if (spaceBefore && cur && !/\s$/.test(cur) && !tightNext) cur += " ";
+      cur += s;
+      tightNext = (t === "(" || t === "." || t === "::") || unary;
+    }
+
+    function maybeBreak() { if (pendingBreak >= 0) { newline(pendingBreak); pendingBreak = -1; } }
+
+    function peekSig(idx) {
+      for (var k = idx + 1; k < tokens.length; k++) {
+        var tk = tokens[k];
+        if (tk.type !== TT.LINE_COMMENT && tk.type !== TT.BLOCK_COMMENT) return tk;
+      }
+      return null;
+    }
+
+    for (var idx = 0; idx < tokens.length; idx++) {
+      var tok = tokens[idx];
+      var t = tok.text || tok.raw;
+      var up = tok.upper;
+      var inline = inInline();
+
+      if (tok.type === TT.LINE_COMMENT || tok.type === TT.BLOCK_COMMENT) {
+        if (!inline) maybeBreak();
+        if (cur.replace(/\s/g, "") !== "" && !tightNext) cur += " ";
+        cur += tok.raw;
+        tightNext = false;
+        if (tok.type === TT.LINE_COMMENT) { newline(contentIndent); pendingBreak = -1; }
+        prevTok = tok;
+        continue;
+      }
+
+      if (t === "(") {
+        if (!inline) maybeBreak();
+        var nextSig = peekSig(idx);
+        var expanded = !inline && !!(nextSig &&
+          (nextSig.upper === "SELECT" || nextSig.upper === "WITH" || nextSig.upper === "VALUES"));
+        appendTok(tok);
+        parenStack.push({ expanded: expanded, base: base, contentIndent: contentIndent, openLineIndent: lineIndent });
+        if (expanded) {
+          base = lineIndent + 1;
+          contentIndent = base;
+          newline(contentIndent);
+        }
+        prevTok = tok;
+        continue;
+      }
+
+      if (t === ")") {
+        var fr = parenStack.pop();
+        if (fr) { base = fr.base; contentIndent = fr.contentIndent; }
+        if (fr && fr.expanded) newline(fr.openLineIndent);
+        appendTok(tok);
+        if (!fr) tightNext = false;
+        prevTok = tok;
+        continue;
+      }
+
+      if (t === ",") {
+        appendTok(tok);
+        if (!inline) newline(contentIndent);
+        prevTok = tok;
+        continue;
+      }
+
+      if (t === ";") {
+        appendTok(tok);
+        if (!inline) { base = 0; contentIndent = 0; pendingBreak = -1; newline(0); }
+        prevTok = tok;
+        continue;
+      }
+
+      if (!inline && up && TOP_LEVEL.has(up)) {
+        newline(base);
+        appendTok(tok);
+        if (LIST_CLAUSES.has(up)) { contentIndent = base + 1; pendingBreak = contentIndent; }
+        else { contentIndent = base; pendingBreak = -1; }
+        prevTok = tok;
+        continue;
+      }
+
+      if (!inline && up === "CASE") {
+        maybeBreak();
+        appendTok(tok);
+        caseStack.push(lineIndent);          // 记住 CASE 在哪一层，WHEN/END 相对它对齐
+        pendingBreak = -1;
+        prevTok = tok;
+        continue;
+      }
+
+      if (!inline && up && (up === "WHEN" || up === "ELSE")) {
+        var ct = caseStack.length ? caseStack[caseStack.length - 1] : base;
+        newline(ct + 1);
+        appendTok(tok);
+        pendingBreak = -1;
+        prevTok = tok;
+        continue;
+      }
+
+      if (!inline && up && (up === "AND" || up === "OR")) {
+        newline(base + 1);
+        appendTok(tok);
+        pendingBreak = -1;
+        prevTok = tok;
+        continue;
+      }
+
+      if (!inline && up === "END") {
+        var ci = caseStack.length ? caseStack.pop() : base;
+        newline(ci);
+        appendTok(tok);
+        pendingBreak = -1;
+        prevTok = tok;
+        continue;
+      }
+
+      if (!inline && up && JOIN_WORDS.has(up)) {
+        newline(base);
+        appendTok(tok);
+        pendingBreak = -1;
+        prevTok = tok;
+        continue;
+      }
+
+      if (!inline) maybeBreak();
+      appendTok(tok);
+      prevTok = tok;
+    }
+
+    flush();
+    return lines.join("\n");
+  }
+
+  /* ---------- 对外：格式化 / 压缩 / 校验 ---------- */
+
+  function significant(src) {
+    var toks = tokenize(src);
+    var sig = [];
+    for (var i = 0; i < toks.length; i++) if (toks[i].type !== TT.WS) sig.push(toks[i]);
+    return mergeSequences(sig);
+  }
+
+  function formatSql(text, opts) {
+    opts = opts || {};
+    var src = stripBOM(text == null ? "" : String(text));
+    if (!src.trim()) return { ok: false, error: emptyError() };
+    var se = structuralError(src);
+    if (se) return { ok: false, error: se };
+    return { ok: true, value: formatTokens(significant(src), indentOf(opts.indent), opts.case || "upper") };
+  }
+
+  /* 压缩用同一套 token / 合并逻辑，只把「换行 + 缩进」换成单空格，
+     标点按更紧的规则贴回去。注释**会被移除**（否则 `--` 之后的一切都还在注释里），
+     移除了几条会在返回值里如实报出，界面照着提示。 */
+  function needSpaceInMin(prev, tok) {
+    if (!prev) return false;
+    var p = prev.text || prev.raw;
+    var t = tok.text || tok.raw;
+    if (t === "," || t === ")" || t === ";" || t === "." || t === "::") return false;
+    if (t === "(") {
+      if (prev.type === TT.WORD) return SPACE_BEFORE_PAREN.has(prev.upper);
+      return !(p === ")" || p === "(" || p === "." || p === "::");
+    }
+    if (p === "(" || p === "." || p === "::") return false;
+    return true;
+  }
+
+  function minifySql(text, opts) {
+    opts = opts || {};
+    var src = stripBOM(text == null ? "" : String(text));
+    if (!src.trim()) return { ok: false, error: emptyError() };
+    var se = structuralError(src);
+    if (se) return { ok: false, error: se };
+    var merged = significant(src);
+    var caseMode = opts.case || "upper";
+    var out = "", prev = null, dropped = 0;
+    for (var i = 0; i < merged.length; i++) {
+      var tok = merged[i];
+      if (tok.type === TT.LINE_COMMENT || tok.type === TT.BLOCK_COMMENT) { dropped++; continue; }
+      if (needSpaceInMin(prev, tok)) out += " ";
+      out += textOf(tok, caseMode);
+      prev = tok;
+    }
+    return { ok: true, value: out, droppedComments: dropped };
+  }
+
+  function validateSql(text) {
+    var src = stripBOM(text == null ? "" : String(text));
+    if (!src.trim()) return { ok: false, error: emptyError() };
+    var se = structuralError(src);
+    if (se) return { ok: false, error: se };
+    return { ok: true, value: src };
+  }
+
+  /* ---------- 着色分类（纯函数：不碰 DOM，因此可单测） ---------- */
+
+  function hlClassFor(tok, next) {
+    if (tok.type === TT.WORD) {
+      if (KEYWORDS.has(tok.upper)) return "tok-kw";
+      if (FUNCS.has(tok.upper)) return "tok-fn";
+      if (next && next.type === TT.PUNCT && next.raw === "(") return "tok-fn";
+      return "";
+    }
+    if (tok.type === TT.STRING) return "tok-str";
+    if (tok.type === TT.NUMBER) return "tok-num";
+    if (tok.type === TT.LINE_COMMENT || tok.type === TT.BLOCK_COMMENT) return "tok-cmt";
+    return "";
+  }
+
+  function buildFrags(text) {
+    var toks = tokenize(text);
+    var frags = [];
+    for (var i = 0; i < toks.length; i++) {
+      var next = null;
+      for (var k = i + 1; k < toks.length; k++) if (toks[k].type !== TT.WS) { next = toks[k]; break; }
+      frags.push({ cls: hlClassFor(toks[i], next), raw: toks[i].raw });
+    }
+    return frags;
+  }
+
+  /* 把片段流按 \n 切成「行 → 片段」，纯数据，不建 DOM */
+  function splitLines(frags) {
+    var lines = [[]];
+    for (var i = 0; i < frags.length; i++) {
+      var parts = String(frags[i].raw).split("\n");
+      for (var p = 0; p < parts.length; p++) {
+        if (p > 0) lines.push([]);
+        if (parts[p]) lines[lines.length - 1].push({ cls: frags[i].cls, raw: parts[p] });
+      }
+    }
+    return lines;
+  }
+
+  /* 数「会造出多少个元素」（只有带 class 的片段才套 span） */
+  function countElements(lines) {
+    var n = 0;
+    for (var li = 0; li < lines.length; li++) {
+      var frags = lines[li];
+      for (var i = 0; i < frags.length; i++) if (frags[i].cls) n++;
+    }
+    return n;
+  }
+
+  /* ---------- 核心命名空间（供测试与搬运） ---------- */
+
+  var API = {
+    MAX_BYTES: MAX_BYTES,
+    TT: TT,
+    KEYWORDS: KEYWORDS,
+    FUNCS: FUNCS,
+    SPACE_BEFORE_PAREN: SPACE_BEFORE_PAREN,
+    TOP_LEVEL: TOP_LEVEL,
+    LIST_CLAUSES: LIST_CLAUSES,
+    JOIN_WORDS: JOIN_WORDS,
+    stripBOM: stripBOM,
+    indentOf: indentOf,
+    countLines: countLines,
+    byteSize: byteSize,
+    lineCol: lineCol,
+    tokenize: tokenize,
+    mergeSequences: mergeSequences,
+    textOf: textOf,
+    formatTokens: formatTokens,
+    formatSql: formatSql,
+    minifySql: minifySql,
+    validateSql: validateSql,
+    structuralError: structuralError,
+    needSpaceInMin: needSpaceInMin,
+    hlClassFor: hlClassFor,
+    buildFrags: buildFrags,
+    splitLines: splitLines,
+    countElements: countElements
+  };
+  if (typeof window !== "undefined") window.SQLFMT = API;
+  if (typeof module !== "undefined" && module.exports) module.exports = API;
+
+  /* ============================================================
+   * 二、界面（只是上面那组函数的壳）
+   * ============================================================ */
+  if (typeof document === "undefined") return;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    input: $("input"), output: $("output"), indent: $("indent"), caseMode: $("caseMode"),
+    inMeta: $("inMeta"), outMeta: $("outMeta"), status: $("status"),
+    btnFormat: $("btnFormat"), btnMinify: $("btnMinify"), btnValidate: $("btnValidate"), btnClear: $("btnClear"),
+    btnCopy: $("btnCopy"), btnDownload: $("btnDownload"), btnTheme: $("btnTheme"), btnWrap: $("btnWrap"),
+    btnOpenFile: $("btnOpenFile"), fileInput: $("fileInput"),
+    toast: $("toast"), hlTrack: $("hlTrack"), hlFill: $("hlFill"), outBusy: $("outBusy"),
+    viewNote: $("viewNote"), viewNoteText: $("viewNoteText"), btnShowAll: $("btnShowAll")
+  };
+
+  var THEME_KEY = "sqlfmt-theme";
+  var WRAP_KEY = "sqlfmt-wrap";
+
+  /* ---------- 主题 ---------- */
+  function readTheme() {
+    try { return localStorage.getItem(THEME_KEY); } catch (_) { return null; }
+  }
+  function writeTheme(v) { try { localStorage.setItem(THEME_KEY, v); } catch (_) {} }
+  function applyTheme(t) {
+    document.documentElement.setAttribute("data-theme", t === "dark" ? "dark" : "light");
+  }
+  function initTheme() {
+    var saved = readTheme();
+    if (saved === "dark" || saved === "light") { applyTheme(saved); return; }
+    var prefersDark = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    applyTheme(prefersDark ? "dark" : "light");
+  }
+
+  /* ---------- 自动换行 ---------- */
+  function readWrap() {
+    try { return localStorage.getItem(WRAP_KEY) === "1"; } catch (_) { return false; }
+  }
+  function writeWrap(on) { try { localStorage.setItem(WRAP_KEY, on ? "1" : "0"); } catch (_) {} }
+  function applyWrap(on) {
+    if (els.output) els.output.classList.toggle("wrap", on);
+    if (els.btnWrap) els.btnWrap.classList.toggle("on", on);
+    try { els.input.wrap = on ? "soft" : "off"; } catch (_) {}
+  }
+  function initWrap() { applyWrap(readWrap()); }
+  function toggleWrap() {
+    var next = !readWrap();
+    applyWrap(next);
+    writeWrap(next);
+  }
+
+  /* ---------- 状态 / 提示 ---------- */
+  function setStatus(kind, mark, body, raw) {
+    els.status.setAttribute("data-kind", kind || "");
+    var m = els.status.querySelector(".mark");
+    var b = els.status.querySelector(".body");
+    if (m) m.textContent = mark;
+    if (b) {
+      b.textContent = body;
+      if (raw) {
+        var r = document.createElement("span");
+        r.className = "reason";
+        r.textContent = raw;
+        b.appendChild(r);
+      }
+    }
+  }
+  function clearStatus() { setStatus("", "·", "就绪。"); }
+
+  var toastTimer = null;
+  function toast(text, kind) {
+    if (!els.toast) return;
+    els.toast.textContent = text;
+    els.toast.setAttribute("data-kind", kind || "");
+    els.toast.classList.add("show");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      toastTimer = null;
+      els.toast.classList.remove("show");
+    }, 2200);
+  }
+
+  function syncMeta(inLines, inBytes) {
+    if (inLines == null) {
+      var v = els.input.value;
+      inLines = countLines(v);
+      inBytes = byteSize(v);
+    }
+    els.inMeta.textContent = (inBytes ? inLines + " 行 · " + inBytes + " 字节" : "—");
+  }
+
+  function showError(e) {
+    if (e.empty) { setStatus("", "·", "还没有内容 —— 先把 SQL 贴到左边。"); return; }
+    var pos = (e.line != null) ? "第 " + e.line + " 行第 " + e.column + " 列：" : "";
+    var body = (e.hint || e.message);
+    setStatus("error", "✗", pos + body, e.hint ? ("引擎判定：" + e.message) : "");
+  }
+
+  /* ---------- 输出渲染（语法高亮 + 大结果视口化 + 分帧渐进） ---------- */
+
+  var HL_MAX_BYTES = 512 * 1024;
+  var HL_MAX_ELEMENTS = 60000;
+  var HL_SYNC_ELEMENTS = 8000;
+  var HL_FIRST_LINES = 200;
+  var HL_CHUNK_LINES = 300;
+  var HL_CHUNK_MS = 8;
+  var HL_VIEW_LINES = 10000;
+
+  var fullResult = "";
+  function outputText() { return fullResult; }
+
+  function makeNode(cls, text) {
+    var s = document.createElement("span");
+    if (cls) s.className = cls;
+    if (text != null) s.textContent = text;
+    return s;
+  }
+
+  function paintLine(host, frags, needNL) {
+    if (needNL) host.appendChild(document.createTextNode("\n"));
+    var pending = "";
+    var flush = function () { if (pending) { host.appendChild(document.createTextNode(pending)); pending = ""; } };
+    for (var i = 0; i < frags.length; i++) {
+      if (frags[i].cls) { flush(); host.appendChild(makeNode(frags[i].cls, frags[i].raw)); }
+      else pending += frags[i].raw;
+    }
+    flush();
+  }
+
+  var yieldToMain = (typeof scheduler !== "undefined" && scheduler.postTask)
+    ? function (fn) { scheduler.postTask(fn, { priority: "background" }); }
+    : function (fn) { setTimeout(fn, 0); };
+
+  var rendering = false;
+  var renderSeq = 0;
+
+  function setProgress(ratio) { if (els.hlFill) els.hlFill.style.width = Math.round(ratio * 100) + "%"; }
+  function setBusy(on) {
+    rendering = on;
+    if (els.hlTrack) els.hlTrack.hidden = !on;
+    if (els.outBusy) els.outBusy.hidden = !on;
+    if (!on) setProgress(0);
+    syncOutputActions();
+  }
+
+  function paintChunked(pre, lines, my) {
+    var total = lines.length;
+    var upto = Math.min(HL_FIRST_LINES, total);
+    var head = document.createElement("span");
+    for (var i = 0; i < upto; i++) paintLine(head, lines[i], i > 0);
+    pre.textContent = "";
+    pre.appendChild(head);
+    setBusy(true);
+    setProgress(upto / total);
+
+    var rest = document.createElement("span");
+    var cursor = upto;
+    var step = function () {
+      if (my !== renderSeq) return;
+      var t0 = Date.now();
+      var from = cursor;
+      while (cursor < total && cursor - from < HL_CHUNK_LINES && Date.now() - t0 < HL_CHUNK_MS) {
+        paintLine(rest, lines[cursor], true);
+        cursor++;
+      }
+      setProgress(cursor / total);
+      if (cursor < total) { yieldToMain(step); return; }
+      pre.appendChild(rest);
+      setBusy(false);
+    };
+    yieldToMain(step);
+  }
+
+  function nthNewline(text, n) {
+    var idx = -1;
+    for (var i = 0; i < n; i++) {
+      idx = text.indexOf("\n", idx + 1);
+      if (idx < 0) return -1;
+    }
+    return idx;
+  }
+
+  function setViewNote(total) {
+    if (!els.viewNote) return;
+    if (total == null) { els.viewNote.hidden = true; return; }
+    var t = els.viewNoteText;
+    t.textContent = "结果共 ";
+    t.appendChild(makeNode("vn-num", total + " 行"));
+    t.appendChild(document.createTextNode("，界面只画了前 "));
+    t.appendChild(makeNode("vn-num", HL_VIEW_LINES + " 行"));
+    t.appendChild(document.createTextNode("。复制与下载拿到的仍是完整结果。"));
+    els.btnShowAll.textContent = "显示全部 " + total + " 行";
+    els.viewNote.hidden = false;
+  }
+
+  function renderOutput(text, forceAll) {
+    var my = ++renderSeq;
+    var pre = els.output;
+    fullResult = text || "";
+    setBusy(false);
+    if (!text) { pre.textContent = ""; setViewNote(null); return; }
+
+    var shown = text, hiddenTotal = null;
+    if (!forceAll) {
+      var cut = nthNewline(text, HL_VIEW_LINES);
+      if (cut >= 0) { shown = text.slice(0, cut); hiddenTotal = countLines(text); }
+    }
+    setViewNote(hiddenTotal);
+
+    if (byteSize(shown) > HL_MAX_BYTES) { pre.textContent = shown; return; }
+    var lines = splitLines(buildFrags(shown));
+    var elems = countElements(lines);
+    if (elems > HL_MAX_ELEMENTS) { pre.textContent = shown; return; }
+
+    if (elems <= HL_SYNC_ELEMENTS) {
+      var host = document.createElement("span");
+      for (var li = 0; li < lines.length; li++) paintLine(host, lines[li], li > 0);
+      pre.textContent = "";
+      pre.appendChild(host);
+      return;
+    }
+    paintChunked(pre, lines, my);
+  }
+
+  function showAllOutput() {
+    if (!fullResult || rendering) return;
+    renderOutput(fullResult, true);
+    syncOutputActions();
+  }
+
+  function deliver(out, label, extra) {
+    renderOutput(out);
+    syncOutputActions();
+    els.outMeta.textContent = countLines(out) + " 行 · " + byteSize(out) + " 字节";
+    if (extra) setStatus("warn", "⚠", "已" + label + "，" + extra);
+    else { clearStatus(); toast("已" + label + " · " + countLines(out) + " 行 · " + byteSize(out) + " 字节"); }
+  }
+
+  function guardSize(bytes) {
+    var n = bytes == null ? byteSize(els.input.value) : bytes;
+    if (n <= MAX_BYTES) return false;
+    setStatus("warn", "⚠", "这段内容有 " + Math.round(n / 1048576 * 10) / 10 + " MB，超过 " +
+      Math.round(MAX_BYTES / 1048576) + " MB —— 大段文本的排版本身会很慢，先拆小再处理，或把文件存成 .sql 分块格式化。");
+    return true;
+  }
+
+  /* ---------- 动作 ---------- */
+  function opts() { return { indent: els.indent.value, case: els.caseMode.value }; }
+
+  function doFormat() {
+    if (guardSize()) return;
+    var r = formatSql(els.input.value, opts());
+    if (!r.ok) { showError(r.error); return; }
+    deliver(r.value, "格式化");
+  }
+
+  function doMinify() {
+    if (guardSize()) return;
+    var r = minifySql(els.input.value, opts());
+    if (!r.ok) { showError(r.error); return; }
+    var extra = r.droppedComments ? ("移除了 " + r.droppedComments + " 处注释（压缩后注释无法保留）") : "";
+    deliver(r.value, "压缩", extra);
+  }
+
+  function doValidate() {
+    if (guardSize()) return;
+    var r = validateSql(els.input.value);
+    if (!r.ok) { showError(r.error); return; }
+    var lines = countLines(r.value), bytes = byteSize(r.value);
+    setStatus("ok", "✓", "结构检查通过：字符串 / 注释闭合、括号配平。" + lines + " 行 · " + bytes + " 字节。");
+    toast("校验通过");
+  }
+
+  function doClear() {
+    els.input.value = "";
+    renderOutput("");
+    els.outMeta.textContent = "—";
+    syncMeta(0, 0);
+    syncOutputActions();
+    clearStatus();
+    els.input.focus();
+  }
+
+  /* ---------- 复制 / 下载 ---------- */
+  function legacyCopy(text) {
+    if (typeof document.execCommand !== "function") return false;
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function copyText(text) {
+    var yes = function (how) { return { ok: true, how: how }; };
+    var no = function (why) { return { ok: false, why: why }; };
+    if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(
+        function () { return yes("clipboard"); },
+        function () { return legacyCopy(text) ? yes("legacy") : no("浏览器拒绝了剪贴板写入"); }
+      );
+    }
+    return Promise.resolve(legacyCopy(text) ? yes("legacy") : no("当前环境不支持剪贴板 API"));
+  }
+
+  function downloadText(text, filename) {
+    var blob;
+    try { blob = new Blob([text], { type: "text/plain;charset=utf-8" }); }
+    catch (_) { return { ok: false, why: "无法构造 Blob" }; }
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    return { ok: true, name: filename };
+  }
+
+  function outputFilename() { return "formatted.sql"; }
+
+  function readFileAsText(file, onOk, onErr) {
+    var fr = new FileReader();
+    fr.onload = function () { onOk(String(fr.result)); };
+    fr.onerror = function () { onErr(fr.error || new Error("读取失败")); };
+    fr.readAsText(file);
+  }
+
+  var LOAD_NOTICE_BYTES = 512 * 1024;
+  var LOAD_NOTICE_LINES = 5000;
+
+  var afterPaint = (typeof requestAnimationFrame === "function")
+    ? function (fn) {
+        var done = false;
+        var run = function () { if (done) return; done = true; fn(); };
+        requestAnimationFrame(function () { requestAnimationFrame(run); });
+        setTimeout(run, 150);
+      }
+    : function (fn) { setTimeout(fn, 0); };
+
+  function applyLoadedText(s, name, lines, bytes) {
+    els.input.value = s;
+    syncMeta(lines, bytes);
+    setStatus("", "·", "已载入" + (name ? " " + name : "") + " · " + lines + " 行 · " + bytes + " 字节，按格式化开始。");
+    els.input.focus();
+  }
+
+  function loadText(text, name) {
+    var s = stripBOM(String(text == null ? "" : text));
+    var lines = countLines(s), bytes = byteSize(s);
+    if (bytes > LOAD_NOTICE_BYTES || lines > LOAD_NOTICE_LINES) {
+      setStatus("", "·", "正在载入" + (name ? " " + name : "") + " · " + lines + " 行 · " + bytes + " 字节…");
+      afterPaint(function () { applyLoadedText(s, name, lines, bytes); });
+      return;
+    }
+    applyLoadedText(s, name, lines, bytes);
+  }
+
+  function loadFile(file) {
+    if (!file) return;
+    readFileAsText(file, function (t) { loadText(t, file.name || ""); }, function (e) {
+      setStatus("error", "✗", "读取文件失败：" + (e && e.message ? e.message : e));
+    });
+  }
+
+  function dragHasFiles(e) {
+    var dt = e.dataTransfer;
+    if (!dt) return false;
+    if (dt.types) { for (var i = 0; i < dt.types.length; i++) if (dt.types[i] === "Files") return true; }
+    return false;
+  }
+  document.addEventListener("dragover", function (e) {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    document.body.classList.add("dragging");
+  });
+  document.addEventListener("dragleave", function (e) {
+    if (e.relatedTarget) return;
+    document.body.classList.remove("dragging");
+  });
+  document.addEventListener("drop", function (e) {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    document.body.classList.remove("dragging");
+    var files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files.length) loadFile(files[0]);
+  });
+
+  function syncOutputActions() {
+    var empty = !outputText();
+    els.btnCopy.disabled = empty;
+    els.btnDownload.disabled = empty;
+    if (els.btnShowAll) els.btnShowAll.disabled = rendering;
+  }
+
+  function doCopy() {
+    var text = outputText();
+    if (!text) { setStatus("", "·", "还没有结果可复制。"); return; }
+    copyText(text).then(function (r) {
+      if (r.ok) { clearStatus(); toast("已复制 " + byteSize(text) + " 字节到剪贴板"); }
+      else setStatus("error", "✗", "自动复制没成功（" + r.why + "）—— 点一下结果区按 Ctrl + A 再 Ctrl + C 一样能拿到。");
+    });
+  }
+
+  function doDownload() {
+    var text = outputText();
+    if (!text) { setStatus("", "·", "还没有结果可下载。"); return; }
+    var r = downloadText(text, outputFilename());
+    if (r.ok) { clearStatus(); toast("已下载 " + r.name + " · 在浏览器的下载目录里"); }
+    else setStatus("error", "✗", "下载没成功（" + r.why + "）—— 可以改用「复制」自己存。");
+  }
+
+  /* ---------- 事件 ---------- */
+  els.btnFormat.addEventListener("click", doFormat);
+  els.btnMinify.addEventListener("click", doMinify);
+  els.btnValidate.addEventListener("click", doValidate);
+  els.btnClear.addEventListener("click", doClear);
+  els.btnCopy.addEventListener("click", doCopy);
+  els.btnDownload.addEventListener("click", doDownload);
+  els.btnShowAll.addEventListener("click", showAllOutput);
+  els.btnOpenFile.addEventListener("click", function () { els.fileInput.click(); });
+  els.fileInput.addEventListener("change", function () {
+    var f = els.fileInput.files && els.fileInput.files[0];
+    loadFile(f);
+    try { els.fileInput.value = ""; } catch (_) {}
+  });
+  els.btnTheme.addEventListener("click", function () {
+    var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    applyTheme(next);
+    writeTheme(next);
+  });
+  els.btnWrap.addEventListener("click", toggleWrap);
+
+  window.addEventListener("keydown", function (e) {
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.code !== "KeyZ" && e.key !== "z" && e.key !== "Z") return;
+    if (e.repeat) return;
+    e.preventDefault();
+    toggleWrap();
+  });
+
+  els.input.addEventListener("input", function () { syncMeta(); });
+  els.input.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); doFormat(); }
+  });
+  els.input.addEventListener("keydown", function (e) {
+    if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    var el = els.input, s = el.selectionStart, t = el.value;
+    el.value = t.slice(0, s) + "  " + t.slice(el.selectionEnd);
+    el.selectionStart = el.selectionEnd = s + 2;
+    syncMeta();
+  });
+
+  els.output.addEventListener("keydown", function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    if (e.key !== "a" && e.key !== "A") return;
+    var sel = (typeof window !== "undefined" && window.getSelection) ? window.getSelection() : null;
+    if (!sel || typeof document.createRange !== "function") return;
+    var r = document.createRange();
+    r.selectNodeContents(els.output);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    e.preventDefault();
+  });
+
+  /* 暴露给测试：UI 层里值得单测的动作与阈值 */
+  API.HL_MAX_BYTES = HL_MAX_BYTES;
+  API.HL_MAX_ELEMENTS = HL_MAX_ELEMENTS;
+  API.HL_SYNC_ELEMENTS = HL_SYNC_ELEMENTS;
+  API.HL_VIEW_LINES = HL_VIEW_LINES;
+  API.renderOutput = renderOutput;
+  API.showAllOutput = showAllOutput;
+  API.outputText = outputText;
+
+  initTheme();
+  initWrap();
+  syncMeta();
+  syncOutputActions();
+  els.input.focus();
+})();
+</script>
+</body>
+</html>
