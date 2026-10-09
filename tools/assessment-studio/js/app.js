@@ -168,6 +168,77 @@
                     setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 2600);
                 }
         
+                // ================================================================
+                // V3.8: 弹层通用能力 —— 焦点陷阱 / 背景隔离 / 焦点归还
+                // ================================================================
+                // 改前每个弹层各自为政：只有确认框和回顾面板顺手 .focus() 了一下。
+                // 既没把焦点关在弹层内（Tab 会一路穿到遮罩后的题卡和按钮，键盘用户直接"走丢"），
+                // 关闭后焦点也停在 body（想回到刚才那个按钮得从头 Tab 一遍）。
+                // 这里统一成一套：打开入栈 → 焦点进弹层 → 隔离背景；关闭出栈 → 焦点还给触发元素。
+                const LAYER_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), ' +
+                    'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+                const layerStack = [];       // 打开中的弹层，后进先出；只有最上层接收键盘
+                let layerReturnFocus = null; // 打开最上层之前焦点在哪，关闭时还回去
+
+                // 只认带 role="dialog" 的弹层容器（五个弹层都有），避免误把 toast 之类当弹层
+                function layerEls() {
+                    return Array.from(document.querySelectorAll('[role="dialog"]'));
+                }
+                function topLayer() { return layerStack[layerStack.length - 1] || null; }
+
+                // 弹层里当前可聚焦、且真的可见的元素（display:none 的子树 rect 为 0，会被滤掉）
+                function focusableIn(root) {
+                    return Array.from(root.querySelectorAll(LAYER_FOCUSABLE)).filter((el) => {
+                        const r = el.getBoundingClientRect();
+                        return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+                    });
+                }
+
+                // 背景隔离：有弹层打开时主内容区 inert（键盘与读屏都进不去）；
+                // 叠加时（例如从回顾里弹出确认框）只有最上层可交互，下面那层一并隔离。
+                // inert 是 Baseline 2023 的能力；老浏览器上退化成"只靠下面的 Tab 陷阱兜底"，不影响可用。
+                function syncLayerInert() {
+                    const top = topLayer();
+                    const appEl = document.getElementById('app');
+                    if (appEl) appEl.inert = layerStack.length > 0;
+                    layerEls().forEach((el) => {
+                        el.inert = layerStack.includes(el) && el !== top;
+                    });
+                }
+
+                // 打开弹层：入栈 → 焦点进弹层 → 隔离背景
+                function openLayer(el, opts = {}) {
+                    if (!el || layerStack.includes(el)) return;
+                    if (layerStack.length === 0) layerReturnFocus = document.activeElement;
+                    el.classList.add('open');
+                    layerStack.push(el);
+                    syncLayerInert();
+                    // 初始焦点：显式指定 > 面板内第一个可聚焦元素 > 面板自身（临时 tabindex=-1）
+                    const target = opts.initialFocus || focusableIn(el)[0];
+                    if (target) { target.focus(); return; }
+                    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+                    el.focus();
+                }
+
+                // 关闭弹层：出栈 → 焦点还给触发元素；还有下层时交给新的最上层
+                function closeLayer(el) {
+                    const i = layerStack.indexOf(el);
+                    if (i === -1) { el.classList.remove('open'); return; }
+                    layerStack.splice(i, 1);
+                    el.classList.remove('open');
+                    syncLayerInert();
+                    if (layerStack.length > 0) {
+                        const t = focusableIn(topLayer())[0];
+                        if (t) t.focus();
+                        return;
+                    }
+                    const back = layerReturnFocus;
+                    layerReturnFocus = null;
+                    // 只归还给"仍在文档里且仍可见"的元素；否则焦点原地不动（别硬塞给 body）
+                    if (back && document.contains(back) && back.getBoundingClientRect().width > 0) back.focus();
+                }
+
                 // V3.3: 通用确认 Modal (替代原生 confirm) —— 返回 Promise，resolve(true/false)
                 let confirmCallback = null;
                 function askConfirm(opts) {
@@ -178,12 +249,11 @@
                         confirmOkBtn.textContent = opts.okText || '确定';
                         confirmOkBtn.className = 'btn ' + (opts.danger ? 'btn-danger' : 'btn-primary');
                         confirmCallback = (val) => { resolve(val); confirmCallback = null; };
-                        confirmModal.classList.add('open');
-                        confirmOkBtn.focus();
+                        openLayer(confirmModal, { initialFocus: confirmOkBtn });
                     });
                 }
                 function closeConfirm() {
-                    if (confirmModal) confirmModal.classList.remove('open');
+                    if (confirmModal) closeLayer(confirmModal);
                 }
         
                 // ================================================================
@@ -201,8 +271,8 @@
                 }
         
         
-                function openHelpModal() { if (helpModal) helpModal.classList.add('open'); }
-                function closeHelpModal() { if (helpModal) helpModal.classList.remove('open'); }
+                function openHelpModal() { if (helpModal) openLayer(helpModal); }
+                function closeHelpModal() { if (helpModal) closeLayer(helpModal); }
         
                 // ================================================================
                 // V3.3: 练习模式即时反馈 —— 判定引擎
@@ -693,7 +763,7 @@
                 let resultAnimId = null; // 圆环数字动画句柄
                 function showResultBanner(score, correct, total) {
                     if (!resultModal) return;
-                    resultModal.classList.add('open');
+                    openLayer(resultModal);
                     resultDetail.textContent = `正确 ${correct} / ${total} 题`;
                     resultVerdict.textContent = score >= 60 ? '通过' : '继续加油';
                     resultVerdict.className = 'result-verdict ' + (score >= 60 ? 'pass' : 'fail');
@@ -717,7 +787,7 @@
         
                 function closeResultModal() {
                     if (resultAnimId) { cancelAnimationFrame(resultAnimId); resultAnimId = null; }
-                    if (resultModal) resultModal.classList.remove('open');
+                    if (resultModal) closeLayer(resultModal);
                 }
         
                 // ================================================================
@@ -829,13 +899,13 @@
                 // 打开题号抽屉。题目多时面板封顶、由网格内部滚动（见 css/app.css .grid-questions），
                 // 这里顺手把「当前题」滚进可视区 —— 否则 70 题时打开抽屉还得自己在 14 行里找。
                 function openDrawer() {
-                    drawerOverlay.classList.add('open');
+                    openLayer(drawerOverlay);
                     const cur = gridContainer && gridContainer.querySelector('.grid-item.current');
                     // display 刚从 none 变 flex，这里同步取布局即可（会强制一次 layout）
                     if (cur) cur.scrollIntoView({ block: 'center', inline: 'nearest' });
                 }
         
-                function closeDrawer() { drawerOverlay.classList.remove('open'); }
+                function closeDrawer() { closeLayer(drawerOverlay); }
         
                 // ================================================================
                 // V3.5: 作答回顾 + 只练错题
@@ -850,7 +920,7 @@
                 }
         
                 function closeReview() {
-                    if (reviewModal) reviewModal.classList.remove('open');
+                    if (reviewModal) closeLayer(reviewModal);
                 }
         
                 // 打开回顾面板 (仅交卷后可用)
@@ -878,8 +948,7 @@
                     if (reviewRetryBtn) reviewRetryBtn.style.display = mode === 'practice' && !retryActive ? 'inline-flex' : 'none';
                     reviewExpandedIdx = null; // 重新打开时收起所有详情
                     renderReviewList();
-                    if (reviewModal) reviewModal.classList.add('open');
-                    if (reviewCloseBtn) reviewCloseBtn.focus();
+                    if (reviewModal) openLayer(reviewModal, { initialFocus: reviewCloseBtn });
                 }
         
                 // 渲染回顾列表 (全部 / 只看错题)；点条目展开「复盘详情」：我的作答/正确答案/解析
@@ -1151,18 +1220,36 @@
         
                     // V3: 键盘快捷键 (左右切题 / A-D 选答案 / 聚焦选项时 Enter/空格)
                     document.addEventListener('keydown', (e) => {
-                        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-                        if (e.isComposing) return; // V3.1: 中文输入法组合输入不触发快捷键
-                        // V3.5: Esc 关闭回顾面板
-                        if (e.key === 'Escape' && reviewModal && reviewModal.classList.contains('open')) {
-                            e.preventDefault();
-                            closeReview();
+                        // V3.8: 弹层打开时先接管 Tab。必须排在最前面 ——
+                        // 放到 INPUT/TEXTAREA 的早退之后，弹层内输入框上按 Tab 就会直接穿出去。
+                        if (e.key === 'Tab' && layerStack.length > 0) {
+                            const top = topLayer();
+                            const items = focusableIn(top);
+                            if (items.length === 0) { e.preventDefault(); return; }
+                            const first = items[0];
+                            const last = items[items.length - 1];
+                            const active = document.activeElement;
+                            const inside = top.contains(active);
+                            if (e.shiftKey) {
+                                if (!inside || active === first) { e.preventDefault(); last.focus(); }
+                            } else if (!inside || active === last) {
+                                e.preventDefault();
+                                first.focus();
+                            }
                             return;
                         }
-                        // 题号抽屉同样支持 Esc 关闭，与其它弹层行为一致
-                        if (e.key === 'Escape' && drawerOverlay && drawerOverlay.classList.contains('open')) {
+                        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                        if (e.isComposing) return; // V3.1: 中文输入法组合输入不触发快捷键
+                        // V3.8: Esc 一律关「当前最上层」弹层。原来写的是回顾优先于抽屉的固定顺序，
+                        // 叠加时会关错层；确认框还要按"取消"语义 resolve(false)。
+                        if (e.key === 'Escape' && layerStack.length > 0) {
                             e.preventDefault();
-                            closeDrawer();
+                            const topId = topLayer().id;
+                            if (topId === 'confirmModal') { closeConfirm(); if (confirmCallback) confirmCallback(false); }
+                            else if (topId === 'reviewModal') closeReview();
+                            else if (topId === 'drawerOverlay') closeDrawer();
+                            else if (topId === 'resultModal') closeResultModal();
+                            else if (topId === 'helpModal') closeHelpModal();
                             return;
                         }
                         const targetOpt = e.target && e.target.classList && e.target.classList.contains('option-item');
