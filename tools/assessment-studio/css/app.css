@@ -805,8 +805,23 @@
                     .grid-questions {
                         grid-template-columns: repeat(4, 1fr);
                     }
+                    /* V3.8: 题号抽屉在窄屏同样占满全屏，与回顾弹层行为对齐
+                       （之前是 88vh 居中卡片 + 四周 40px 白边，两个弹层观感不一致）。
+                       基础规则里的 max-height: calc(100dvh - 40px) 在此被覆盖；
+                       网格仍是唯一滚动区（.grid-questions 的 flex:1 + min-height:0），
+                       标题与图例 flex-shrink:0 常驻 —— 所以全屏后网格会自动吃满剩余高度。
+                       本块在 .drawer-overlay(545) / .drawer-panel(560) 之后，同特异度可直接覆盖。 */
+                    .drawer-overlay {
+                        padding: 0;
+                        align-items: stretch;
+                    }
                     .drawer-panel {
-                        padding: 20px 16px;
+                        max-width: none;
+                        width: 100%;
+                        height: 100%;
+                        max-height: 100%;
+                        border-radius: 0;
+                        padding: 18px 16px calc(16px + env(safe-area-inset-bottom, 0px));
                     }
                 }
         
