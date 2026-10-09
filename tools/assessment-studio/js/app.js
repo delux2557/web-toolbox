@@ -195,6 +195,24 @@
                     });
                 }
 
+                // V3.8: 弹层打开时锁住页面滚动。inert 只挡交互、不挡滚动 —— 背景仍会跟手滚。
+                // 锁的是 body（页面滚动容器）；弹层自身是 fixed 元素，其内部滚动不受影响。
+                // 桌面端滚动条消失会让居中内容横向平移，用 --scrollbar-comp 交给 CSS 补偿。
+                let scrollLocked = false;
+                function setScrollLock(on) {
+                    if (on === scrollLocked) return;
+                    scrollLocked = on;
+                    const body = document.body;
+                    if (on) {
+                        const comp = window.innerWidth - document.documentElement.clientWidth;
+                        if (comp > 0) body.style.setProperty('--scrollbar-comp', comp + 'px');
+                        body.classList.add('layer-locked');
+                    } else {
+                        body.classList.remove('layer-locked');
+                        body.style.removeProperty('--scrollbar-comp');
+                    }
+                }
+
                 // 背景隔离：有弹层打开时主内容区 inert（键盘与读屏都进不去）；
                 // 叠加时（例如从回顾里弹出确认框）只有最上层可交互，下面那层一并隔离。
                 // inert 是 Baseline 2023 的能力；老浏览器上退化成"只靠下面的 Tab 陷阱兜底"，不影响可用。
@@ -205,6 +223,7 @@
                     layerEls().forEach((el) => {
                         el.inert = layerStack.includes(el) && el !== top;
                     });
+                    setScrollLock(layerStack.length > 0);
                 }
 
                 // 打开弹层：入栈 → 焦点进弹层 → 隔离背景
@@ -823,6 +842,8 @@
                 // ================================================================
                 function setMode(m, persist) {
                     mode = (m === 'exam') ? 'exam' : 'practice';
+                    // V3.8: 练习模式才在题卡内预留解析槽（body.mode-practice 驱动 --fb-slot）
+                    document.body.classList.toggle('mode-practice', mode === 'practice');
                     if (modeSeg) {
                         modeSeg.querySelectorAll('.seg-btn').forEach(b => {
                             b.classList.toggle('active', b.dataset.mode === mode);
