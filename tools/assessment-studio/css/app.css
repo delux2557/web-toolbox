@@ -5,6 +5,7 @@
                 }
         
                 body {
+                    --body-pad: 20px;
                     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                     background: var(--gray-1);
                     color: var(--text-primary);
@@ -12,7 +13,17 @@
                     display: flex;
                     justify-content: center;
                     align-items: center;
-                    padding: 20px;
+                    padding: var(--body-pad);
+                }
+
+                /* V3.8: 弹层打开时锁住页面滚动（配套 js/app.js 的 setScrollLock）。
+                   overflow:hidden 挡住滚轮/触控；overscroll-behavior:contain 挡住
+                   弹层内部滚到边界后把剩余滚动"漏"给页面（滚动穿透）。
+                   桌面端滚动条消失会让居中的内容横向平移，用等宽 padding 补偿。 */
+                body.layer-locked {
+                    overflow: hidden;
+                    overscroll-behavior: contain;
+                    padding-right: calc(var(--body-pad) + var(--scrollbar-comp, 0px));
                 }
         
                 /* ===== 主容器 ===== */
@@ -203,8 +214,15 @@
                 }
         
                 .question-card {
+                    /* V3.8: 解析槽高度。练习模式下常驻预留一块固定高度的区域，解析条
+                       在其中绝对定位 —— 内容区高度不再随解析条出现而变化。
+                       改前：justify-content:center + 卡片高度被内容撑开，答完题后
+                       内容从"居中"变"贴顶"，实测题干与选项整体上移 44px。 */
+                    --fb-slot: 0px;
                     flex: 0 0 100%;
                     padding-right: 4px;
+                    padding-bottom: var(--fb-slot, 0px);
+                    position: relative;
                     opacity: 0.6;
                     /* V3: 滑动结束后隐藏屏外卡片 (防邻题漏出 + 修复键盘聚焦/读屏) */
                     visibility: hidden;
@@ -214,6 +232,11 @@
                     display: flex;
                     flex-direction: column;
                     justify-content: center;
+                }
+                /* V3.8: 只有练习模式会在卡内出现解析条，此时才预留槽位；
+                   考试模式的解析走「回顾」面板，不占卡内空间。 */
+                body.mode-practice .question-card {
+                    --fb-slot: 96px;
                 }
                 .question-card.active {
                     opacity: 1;
@@ -394,7 +417,18 @@
                 /* 练习模式：判定后在题目卡内就地显示「解析」条
                    (仅练习模式出现；考试模式交卷后仍走「回顾」面板，不改动原有批改体验) */
                 .q-inline-fb {
-                    margin-top: 16px;
+                    /* V3.8: 绝对定位填充卡片的「解析槽」——不参与文档流。
+                       改前它是 appendChild 进正常流 + margin-top，出现时把内容顶高、
+                       再触发重新居中，题干与选项整体上移 44px；现在它的出现对
+                       题干/选项零影响（槽位高度由 .question-card 的 padding-bottom 常驻预留）。
+                       短解析顶对齐槽位（紧跟选项），超长则槽内滚动。 */
+                    position: absolute;
+                    left: 0;
+                    right: 4px;
+                    top: calc(100% - var(--fb-slot, 0px));
+                    max-height: var(--fb-slot, 0px);
+                    overflow-y: auto;
+                    overscroll-behavior: contain;
                     padding: 12px 16px;
                     border-radius: 10px;
                     border-left: 3px solid var(--gray-4);
@@ -763,7 +797,7 @@
                 /* ===== 响应式 ===== */
                 @media (max-width: 600px) {
                     body {
-                        padding: 8px;
+                        --body-pad: 8px;
                     }
                     .exam-app {
                         border-radius: 12px;
