@@ -57,6 +57,13 @@ jobs:
       - name: 构建单文件产物（传统单页）
         run: node tools/_build/build-single.mjs
 
+      # table-helper 的风险同样集中在"不报错、数据悄悄变样"那一类：CSV 各行列数不一致时
+      # 静默串列、空表头渲染成字面量 "null"、以及 Worker 与主线程两份实现悄悄漂移。
+      # **必须放在 build-single 之后**：最后一节契约断言要读 dist/index.html，验证 Worker
+      # 走 Blob 而不是外链 .js（外链在单文件产物里会 404，主线程回落掩盖成"只是慢"）。
+      - name: table-helper 解析器校验（CSV / JSON / Worker 一致性 / 单文件契约）
+        run: node tools/table-helper/tests/parsers.test.mjs
+
       - name: 构建单文件快照（SPA / manifest 版本注册）
         run: node tools/_build/build-snapshot.mjs
         # 故意不加 --strict：codebase-context 有一处阻塞型外链（highlight.js CDN，
