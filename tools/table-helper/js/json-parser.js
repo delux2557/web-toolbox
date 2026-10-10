@@ -91,5 +91,7 @@ const JsonParser = (function () {
     return { source: 'json', columns, rows };
   }
 
-  return { parseToTableData, detect, serializeCell };
+  /* isPlainObject / tryParse 一并暴露：worker-source.js 需要把 parseToTableData
+   * 连同其自由变量（这两个函数）一起序列化进 Worker，缺一个就会在 Worker 里报未定义。 */
+  return { parseToTableData, detect, serializeCell, isPlainObject, tryParse };
 })();

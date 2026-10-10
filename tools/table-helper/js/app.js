@@ -100,6 +100,75 @@ let currentTableData = null;   // 当前模式的展示/导出数据（TableData
 let extractedHtmlTables = [];  // html 模式：最近解析出的原始 table（detached，安全）
 let isExampleData = false;     // html/json 模式：示例演示状态
 
+/* ---------- Web Worker 解析（大数据量防卡顿） ----------
+ * 解析器（CSV/JSON）是纯函数，可以整体搬到 Worker 里跑，主线程只等结果。
+ * 源码由 WorkerSource.build() 在运行时序列化生成 → Blob URL，
+ * 因此不依赖独立 worker.js 文件，dist 单文件产物在 file:// 下同样可用。
+ * 任何一步失败（浏览器禁用 Worker / blob 被拦 / 超时）都**静默降级**为主线程解析，
+ * 保证功能不受影响。 */
+let parseWorkerUrl = null;          // Blob URL，创建一次复用
+const PARSE_WORKER_THRESHOLD = 200000; // 输入超过约 200KB 才值得开线程（含结构化克隆开销）
+const PARSE_WORKER_TIMEOUT = 30000;
+
+/** 惰性创建 Worker 的 Blob URL；不可用时返回 null（调用方走主线程） */
+function ensureWorkerUrl() {
+  if (parseWorkerUrl) return parseWorkerUrl;
+  try {
+    if (typeof Worker === 'undefined' || typeof Blob === 'undefined' || !URL.createObjectURL) return null;
+    const blob = new Blob([WorkerSource.build()], { type: 'text/javascript' });
+    parseWorkerUrl = URL.createObjectURL(blob);
+    return parseWorkerUrl;
+  } catch (e) {
+    return null;   // 降级为主线程
+  }
+}
+
+/** 在 Worker 里解析；成功 resolve(TableData)，失败 reject(Error) */
+function parseWithWorker(mode, input, opts) {
+  return new Promise((resolve, reject) => {
+    const url = ensureWorkerUrl();
+    if (!url) { reject(new Error('Worker 不可用')); return; }
+
+    let worker;
+    try { worker = new Worker(url); }
+    catch (e) { reject(new Error('Worker 创建失败')); return; }
+
+    let settled = false;
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { worker.terminate(); } catch (e) { /* ignore */ }
+      fn(arg);
+    };
+    const timer = setTimeout(() => finish(reject, new Error('解析超时（30s）')), PARSE_WORKER_TIMEOUT);
+
+    worker.onmessage = e => {
+      const msg = e.data || {};
+      if (msg.type === 'result') finish(resolve, msg.data);
+      else if (msg.type === 'error') finish(reject, new Error(msg.message || '解析失败'));
+    };
+    worker.onerror = () => finish(reject, new Error('Worker 执行异常'));
+    worker.postMessage({ type: 'parse', mode, input, opts: opts || {} });
+  });
+}
+
+/**
+ * 大数据量异步解析：Worker 优先，失败则静默降级到主线程（功能等价，只慢一点）。
+ * @param parseMain 主线程解析闭包（同步，可能抛错）
+ * @param onDone    解析成功后的落地回调
+ */
+function parseAsync(mode, input, opts, parseMain, onDone, label) {
+  btnParse.disabled = true; btnParse.textContent = '⏳ 解析中…';
+  parseWithWorker(mode, input, opts)
+    .then(onDone)
+    .catch(() => {
+      try { onDone(parseMain()); }
+      catch (e) { toast(e.message || (label + '解析失败'), 'error'); }
+    })
+    .finally(() => { btnParse.disabled = false; btnParse.textContent = '🔍 解析'; });
+}
+
 /* ---------- 解析流程 ---------- */
 function parseInput() {
   const input = inputBox.value;
@@ -113,25 +182,39 @@ function parseHtml(input) {
   const tables = adapters.html.load(input);
   if (!tables.length) { toast('未识别到表格，请检查粘贴内容', 'error'); return; }
   extractedHtmlTables = tables;
+
+  // 默认解析哪一张：多表时智能选行数最多的一张（跳过 colgroup 规格行那一类）
+  let pick = 0;
   if (tables.length > 1) {
+    const counts = tables.map(t => t.querySelectorAll('tr').length);
+    pick = HtmlTable.pickLargestIndex(counts);
     tableSelect.textContent = '';
     tables.forEach((t, i) => tableSelect.add(new Option(HtmlTable.tableMeta(t, i), String(i))));
-    tableSelect.value = '0';
+    tableSelect.value = String(pick);
     selectWrap.hidden = false;
+    if (pick !== 0) toast('检测到多个表格，已自动选中最长（表格' + (pick + 1) + ' · ' + counts[pick] + '行），可在「表格来源」切换', 'warn');
   } else {
+    // ★ 必须清空下拉：否则上一次多表解析留下的 value（如 "1"）会残留在 DOM 上，
+    //   下一轮读回时越界索引到不存在的表格（曾真的因此整页解析失败）。
+    tableSelect.textContent = '';
+    tableSelect.value = '';
     selectWrap.hidden = true;
   }
-  applyExtract(0, appendToggle.checked && !!currentTableData);
+  // 直接用本地 pick，不从 DOM 读回——杜绝「陈旧 value」这一整类问题
+  applyExtract(pick, appendToggle.checked && !!currentTableData);
 }
 
 function parseJson(input) {
-  let newData;
-  try {
-    newData = adapters.json.parse(input);
-  } catch (e) {
-    toast(e.message || 'JSON 解析失败', 'error');
+  const parseMain = () => adapters.json.parse(input);
+  if (input.length < PARSE_WORKER_THRESHOLD) {
+    try { finishParseJson(parseMain()); }
+    catch (e) { toast(e.message || 'JSON 解析失败', 'error'); }
     return;
   }
+  parseAsync('json', input, undefined, parseMain, finishParseJson, 'JSON');
+}
+
+function finishParseJson(newData) {
   if (!newData.columns.length) { toast('JSON 缺少可解析的列', 'error'); return; }
   if (appendToggle.checked && currentTableData) {
     const merged = mergeTableData(currentTableData, newData);
@@ -148,8 +231,28 @@ function parseCsv(input) {
   // 表头策略：用户手动拨过开关（headerOverrideActive）则以其强制值为准；
   // 否则传 'auto' 交由适配器智能判定（首行数字占比高 → 退化为 列1、列2）。
   const headerOpt = modeStateStore.csv.headerOverrideActive ? modeStateStore.csv.header : 'auto';
-  const newData = adapters.csv.parse(input, { header: headerOpt });
+  const opts = { header: headerOpt };
+  const parseMain = () => adapters.csv.parse(input, opts);
+  if (input.length < PARSE_WORKER_THRESHOLD) {
+    try { finishParseCsv(parseMain()); }
+    catch (e) { toast(e.message || 'CSV 解析失败', 'error'); }
+    return;
+  }
+  parseAsync('csv', input, opts, parseMain, finishParseCsv, 'CSV');
+}
+
+function finishParseCsv(newData) {
   if (!newData.columns.length) { toast('没有可解析的列', 'error'); return; }
+
+  // 提示优先级：疑似 TSV（格式选错）> 列数不一致（可能串列）；两者不叠加刷屏
+  const uneven = newData._uneven;
+  if (newData._tsvSuspect) {
+    toast('⚠️ 输入里检测到制表符（Tab），更像 TSV 而非逗号 CSV，解析结果可能不对', 'warn');
+  } else if (uneven && uneven.hasUneven) {
+    toast('⚠️ 解析完成：有行列数（最少 ' + uneven.minCols + ' 列）与列数（' + newData.columns.length
+      + ' 列）不一致，已按空值补齐，请核对是否串列', 'warn');
+  }
+
   // 智能判定生效时（用户未手动覆盖）：若认首行非表头，则同步开关与状态为未勾选，保证所见即所得
   if (!modeStateStore.csv.headerOverrideActive) {
     const headerActuallyUsed = newData._headerUsed !== false;
@@ -170,8 +273,20 @@ function parseCsv(input) {
 }
 
 function applyExtract(idx, append) {
-  const newData = adapters.html.extract(extractedHtmlTables[idx]);
+  const tableEl = extractedHtmlTables[idx];
+  // 防御：下标越界（如切换下拉与输入不同步）时给出提示而不是抛异常中断整个解析
+  if (!tableEl) { toast('未找到所选表格，请重新解析', 'error'); return; }
+  const newData = adapters.html.extract(tableEl);
   if (!newData.columns.length) { toast('所选表格没有可用列', 'error'); return; }
+  // 合并单元格提示：colspan 已按展开单元格对齐；rowspan 暂不做跨行回填，可能致行错位
+  const hasColspan = !!tableEl.querySelector('[colspan]');
+  const hasRowspan = !!tableEl.querySelector('[rowspan]');
+  if (hasColspan || hasRowspan) {
+    const parts = [];
+    if (hasColspan) parts.push('colspan 已展开对齐');
+    if (hasRowspan) parts.push('rowspan 未做跨行回填，少数行可能错位');
+    toast('⚠️ 表格含合并单元格：' + parts.join('；'), 'warn');
+  }
   if (append && currentTableData) {
     const merged = mergeTableData(currentTableData, newData);
     if (!merged) return;
@@ -323,6 +438,9 @@ function restoreModeMemory() {
       tableSelect.value = modeStateStore[currentMode].tableValue || '0';
       selectWrap.hidden = false;
     } else {
+      // 同步清空，避免留下上一次多表解析的陈旧选项/value
+      tableSelect.textContent = '';
+      tableSelect.value = '';
       selectWrap.hidden = true;
     }
   } else {
@@ -691,3 +809,8 @@ if (btnCloseX) btnCloseX.addEventListener('click', () => { tipModal.hidden = tru
 buildExampleList();
 renderTabs();
 applyModeUI();
+
+/* 页面卸载时释放 Worker 的 Blob URL（Worker 实例本身按次创建、用完即 terminate） */
+window.addEventListener('beforeunload', function () {
+  if (parseWorkerUrl) { try { URL.revokeObjectURL(parseWorkerUrl); } catch (e) {} parseWorkerUrl = null; }
+});
