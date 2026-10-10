@@ -148,7 +148,7 @@
         <li>⚠️ 请确认当前内容包含全部目标数据；若表格为分页 / 虚拟滚动，请先切换「每页更多条」或滚动加载完成后再复制。</li>
         <li>自动识别 <kbd>data-field</kbd> / <kbd>&lt;th&gt;</kbd> / 列索引 作为列名，兼容字段变化。</li>
         <li>自动跳过隐藏列（display:none）与 复选 / 操作 类功能列。</li>
-        <li>页面存在多个表格时默认解析第一个，可在「表格来源」中切换。</li>
+        <li>页面存在多个表格时，自动选中行数最多的那个；可在「表格来源」中切换。</li>
         <li>开启「追加模式」后，再次解析将按列名对齐合并数据，适合分页粘贴场景。</li>
         <li>「CSV转JSON」模式：支持双引号转义、BOM 自动剥离；「首行为表头」关闭时列名自动为 列1、列2…。</li>
         <li>「粘贴JSON」模式：自动识别 对象数组 / 二维数组 / 单个对象；对象数组以字段名为列名，嵌套对象、数组自动序列化为字符串。</li>
@@ -183,6 +183,7 @@
 <script src="js/html-table.js"></script>
 <script src="js/exporters.js"></script>
 <script src="js/adapters.js"></script>
+<script src="js/worker-source.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

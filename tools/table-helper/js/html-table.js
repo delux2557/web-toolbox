@@ -24,7 +24,13 @@ const HtmlTable = (function () {
 
   function cellText(el) { return (el.textContent || '').replace(/\s+/g, ' ').trim(); }
 
-  function rowCells(tr) { return Array.from(tr.children).filter(c => c.tagName === 'TD' || c.tagName === 'TH'); }
+  /** 获取行内单元格，展开 colspan 使列索引对齐（合并单元格占多列） */
+  function rowCells(tr) {
+    const raw = Array.from(tr.children).filter(c => c.tagName === 'TD' || c.tagName === 'TH');
+    // 检测 colspan 并展开
+    const hasSpan = raw.some(c => c.hasAttribute('colspan'));
+    return hasSpan ? expandColspan(raw) : raw;
+  }
 
   /* 定位表头行与数据行：优先取 <thead>；否则按 <th>、data-field、是否纯数字启发式判断 */
   function locateHeaderRows(table, thead, allRows) {
@@ -99,6 +105,28 @@ const HtmlTable = (function () {
     return Array.from({ length: count }, (_, i) => i).filter(i => !skip.has(i));
   }
 
+  /**
+   * 展开 colspan：把跨 n 列的单元格在同一行内重复 n 次，
+   * 使后续单元格落到正确的列下标上（不做 rowspan 的跨行回填）。
+   * 返回展开后的 cell 数组（同一元素可能出现多次）。
+   */
+  function expandColspan(cells) {
+    const expanded = [];
+    cells.forEach(cell => {
+      const cs = parseInt(cell.getAttribute('colspan') || '1', 10);
+      const n = Number.isFinite(cs) && cs > 1 ? Math.min(cs, 1000) : 1; // 防御异常巨大的 colspan
+      for (let j = 0; j < n; j++) expanded.push(cell);
+    });
+    return expanded;
+  }
+
+  /**
+   * 检测表格是否使用了 colspan / rowspan
+   */
+  function hasMergedCells(table) {
+    return !!table.querySelector('[colspan], [rowspan]');
+  }
+
   function extractTableData(table) {
     const allRows = Array.from(table.querySelectorAll('tr'));
     const thead = table.querySelector('thead');
@@ -145,12 +173,28 @@ const HtmlTable = (function () {
     return label;
   }
 
+  /**
+   * 智能推荐默认表格下标：返回行数最多的一张的下标（并列时取靠前者）。
+   * 抽成纯函数是为了能脱离 DOM 单测（多表智能选表曾因「读回陈旧下拉 value」出过越界 bug）。
+   */
+  function pickLargestIndex(rowCounts) {
+    let best = 0, bestN = -1;
+    (rowCounts || []).forEach((n, i) => {
+      const c = Number(n) || 0;
+      if (c > bestN) { bestN = c; best = i; }
+    });
+    return best;
+  }
+
   return {
     SKIP_KEYWORDS,
     isHiddenEl,
     isSkipCell,
     cellText,
     rowCells,
+    expandColspan,
+    hasMergedCells,
+    pickLargestIndex,
     extractTableData,
     tableMeta
   };

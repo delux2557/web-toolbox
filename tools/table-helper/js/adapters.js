@@ -11,39 +11,11 @@ const Adapters = (function () {
     parse() { throw new Error('Adapter.parse 未实现'); }
   }
 
-  /* 判定本次是否把首行当表头：
-   * - opts.header === false：用户强制关闭
-   * - opts.header === true： 用户强制开启
-   * - 其余（含 'auto'、undefined）：智能判定，首行数字占比 > 50% 视为数据行而非表头 */
-  function decideKeepHeader(grid, opts) {
-    const o = opts || {};
-    let keepHeader = true;
-    if (o.header === false) keepHeader = false;
-    else if (o.header !== true) {
-      const first = grid[0];
-      if (first) {
-        const cells = first.filter(c => String(c).trim() !== '');
-        const numCount = cells.filter(c => /^-?\d[\d,.\s]*%?$/.test(String(c).trim())).length;
-        if (cells.length && numCount / cells.length > 0.5) keepHeader = false;
-      }
-    }
-    return keepHeader;
-  }
-
   class CsvAdapter extends BaseAdapter {
+    /* 逻辑全部下沉到 CsvParser.parseToTableData（纯函数，Worker 复用同一份），
+     * 这里只做转发，避免「主线程一份、Worker 一份」两处实现各自漂移。 */
     parse(input, opts) {
-      const grid = CsvParser.parseCSV(input);
-      if (!grid.length) return { source: 'csv', columns: [], rows: [] };
-
-      const keepHeader = decideKeepHeader(grid, opts);
-      const columns = CsvParser.buildColumns(grid, keepHeader);
-      let rows = keepHeader ? grid.slice(1) : grid;
-      // 过滤全空行；每行按列数补齐（不足补空串），保证行列对齐
-      rows = rows
-        .filter(r => r.some(c => String(c).trim() !== ''))
-        .map(r => columns.map((_, i) => r[i] ?? ''));
-      // _headerUsed：本次实际生效的表头判定值，供调用方同步开关/UI（所见即所得）
-      return { source: 'csv', columns, rows, _headerUsed: keepHeader };
+      return CsvParser.parseToTableData(input, opts);
     }
   }
 
