@@ -277,6 +277,51 @@
       "find": "dual: ' FROM dual'",
       "replace": "dual: ''",
       "expect": ["Oracle 带 FROM dual"]
+    },
+    {
+      "id": "clean-width-chars-not-deleted",
+      "gate": "logic",
+      "why": "列名清洗不再删除零宽字符 —— 零宽空格在 JS 里既不是空白也不是可见内容，留着会让产物出现「看不见的列名」、且 col_N 补名不触发（对齐 Python 0.4.2 时实测）",
+      "file": "tools/excel2sql/js/headers.js",
+      "find": "const INVISIBLE_RE = /[\\u00ad\\u200b\\u200c\\u200d\\u2060\\u200e\\u200f\\u202a-\\u202e\\u3164\\ufeff]/g;",
+      "replace": "const INVISIBLE_RE = /[\\u00ad\\u3164\\ufeff]/g;",
+      "expect": ["★ 零宽字符删除而不是变空格"]
+    },
+    {
+      "id": "isblank-back-to-trim",
+      "gate": "logic",
+      "why": "isBlank 退回 trim() 判空 —— trim() 去不掉零宽字符，于是「看着没名字」的列被当成正常列名（Python 版 0.4.2 修的就是这条）",
+      "file": "tools/excel2sql/js/headers.js",
+      "find": "return cell == null || (cell.t === 'str' && cleanName(cell.v) === '');",
+      "replace": "return cell == null || (cell.t === 'str' && String(cell.v).trim() === '');",
+      "expect": ["★ 零宽字符单元格算空"]
+    },
+    {
+      "id": "clean-notice-hidden",
+      "gate": "ui",
+      "why": "界面不再把「列名已清洗」告诉用户 —— 清洗会改写用户的表头，静默修正和静默走偏只差一步（多行 find：同一条 if 在抽屉里还有一处，必须靠缩进区分）",
+      "file": "tools/excel2sql/js/app.js",
+      "find": "    if (pre.headerCleaned && pre.headerCleaned.length) {\n      notice(el.headerNotice, 'info',",
+      "replace": "    if (false) {\n      notice(el.headerNotice, 'info',",
+      "expect": ["且说清改了几列"]
+    },
+    {
+      "id": "quote-drops-invisible-escapes",
+      "gate": "logic",
+      "why": "提示里不再转义\"看不见的空白\"（NBSP / 全角空格 / 零宽）—— 它们渲染出来与普通空格完全一样，于是提示显示成 `'数量 (件)' → '数量 (件)'`，看着像\"根本没改\"，清洗提示就失去意义。★ 这条是 2026-10-14 **真机实测**才发现，DOM 桩与 cleanName 比对都测不出来（漏比了展示函数这一半）",
+      "file": "tools/excel2sql/js/headers.js",
+      "find": "  const QUOTE_ESCAPE_RE =\n    /[\\u0000-\\u001f\\u007f-\\u009f\\u00a0\\u00ad\\u1680\\u2000-\\u200f\\u2028-\\u202e\\u202f\\u205f\\u2060\\u3000\\u3164\\ufeff]/g;",
+      "replace": "  const QUOTE_ESCAPE_RE =\n    /[\\u0000-\\u001f\\u007f-\\u009f]/g;",
+      "expect": ["★ NBSP 转义显示"]
+    },
+    {
+      "id": "quote-always-single-quote",
+      "gate": "logic",
+      "why": "提示里总是用单引号包裹 —— 列名含单引号时（如 O'Brien）会渲染成 'O'Brien'，引号不配对、读起来有歧义。Python 的 repr 遇到这种内容会改用双引号",
+      "file": "tools/excel2sql/js/headers.js",
+      "find": "    if (hasSingle && !hasDouble) return '\"' + s + '\"';",
+      "replace": "    if (false) return '\"' + s + '\"';",
+      "expect": ["★ 含单引号时改用双引号包裹"]
     }
   ]
 }

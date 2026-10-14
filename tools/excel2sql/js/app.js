@@ -734,6 +734,15 @@
         function () { pickHeaderRow(1); });
     }
 
+    /* 列名清洗 —— 必须放在体检问题**之前**：
+       清洗会把「零宽字符列名」变成空列，紧接着的"表头第 N 列为空"才讲得通。
+       先说明"我改了你的表头什么"，再说"因此有什么需要注意"。 */
+    if (pre.headerCleaned && pre.headerCleaned.length) {
+      notice(el.headerNotice, 'info',
+        pre.headerCleanedCount + ' 个列名已清洗（换行/制表符等空白折叠成单空格，零宽字符删除）：' +
+        pre.headerCleaned.join('；'));
+    }
+
     if (!pre.check.ok) {
       pre.check.issues.forEach(function (t) { notice(el.headerNotice, 'warn', t); });
     }
@@ -784,6 +793,13 @@
         head.push('第 ' + pre.skippedRows.join('、') + ' 行整行跳过，不参与产物。');
       } else {
         head.push('表头之前没有被跳过的行。');
+      }
+      /* 列名清洗：逐条列出「改了什么」。这条**不是问题**，是告知 ——
+         但用户有权知道自己交上来的表头被改过，所以放在识别说明这一组里。 */
+      if (pre.headerCleaned && pre.headerCleaned.length) {
+        pre.headerCleaned.forEach(function (t) {
+          head.push('列名已清洗：' + t);
+        });
       }
       /* ★ 注意：识别问题（列名有空洞 / 重复 / 表头像数字日期）**不复述原话** ——
          它们在「数据预览」页签上是带动作按钮的黄色提示条。这里只报数并指路，

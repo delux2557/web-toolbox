@@ -829,6 +829,68 @@ async function main() {
   ok('恢复后数据回到 7 行', byId('statRows').textContent === '7', byId('statRows').textContent);
 
   /* ---------------------------------------------------------------
+   * [11b] 列名清洗提示（对齐命令行版 0.4.2）
+   *
+   * 列名里的换行会把产物头注释劈成两行、后半行被当语句执行 -> 产物 syntax error。
+   * 清洗本身在纯逻辑层已测得较细；这里只守**界面有没有把这件事告诉用户** ——
+   * 「静默修正」和「静默走偏」只差一步，用户有权知道自己的表头被改过。
+   * 用 CSV 合成夹具，不必新增二进制文件（清洗在 reader 之后，与源格式无关）。
+   * ------------------------------------------------------------- */
+  section('11b. 列名清洗提示（对齐命令行版 0.4.2）');
+  errors.length = 0;
+  /* 表头第 1 列带**引号包裹的换行**（Excel 里 Alt+Enter 折行的 CSV 形态），
+     第 3 列带零宽空格 —— 后者清洗后会变成空列，还要能看到"为空"的提示。 */
+  byId('fileInput').files = [makeFile('脏表头.csv',
+    enc('"订单\n编号",数量,\u200b\nA001,2,3.5\nA002,5,1.2\n'))];
+  fireChange(byId('fileInput'));
+  await tick(120);
+  ok('脏表头文件能正常载入（没有解析异常）', realErrors().length === 0, realErrors().join(' | '));
+
+  const noticeText = () => byId('headerNotice').textContent;
+  ok('★ 提示了"列名已清洗"，且说清改了几列',
+    hasText(byId('headerNotice'), '个列名已清洗'), noticeText());
+  ok('★ 提示里点明了清洗规则（空白折叠 / 零宽删除）',
+    hasText(byId('headerNotice'), '换行') && hasText(byId('headerNotice'), '零宽字符'),
+    noticeText());
+  ok('★ 提示里能看见被改的那一列（含列序与前后值）',
+    hasText(byId('headerNotice'), '[第1列]'), noticeText());
+  /* ★ 否定判据：清洗提示必须**排在体检问题之前** ——
+     零宽列名清洗后变成空列，紧接着的"表头第 3 列为空"才讲得通；
+     顺序反了用户会先看到"某列为空"却不知道是自己表头里的隐形字符导致的。 */
+  /* ★ 否定判据两份合在一起才成立：① 清洗提示**确实在**；② 它排在"为空"之前。
+     只写 ② 会在提示缺失时假绿（indexOf 返回 -1 < 正数 恒真）—— 实测踩过。 */
+  const seq = noticeText();
+  const atClean = seq.indexOf('个列名已清洗');
+  ok('★ 清洗提示排在"列为空"之前（先解释改了什么，再说因此要注意什么）',
+    atClean >= 0 && atClean < seq.indexOf('为空'), JSON.stringify(seq));
+
+  fireClick(byId('btnGenerate'));
+  await tick();
+  ok('★ 脏表头生成的产物里没有跨行的列名（换行已被洗净）',
+    !/AS `[^`]*\n[^`]*`/.test(previewSql()), firstSelect(previewSql()));
+  ok('★ 零宽列被补成 col_3（不留下看不见的列名）',
+    has(previewSql(), 'AS `col_3`'), firstSelect(previewSql()));
+  /* ★ 判据落在"这一行是否完整"上：清单完整落在同一行，且下一行就是「提示」行。
+     不用「以某前缀开头的行数 == 1」—— 注释被劈开时前半行仍以该前缀开头，计数照样是 1，
+     那是假守卫（纯逻辑层已实测确认）。 */
+  const dirtyLines = previewSql().split('\n');
+  const colLineAt = dirtyLines.findIndex((l) => l.indexOf('-- 按字符串输出的列') === 0);
+  ok('★ 头注释未被劈开（列名清单完整落在同一行，下一行就是「提示」行）',
+    colLineAt >= 0 && dirtyLines[colLineAt].indexOf('订单 编号') > 0 &&
+    dirtyLines[colLineAt + 1].indexOf('-- 提示：') === 0,
+    JSON.stringify(dirtyLines.slice(colLineAt, colLineAt + 3)));
+
+  /* 干净表头：不该出现清洗提示（否定判据 —— 免得"永远显示"也算通过） */
+  byId('fileInput').files = [makeFile('干净表头.csv', enc('订单编号,数量\nA001,2\n'))];
+  fireChange(byId('fileInput'));
+  await tick(120);
+  ok('★ 干净表头不显示清洗提示', !hasText(byId('headerNotice'), '列名已清洗'), noticeText());
+
+  /* 回到示例数据现场继续后面的用例 */
+  byId('btnSample')._h.click({ stopPropagation() {} });
+  await tick(120);
+
+  /* ---------------------------------------------------------------
    * [12] 表名输入框
    * ------------------------------------------------------------- */
   section('12. 表名输入框');
