@@ -271,16 +271,28 @@ const E2sSqlGen = (function () {
     return out;
   }
 
+  /* 会"断行"的字符 -> 空格。★ 只换这些，**不能**整体归一空白：
+     那会把注释里**有意的**多空格（如 `方言：X   输出格式：Y`）一并折叠掉。 */
+  const LINE_BREAK_RE = /[\r\n\v\f\t\u0085\u2028\u2029]/g;
+
+  /* 一行 `--` 注释。
+     ★ 必须压平换行：列名里带换行会**把注释劈成两行**，后半行失去 `--` 前缀、
+       被 SQL 引擎当成语句执行 —— 实测产物直接 syntax error（对齐 Python 版 0.4.2）。
+       这是库层的**兜底**：调用方（sqlgen.prepare）理应已经清洗过列名。 */
+  function comment(text) {
+    return '-- ' + String(text).replace(LINE_BREAK_RE, ' ').replace(/\s+$/, '') + '\n';
+  }
+
   function headerComments(header, data, force, opt) {
     const lines = [
-      '-- 由 excel2sql 生成：' + data.length + ' 行 x ' + header.length + ' 列',
-      '-- 方言：' + opt.dialect.name + '   输出格式：' + opt.fmt
+      comment('由 excel2sql 生成：' + data.length + ' 行 x ' + header.length + ' 列'),
+      comment('方言：' + opt.dialect.name + '   输出格式：' + opt.fmt)
     ];
     forcedGroups(header, data, force, opt).forEach(function (g) {
-      lines.push('-- 按字符串输出的列（' + g[0] + '）：' + g[1].join(', '));
+      lines.push(comment('按字符串输出的列（' + g[0] + '）：' + g[1].join(', ')));
     });
-    lines.push('-- 提示：内联数据仅供测试/修数，请勿直接用于生产批量导入');
-    return lines.map(function (l) { return l + '\n'; }).join('');
+    lines.push(comment('提示：内联数据仅供测试/修数，请勿直接用于生产批量导入'));
+    return lines.join('');
   }
 
   function render(header, data, force, opt) {
@@ -323,13 +335,24 @@ const E2sSqlGen = (function () {
       ncols--;
     }
 
-    /* 表头名（空 -> null，交给 repair 补 col_N） */
-    const rawNames = [];
+    /* 表头名：原始文本 -> **清洗** -> 空则交 repair 补 col_N。
+       ★ 清洗放在这里（唯一的切表头入口），对齐 Python 版 cli.split_header() ——
+         原先只在 repair() 里 trim()，而 repair() 的语义是"修复不规范的表"，
+         一个"看着规范、只是列名带换行"的表头会绕过它。
+         Python 版的真实 P0：列名里的换行把产物头注释劈成两行，后半行失去 `--`
+         前缀被当语句执行 → 产物 syntax error。前端同样会中。 */
+    const rawNames = [];      /* 清洗前的原始文本，供"清洗了哪几列"提示用 */
+    const names = [];         /* 清洗后的列名；'' 表示空（含清洗后变空） */
     for (let i = 0; i < ncols; i++) {
       const c = headerCells[i] != null ? headerCells[i] : null;
-      rawNames.push(H.isBlank(c) ? null : String(c.v).trim());
+      const text = c == null ? '' : String(c.v);
+      rawNames.push(text);
+      names.push(H.cleanName(text));
     }
-    const header = H.repair(rawNames);
+    const header = H.repair(names);
+    /* 清洗必须"看得见"：静默修正和静默走偏只差一步，用户有权知道表头被改过 */
+    const cleanDiffs = H.nameDiffs(rawNames, names);
+    const headerCleaned = H.formatNameDiffs(cleanDiffs);
 
     /* 数据行：跳过全空行，列数补齐到 ncols */
     const data = [];
@@ -352,8 +375,9 @@ const E2sSqlGen = (function () {
        与"全部按字符串输出"自相矛盾。 */
     const finalData = (opt.inferTypes && !opt.allString) ? coerceNumericColumns(data) : data;
     const force = inferColumnTypes(header, finalData, opt);
-    /* 体检基于「修复前」的表头 —— 空列名/重名会被自动修好，但必须如实告知用户 */
-    const check = H.check(rawNames, finalData);
+    /* 体检基于「清洗后的表头」—— 与 Python 版一致（那边也是把 split_header 的产物交给 check）。
+       空列名/重名会被自动修好，但必须如实告知用户 */
+    const check = H.check(names, finalData);
 
     /* 被跳过的行里只要有内容，就值得提示用户核对（可能把真表头跳过了）。
        注：Python 版这里的两个条件（首列非空 / 行内任一格非空）是重复的 ——
@@ -372,6 +396,8 @@ const E2sSqlGen = (function () {
       detectWhy: detectWhy,
       check: check,
       skippedRows: skipped,
+      headerCleaned: headerCleaned,
+      headerCleanedCount: cleanDiffs.length,
       ncols: ncols
     };
   }
@@ -427,6 +453,8 @@ const E2sSqlGen = (function () {
       detectWhy: pre.detectWhy,
       check: pre.check,
       skippedRows: pre.skippedRows,
+      headerCleaned: pre.headerCleaned,
+      headerCleanedCount: pre.headerCleanedCount,
       forcedGroups: forcedGroups(pre.header, pre.data, pre.force, opt),
       warnings: warnings,
       tPrep: tPrep,
@@ -466,6 +494,9 @@ const E2sSqlGen = (function () {
     coerceNumericColumns: coerceNumericColumns,
     literal: literal,
     forcedGroups: forcedGroups,
+    /* 导出只为让自检能**直测**注释兜底：走 buildSql 的话 prepare 已经清洗过，
+       兜底那几行执行不到，断言会变成假绿（实测踩过） */
+    headerComments: headerComments,
     prepare: prepare,
     buildSql: buildSql,
     estimatePlan: estimatePlan,
