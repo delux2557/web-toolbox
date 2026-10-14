@@ -27,7 +27,7 @@ function loadTool() {
   return factory();
 }
 
-const { E2sDialects: Dialects, E2sReaders: Readers, E2sSqlGen: SqlGen } = loadTool();
+const { E2sDialects: Dialects, E2sHeaders: Headers, E2sReaders: Readers, E2sSqlGen: SqlGen } = loadTool();
 
 /* ---------- 极简断言框架 ---------- */
 let pass = 0;
@@ -332,15 +332,191 @@ async function main() {
   ok('全数字表头被体检拦下', nh.check.issues.some((s) => s.indexOf('表头行全是数字') >= 0),
     nh.check.issues.join('；'));
 
-  /* ============ 15. 大表护栏 ============ */
-  section('15. 性能护栏');
+  /* ============ 15. 列名清洗（对齐命令行版 0.4.2） ============ */
+  /* 列名里的换行会把产物头注释**劈成两行**，后半行失去 `--` 前缀被 SQL 引擎当语句执行
+     → 产物直接 syntax error。修复前实测：本前端同样中招（a_nl / f_collide 两例）。
+     所以这里既查 cleanName 本身，也查"产物里不出现孤儿行"。
+     ★ cleanName 与 Python 版 headers.clean_name() **逐码位一致** ——
+       两边对同一批夹具的比对见 commit message（43/43 完全一致）。 */
+  section('15. 列名清洗（对齐命令行版 0.4.2）');
+
+  /* ★ 缺特性时要报**干净的 FAIL**，而不是把整个自检抛崩 ——
+     崩了只会打印「自检异常终止：CN is not a function」，报不出到底是哪几条坏了。
+     哨兵故意做成**非幂等**的（每次调用换个值），这样连"幂等"那条也会红。 */
+  ok('★ 存在 cleanName（0.4.2 新增）', typeof Headers.cleanName === 'function');
+  let cnMiss = 0;
+  const CN = typeof Headers.cleanName === 'function'
+    ? Headers.cleanName
+    : function () { cnMiss += 1; return '（无 cleanName #' + cnMiss + '）'; };
+  ok('换行折叠成单空格', CN('订\n单') === '订 单', JSON.stringify(CN('订\n单')));
+  ok('CRLF 折叠成单空格（xlsx 里真存 \\r\\n）', CN('订单\r\n编号') === '订单 编号',
+    JSON.stringify(CN('订单\r\n编号')));
+  ok('制表符折叠成单空格', CN('a\tb') === 'a b', JSON.stringify(CN('a\tb')));
+  ok('前后空白去掉', CN('  数量  ') === '数量', JSON.stringify(CN('  数量  ')));
+  ok('NBSP 也是空白', CN('数量\u00a0(件)') === '数量 (件)', JSON.stringify(CN('数量\u00a0(件)')));
+  ok('全角空格也是空白', CN('前\u3000后') === '前 后', JSON.stringify(CN('前\u3000后')));
+  ok('连续空白折叠成一个', CN('多   空格') === '多 空格', JSON.stringify(CN('多   空格')));
+  ok('★ 零宽字符删除而不是变空格', CN('x\u200by') === 'xy', JSON.stringify(CN('x\u200by')));
+  ok('★ 纯 BOM 清洗成空', CN('\ufeff') === '', JSON.stringify(CN('\ufeff')));
+  ok('★ 纯零宽空格清洗成空', CN('\u200b') === '', JSON.stringify(CN('\u200b')));
+  ok('★ 干净列名一个字符都不改', CN('单价(元)') === '单价(元)');
+  ok('★ VS16 保留（删了会让 emoji 变单色字形）',
+    CN('\u{1F5C3}\uFE0F') === '\u{1F5C3}\uFE0F', JSON.stringify(CN('\u{1F5C3}\uFE0F')));
+  ok('★ Python 认的 0x1c-0x1f 也当空白（JS 的 \\s 不认）', CN('a\u001cb') === 'a b',
+    JSON.stringify(CN('a\u001cb')));
+  ok('★ NEL(U+0085) 也当空白（JS 的 \\s 不认）', CN('a\u0085b') === 'a b',
+    JSON.stringify(CN('a\u0085b')));
+  ok('清洗是幂等的', CN(CN('订\n单')) === CN('订\n单'));
+  ok('清洗结果不含任何断行字符',
+    ['订\n单', 'a\r\nb', 'a\tb', 'a\u000bb', 'a\u2028b'].every(
+      (x) => !/[\r\n\t\v\f\u0085\u2028\u2029]/.test(CN(x))));
+  ok('null / 数字也能吃', CN(null) === '' && CN(2024) === '2024');
+
+  /* isBlank 必须以清洗后为准 —— 否则零宽字符列名得不到 col_N 补名，
+     产物里会出现**看不见的列名**（修复前真实存在）。 */
+  const cellStr = (v) => ({ t: 'str', v });
+  /* isBlank 若没跟着改，这几条会以"零宽算空"最直观地红 —— 那是本次修复的核心。 */
+  const isBlank = typeof Headers.isBlank === 'function' ? Headers.isBlank : () => true;
+  ok('★ 零宽字符单元格算空', isBlank(cellStr('\u200b')) === true);
+  ok('★ BOM 单元格算空', isBlank(cellStr('\ufeff')) === true);
+  ok('★ 只含换行的单元格算空', isBlank(cellStr('\n')) === true);
+  ok('"0" 不算空', isBlank(cellStr('0')) === false);
+  ok('数字 0 不算空', isBlank({ t: 'num', v: 0 }) === false);
+
+  ok('repair 复用清洗（换行不再进列名）',
+    Headers.repair(['订\n单', 'a\tb']).join('|') === '订 单|a b',
+    Headers.repair(['订\n单', 'a\tb']).join('|'));
+
+  /* check 不该把空列名当"重复列名"列出来（那会输出 `列名重复：` 后面空着） */
+  const dupReport = Headers.check(['a', '', ''], [[{ t: 'num', v: 1 }]]);
+  ok('★ 空列名不参与重复统计', dupReport.issues.every((s) => s.indexOf('列名重复') < 0),
+    dupReport.issues.join('；'));
+  ok('真重复仍然报', Headers.check(['a', 'a'], [[{ t: 'num', v: 1 }]])
+    .issues.some((s) => s.indexOf('列名重复') >= 0));
+
+  /* ---- 端到端：脏表头产出的 SQL 必须"没有孤儿行" ---- */
+  const dirtyHeader = [
+    [cellStr('订单\n编号'), cellStr('数量'), cellStr('单\n价'), cellStr('备注')],
+    [cellStr('A001'), { t: 'num', v: 2 }, { t: 'num', v: 3.5 }, cellStr('甲')],
+    [cellStr('A002'), { t: 'num', v: 5 }, { t: 'num', v: 1.2 }, cellStr('乙')]
+  ];
+  const dirty = SqlGen.buildSql(dirtyHeader, { dialect: Dialects.DIALECTS.sqlite, headerRow: 1 });
+  /* 用 (x || []) 兜底：万一以后有人把这两个字段从返回值里去掉，
+     这几条应当是干净的 FAIL，而不是把整个自检抛崩（那样报不出是哪条坏了）。 */
+  const dirtyCleaned = dirty.headerCleaned || [];
+  ok('★ 脏表头列名被清洗', dirty.header.join('|') === '订单 编号|数量|单 价|备注',
+    dirty.header.join('|'));
+  ok('★ 报出清洗了几列', dirty.headerCleanedCount === 2, String(dirty.headerCleanedCount));
+  ok('清洗清单可读（含第几列与前后值）',
+    dirtyCleaned.length === 2 && dirtyCleaned[0].indexOf('[第1列]') === 0 &&
+    dirtyCleaned[0].indexOf('订单 编号') > 0,
+    JSON.stringify(dirtyCleaned));
+
+  /* ---- quoteName：提示里"看不见的字符"必须转义成看得见的（等价于 Python repr）----
+     ★★ 这一组是**真机实测**才发现的缺口（DOM 桩测不出来）：只比 cleanName 会漏掉
+        展示函数这一半，于是 NBSP / 全角空格在提示里显示成普通空格
+        —— `'数量 (件)' → '数量 (件)'` 看着像"根本没改"，提示就失去意义了。
+     与 Python repr 的一致性已用 24 条用例逐字符比对过（23/24 相同，
+     唯一不同的是 U+3164 —— 那是**有意的改进**，Python 的 isprintable() 认它可打印）。 */
+  const Q = Headers.quoteName || function (x) { return String(x); };
+  ok('★ NBSP 转义显示（否则与普通空格无法区分）', Q('\u00a0') === "'\\xa0'", Q('\u00a0'));
+  ok('★ 全角空格转义显示', Q('\u3000') === "'\\u3000'", Q('\u3000'));
+  ok('★ 零宽空格转义显示', Q('\u200b') === "'\\u200b'", Q('\u200b'));
+  ok('★ BOM 转义显示', Q('\ufeff') === "'\\ufeff'", Q('\ufeff'));
+  ok('★ 谚文填充符转义显示（命令行版看不到，这里有意做得更清楚）',
+    Q('\u3164') === "'\\u3164'", Q('\u3164'));
+  ok('★ 反过来：普通空格**不**转义（它是可打印的，转义只会让提示变吵）',
+    Q(' ') === "' '", Q(' '));
+  ok('制表符 / 换行用短转义（与 Python repr 一致）',
+    Q('\t') === "'\\t'" && Q('\n') === "'\\n'", Q('\t') + ' ' + Q('\n'));
+  ok('中文正常显示（不被转义）', Q('订单') === "'订单'", Q('订单'));
+  ok('★ 含单引号时改用双引号包裹（照 Python 的规则）',
+    Q("O'Brien") === '"O\'Brien"', Q("O'Brien"));
+  ok('★ 单双引号都有时用单引号并转义内部单引号',
+    Q('a\'b"c') === "'a\\'b\"c'", Q('a\'b"c'));
+  ok('反斜杠转义', Q('C:\\path') === "'C:\\\\path'", Q('C:\\path'));
+  ok('数据换行被转义成 \\n 字面量（单行显示，不破坏行结构）',
+    Q('a\nb').indexOf('\n') < 0 && Q('a\nb') === "'a\\nb'", Q('a\nb'));
+  /* 连起来看：真机上那条"看起来没改"的提示，现在能看出差异了 */
+  const shown = Headers.changedNames(['数量\u00a0(件)'], ['数量 (件)'])[0];
+  ok('★ 真机缺陷回归：NBSP 列名的提示能看出前后差异',
+    shown.indexOf('\\xa0') > 0 && shown.indexOf('数量 (件)') > 0, shown);
+  ok('★ 产物里没有孤儿行（每行要么是注释要么是 SQL）',
+    dirty.sql.split('\n').filter(Boolean).every((l) =>
+      l.trimStart().indexOf('--') === 0 || /WITH|SELECT|UNION ALL|\)/.test(l)),
+    dirty.sql.split('\n').filter((l) => l && l.trimStart().indexOf('--') !== 0 &&
+      !/WITH|SELECT|UNION ALL|\)/.test(l)).join(' ¶ '));
+  /* ★ 判据要落在"这一行是否完整"上。
+     用「以某前缀开头的行数 == 1」是**假守卫**：注释被劈开时，前半行仍然以该前缀开头，
+     计数照样是 1 —— 实测确认（旧实现下这条会假绿）。 */
+  const colLine = dirty.sql.split('\n').find((l) => l.indexOf('-- 按字符串输出的列') === 0);
+  ok('★ 头注释未被劈开（整行列名清单都在一行内）',
+    colLine != null && colLine.endsWith('：订单 编号, 备注'), JSON.stringify(colLine));
+
+  /* ---- 纯不可见列名 → 空列 → col_N + 体检报出 ---- */
+  const invisibleHeader = [
+    [cellStr('订单编号'), cellStr('\u200b'), cellStr('\ufeff'), cellStr('x\u200by')],
+    [cellStr('A001'), { t: 'num', v: 2 }, { t: 'num', v: 3.5 }, cellStr('z')]
+  ];
+  const inv = SqlGen.buildSql(invisibleHeader, { dialect: Dialects.DIALECTS.sqlite, headerRow: 1 });
+  ok('★ 不可见列名补成 col_N', inv.header.join('|') === '订单编号|col_2|col_3|xy',
+    inv.header.join('|'));
+  ok('★ 并且作为"空列"报出来（不静默）',
+    inv.check.ok === false && inv.check.issues.some((s) => s.indexOf('为空') >= 0),
+    inv.check.issues.join('；'));
+
+  /* ---- 清洗后撞名：'订\n单' 与 '订 单' 都变成 '订 单' ---- */
+  const collide = SqlGen.buildSql([
+    [cellStr('订\n单'), cellStr('订 单'), cellStr('数量')],
+    [cellStr('A'), cellStr('B'), { t: 'num', v: 1 }]
+  ], { dialect: Dialects.DIALECTS.sqlite, headerRow: 1 });
+  ok('★ 清洗致重名 → 自动加后缀', collide.header.join('|') === '订 单|订 单_2|数量',
+    collide.header.join('|'));
+
+  /* ---- 硬边界：数据里的换行必须原样保留（只清洗表头） ---- */
+  const dataNl = SqlGen.buildSql([
+    [cellStr('订单编号'), cellStr('地址')],
+    [cellStr('A001'), cellStr('上海市\n浦东新区')]
+  ], { dialect: Dialects.DIALECTS.sqlite, headerRow: 1 });
+  ok('★ 数据换行保留：产物含 CHAR(10) 拼接',
+    dataNl.sql.indexOf("'上海市' || CHAR(10) || '浦东新区'") > 0,
+    dataNl.sql.split('\n').find((l) => l.indexOf('地址') > 0));
+  ok('★ 数据换行不报"已清洗"', dataNl.headerCleanedCount === 0);
+
+  /* ---- 干净表头：不该报"已清洗" ---- */
+  const cleanHdr = SqlGen.buildSql([
+    [cellStr('订单编号'), cellStr('数量')],
+    [cellStr('A001'), { t: 'num', v: 2 }]
+  ], { dialect: Dialects.DIALECTS.sqlite, headerRow: 1 });
+  ok('★ 干净表头不报清洗', cleanHdr.headerCleanedCount === 0 && cleanHdr.headerCleaned.length === 0);
+
+  /* ---- 库层兜底：即使调用方没清洗，注释也不能被劈开 ----
+     ★ 这条必须**直测 headerComments**：走 buildSql 的话 prepare 已经清洗过了，
+       兜底那几行根本执行不到，断言会变成假绿（实测：旧实现下"以某前缀开头的行数==1"
+       照样成立）。所以这里直接把带换行的表头喂给 headerComments。 */
+  const HC = typeof SqlGen.headerComments === 'function'
+    ? SqlGen.headerComments
+    : function () { return '（无 headerComments）\n'; };
+  const fbOpt = Object.assign(SqlGen.defaultOptions({}), {
+    dialect: Dialects.DIALECTS.sqlite, fmt: 'union', wrap: 'cte', allString: true
+  });
+  const fb = HC(['a\nb', 'c'], [[{ t: 'str', v: 'x' }]], [true, false], fbOpt);
+  ok('★ 库层兜底：注释里的换行被压成空格（原始换行名不出现）',
+    fb.indexOf('a\nb') < 0 && fb.indexOf('a b') > 0, JSON.stringify(fb));
+  ok('★ 库层兜底：每行都是完整注释（除末行换行外没有裸换行）',
+    fb.split('\n').filter(Boolean).every((l) => l.indexOf('-- ') === 0), JSON.stringify(fb));
+  ok('★ 库层兜底不折叠有意的多空格', fb.indexOf('SQLite   输出格式：union') > 0,
+    JSON.stringify(fb.split('\n')[1]));
+
+  /* ============ 16. 大表护栏 ============ */
+  section('16. 性能护栏');
   ok('UNION_ROW_WARN = 2000', SqlGen.UNION_ROW_WARN === 2000);
   ok('MAX_ROWS = 200000', SqlGen.MAX_ROWS === 200000);
   const plan = SqlGen.estimatePlan(30000, 'union');
   ok('3 万行给出两条提示', plan.notes.length === 2, JSON.stringify(plan.notes));
 
-  /* ============ 16. 方言解析别名 ============ */
-  section('16. 方言解析');
+  /* ============ 17. 方言解析别名 ============ */
+  section('17. 方言解析');
   ok('-d 1 -> SQL Server', Dialects.resolve('1').key === 'sqlserver');
   ok('-d pg -> PostgreSQL', Dialects.resolve('pg').key === 'postgresql');
   ok('-d sqlite3 -> SQLite', Dialects.resolve('sqlite3').key === 'sqlite');
@@ -376,16 +552,16 @@ async function main() {
   ok('★ 每个方言都有编号别名，且编号连续',
     Dialects.ORDER.every(function (k, i) { return Dialects.ALIASES[String(i + 1)] === k; }));
 
-  /* ============ 17. 转义安全（防注入破坏语句结构） ============ */
-  section('17. 标识符与字符串转义');
+  /* ============ 18. 转义安全（防注入破坏语句结构） ============ */
+  section('18. 标识符与字符串转义');
   const evil = [[{ t: 'str', v: "a] FROM x; DROP TABLE y; --" }],
                 [{ t: 'str', v: "b' OR '1'='1" }]];
   const evilSql = SqlGen.buildSql(evil, { dialect: Dialects.DIALECTS.sqlserver });
   ok('列名里的 ] 被双写', has(evilSql.sql, '[a]] FROM x; DROP TABLE y; --]'), evilSql.sql.split('\n')[4]);
   ok("字符串里的单引号被双写", has(evilSql.sql, "'b'' OR ''1''=''1'"));
 
-  /* ============ 18. utils.js 纯函数 ============ */
-  section('18. utils 工具函数');
+  /* ============ 19. utils.js 纯函数 ============ */
+  section('19. utils 工具函数');
   const utilSrc = readFileSync(join(JS, 'utils.js'), 'utf8');
   const Utils = new Function(utilSrc + '\n; return E2sUtils;')();
 
@@ -422,10 +598,10 @@ async function main() {
       === '示例_销售_明细_hardcode.sql',
     Utils.stemOf('示例.xlsx') + '_' + Utils.safeFileStem('销售 明细') + '_hardcode.sql');
 
-  /* ============ 19. app.js 与 index.html 的静态一致性 ============ */
+  /* ============ 20. app.js 与 index.html 的静态一致性 ============ */
   /* 这两块是纯静态检查，不需要 DOM —— 抓的是 "改 HTML 时忘了同步 app.js"
      这类静默失效：$('xxx') 拿到 null，报错却发生在很远的地方。 */
-  section('19. app.js / index.html 静态一致性');
+  section('20. app.js / index.html 静态一致性');
   const html = readFileSync(join(TOOL, 'index.html'), 'utf8');
   const appSrc = readFileSync(join(JS, 'app.js'), 'utf8');
 
