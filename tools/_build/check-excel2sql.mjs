@@ -99,6 +99,27 @@ async function main() {
   ok('稀疏行只保留有值的列（由 prepare 统一补齐到 ncols）',
     eRows[3].length === 2 && eRows[3][1].v === 3, 'length=' + eRows[3].length);
 
+  /* ============ 3b. 解析 DataGrip 风格夹具（无 r 属性 + 自闭合 <c/>） ============ */
+  section('3b. 解析 datagrip-style.xlsx（DataGrip 导出：行/格不写 r，空格为 <c/>）');
+  const dgBytes = new Uint8Array(readFileSync(join(TOOL, 'test-fixtures', 'datagrip-style.xlsx')));
+  const dg = await Readers.readXlsx(dgBytes);
+  const dgRows = dg[0].rows;
+
+  ok('sheet 名带空格（Result 1）', dg[0].name === 'Result 1', dg.map((s) => s.name).join(' / '));
+  ok('读到 2 个工作表', dg.length === 2, '实际 ' + dg.length);
+  ok('行号缺省按出现顺序补位（4 行全在，不再落 rows[-1] 丢表）',
+    dgRows.length === 4, '实际 ' + dgRows.length);
+  ok('表头 4 列正确', dgRows[0].map((c) => c && c.v).join('|') === '名称|数量|备注|编号',
+    JSON.stringify(dgRows[0].map((c) => c && c.v)));
+  ok('中间 <c/> 空格保位：行2 备注列为 null（不左移）',
+    dgRows[1][2] === null, JSON.stringify(dgRows[1].map((c) => c && c.v)));
+  ok('行2 编号列仍在第 4 列', dgRows[1][3] && dgRows[1][3].v === 'A001',
+    JSON.stringify(dgRows[1].map((c) => c && c.v)));
+  ok('t="n" 数字识别为 num', dgRows[1][1] && dgRows[1][1].t === 'num' && dgRows[1][1].v === 1);
+  ok('数量位 <c/> 空格保位：行4 第 2 列为 null',
+    dgRows[3][1] === null, JSON.stringify(dgRows[3].map((c) => c && c.v)));
+  ok('行4 编号取到 sharedStrings 正确值', dgRows[3][3] && dgRows[3][3].v === 'A003');
+
   /* ============ 4. 表头识别 ============ */
   section('4. 表头识别');
   const built = SqlGen.buildSql(bRows, { dialect: Dialects.DIALECTS.sqlserver });
