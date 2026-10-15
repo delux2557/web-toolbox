@@ -228,15 +228,20 @@ const E2sReaders = (function () {
       const dim = (xml.match(/<dimension\s+ref="([^"]*)"/) || [, ''])[1];
       const rows = [];
 
+      /* 行号 r 缺省时按出现顺序补位（DataGrip 导出的 <row> 不写 r 属性；
+         若用 0 兜底会落到 rows[-1]，整表丢失） */
       const rowRe = /<row[^>]*>([\s\S]*?)<\/row>/g;
       let rowM;
       while ((rowM = rowRe.exec(xml)) !== null) {
-        const rowIdx = Number((rowM[0].match(/\br="(\d+)"/) || [, 0])[1]);
+        const rowAttr = rowM[0].match(/\br="(\d+)"/);
+        const rowIdx = rowAttr ? Number(rowAttr[1]) : (rows.length + 1);
         const row = [];
-        const cellRe = /<c\s([^>]*?)(\/>|>([\s\S]*?)<\/c>)/g;
+        /* <c 后的空白可有可无：DataGrip 的空单元格写成自闭合 <c/>（无属性无空白），
+           旧正则 /<c\s…/ 匹配不到它，会把空格吞掉导致后续列整体左移 */
+        const cellRe = /<c(?:\s([^>]*?))?(\/>|>([\s\S]*?)<\/c>)/g;
         let cm;
         while ((cm = cellRe.exec(rowM[1])) !== null) {
-          const attrs = cm[1];
+          const attrs = cm[1] || '';
           const inner = cm[3] || '';
           const ref = (attrs.match(/r="([A-Z]+\d+)"/) || [])[1];
           const t = (attrs.match(/\bt="([^"]*)"/) || [])[1];
