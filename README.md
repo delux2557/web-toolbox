@@ -267,7 +267,7 @@ node tools/_build/check-portal-sync.mjs    # 退出码 0 = 一致，1 = 有漂�
 | `check-portal-sync.mjs` | 10 · 门户一致性 |
 | `code-workspace/tests/run-all.mjs` | 253 · 悬空引用 / 逻辑 / 接线 / 文档防过期 |
 | `json-format/tests/format.test.mjs` | 344 · 形态契约 / 报错定位 / 词法器 / 重复键（含线性度） / 高亮与参考线 / 渐进渲染 / 大结果视口化与「显示全部」 / 导入先出提示 / 主题外观契约 / 自动换行开关 / UI 冒烟 |
-| `check-excel2sql.mjs` | 192 · 解析 / 表头（识别·清洗·校验）/ 类型 / 五方言渲染 / 推断安全边界 / 静态一致性 |
+| `check-excel2sql.mjs` | 201 · 解析（openpyxl/Excel/DataGrip 三路）/ 表头（识别·清洗·校验）/ 类型 / 五方言渲染 / 推断安全边界 / 静态一致性 |
 | `check-excel2sql-ui.mjs` | 298 · DOM 桩下的界面接线与真实操作序列 + 静态契约（布局/对比度门槛） |
 | `build-single.mjs` | 传统单页内联产物 |
 | `table-helper/tests/parsers.test.mjs` | 72 · 形态契约 / CSV 边界（列数不一致、TSV、空表头） / JSON / HTML 工具函数（含 `colspan`、`pickLargestIndex`） / **Worker↔主线程逐字段一致（防两份实现漂移）** / 单文件产物契约（Worker 必须走 Blob） |
