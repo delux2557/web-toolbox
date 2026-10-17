@@ -534,6 +534,8 @@
         <li>每行一个 URL，支持批量；快捷键 <kbd>Ctrl</kbd> + <kbd>Enter</kbd> 快速解码。</li>
         <li>自动循环解码直到无 % 编码（最多 10 层，含定点保护，防止死循环）。</li>
         <li>自动提取 <kbd>viewlet</kbd> / <kbd>reportlet</kbd> 参数作为帆软文件路径，值若多层编码会二次解码。</li>
+        <li>参数值里的空格（<kbd>%20</kbd>）会原样保留，<kbd>2026Q1 sales summary draft.cpt</kbd> 不会被截成 <kbd>2026Q1</kbd>。</li>
+        <li>从网页源码 / 邮件里复制的链接，<kbd>&amp;amp;</kbd> 会自动还原成 <kbd>&amp;</kbd>；值里的 <kbd>+</kbd> 按表单约定当空格（字面加号请用 <kbd>%2B</kbd>）。</li>
         <li>单条 URL 显示解码过程，多条显示结果表格并支持 CSV 导出。</li>
         <li>成功 = 提取到路径；失败 = 未识别到参数（解码结果仍会展示，便于人工核对）。</li>
       </ul>
@@ -573,6 +575,18 @@ const MAX_DECODE = 10;
 const PREVIEW_LIMIT = 200;
 
 /* ---------- 解码核心 ---------- */
+/* 输入规范化：链接从网页源码 / 邮件 / 富文本里复制出来时常带 HTML 实体，
+   典型的是 &amp; 把参数分隔符写坏了（?a=1&amp;viewlet=... 会认不出 viewlet）。
+   只还原 & 相关实体，别的实体（&lt; 之类）留着不动，免得改坏路径里的参数值。 */
+function normalizeInput(s) {
+  let t = String(s);
+  for (let i = 0; i < 3; i++) {                 // 最多还原 3 层 &amp;amp;
+    const n = t.replace(/&amp;/gi, '&').replace(/&#0*38;/g, '&');
+    if (n === t) break;
+    t = n;
+  }
+  return t;
+}
 function safeDecodeOnce(s) {
   try { return decodeURIComponent(s); }
   catch (e) {
@@ -594,19 +608,38 @@ function decodeAll(raw) {
   }
   return { final: cur, steps };
 }
+/* 参数值解码：query 里的 + 按表单约定当空格（字面加号要写成 %2B）。
+   与 param-analysis 保持同一口径 —— 同一个链接在两个工具里必须给出同一个值。 */
+function decodeParamValue(v) {
+  let s = String(v).replace(/\+/g, ' ');
+  for (let k = 0; k < 4; k++) {                // 值本身可能仍多层编码
+    try { const d = decodeURIComponent(s); if (d === s) break; s = d; }
+    catch (e) { break; }
+  }
+  return s;
+}
 function extractViewlet(stages) {
-  for (let i = stages.length - 1; i >= 0; i--) {
-    const m = stages[i].match(/[?&](?:viewlet|reportlet)=([^&#\s]+)/i);
+  // 从「最接近原始输入」的一层开始找，命中即返回，只对参数值单独解码。
+  // 不能反过来从最解码的一层找：%20 已经变成真空格，正则里的 \s 会在第一个
+  // 空格处截断，2026Q1%20sales%20summary%20draft.cpt 就只剩 2026Q1。
+  for (let i = 0; i < stages.length; i++) {
+    // 值里允许出现空格（真空格由 %20 解码而来，不是分隔符；分隔符只有 & 和 #）
+    const m = stages[i].match(/[?&](?:viewlet|reportlet)=([^&#]*)/i);
     if (m) {
-      let v = m[1];
-      for (let k = 0; k < 4; k++) {            // 值本身可能仍多层编码
-        try { const d = decodeURIComponent(v); if (d === v) break; v = d; }
-        catch (e) { break; }
-      }
-      return v;
+      const v = m[1].trim();
+      if (!v) continue;                        // 形如 viewlet=&x=1，继续往后找
+      return decodeParamValue(v);
     }
   }
   return '';
+}
+
+/* 单条 URL 的完整分析（UI 与测试共用同一条路径，避免"测试版/生产版"漂移） */
+function analyzeOne(raw) {
+  const norm = normalizeInput(raw);
+  const { final, steps } = decodeAll(norm);
+  const path = extractViewlet(steps);
+  return { raw, norm, final, steps, path, ok: !!path };
 }
 
 /* ---------- 导入示例：示例数据常量 ---------- */
@@ -648,6 +681,10 @@ const inputBox = $('inputBox'), btnDecode = $('btnDecode'), btnReset = $('btnRes
   tipModal = $('tipModal'), btnTips = $('btnTips'), btnCloseModal = $('btnCloseModal'),
   exampleModal = $('exampleModal'), exampleList = $('exampleList'),
   exampleBanner = $('exampleBanner'),
+  // 这三个以前没声明，靠浏览器「id 自动成为全局变量」的遗留行为兜着；
+  // 换个运行环境（vm / 将来改成模块）就是 ReferenceError，显式声明掉。
+  btnExample = $('btnExample'), btnClearExample = $('btnClearExample'),
+  btnCloseExampleX = $('btnCloseExampleX'),
   toastEl = $('toast');
 
 let results = []; // { raw, final, steps, path, ok }
@@ -658,11 +695,7 @@ function doDecode() {
   const lines = inputBox.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   if (!lines.length) { toast('请输入至少一个 URL', 'warn'); return; }
 
-  results = lines.map(raw => {
-    const { final, steps } = decodeAll(raw);
-    const path = extractViewlet(steps);
-    return { raw, final, steps, path, ok: !!path };
-  });
+  results = lines.map(analyzeOne);
   emptyCard.hidden = true;
   render();
 }
@@ -690,7 +723,10 @@ function renderSingle(r) {
   r.steps.forEach((s, i) => {
     const row = document.createElement('div'); row.className = 'step';
     const badge = document.createElement('span'); badge.className = 'step-badge';
-    badge.textContent = (i === 0) ? '原始' : ('第 ' + i + ' 层');
+    // 输入里若有 &amp; 之类的 HTML 实体，步骤 0 展示的是还原后的串，标注一下免得看不出差别
+    badge.textContent = (i === 0)
+      ? (r.raw !== r.steps[0] ? '原始 · 已还原 HTML 实体' : '原始')
+      : ('第 ' + i + ' 层');
     const code = document.createElement('code'); code.className = 'step-text';
     code.textContent = s;
     row.appendChild(badge); row.appendChild(code);

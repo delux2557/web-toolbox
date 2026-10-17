@@ -527,6 +527,10 @@
         <span class="ex-hint">这是示例演示，帮你快速了解参数解析效果。</span>
         <button class="btn btn-ghost btn-sm" id="btnClearExample">清空输入</button>
       </div>
+      <div class="example-banner" id="autoNote" hidden>
+        <span class="ex-badge">已自动解码</span>
+        <span class="ex-hint">输入是一条被整体编码过的 URL（没有真正的 <code>?</code>），已先解一层再解析参数。</span>
+      </div>
       <div class="overview" id="overview"></div>
 
       <div class="table-wrap" id="detailWrap"><table id="detailTable"></table></div>
@@ -570,6 +574,7 @@
       <ul>
         <li>每行一个 URL，支持批量；快捷键 <kbd>Ctrl</kbd> + <kbd>Enter</kbd> 快速分析。</li>
         <li>每个参数值独立循环解码（最多 10 层，含定点保护），层数见「层数」列；查询串中的 <kbd>+</kbd> 按空格处理。</li>
+        <li>从网页源码 / 邮件里复制的链接，<kbd>&amp;amp;</kbd> 会自动还原成 <kbd>&amp;</kbd>；整条 URL 被编码过（没有真正的 <kbd>?</kbd> 但含 <kbd>%3F</kbd>）时会先解一层再解析，并在结果区给出提示。</li>
         <li>类型自动识别：嵌套 URL / 嵌套查询串 / JSON / 时间戳（换算可读时间）/ Base64 疑似。</li>
         <li><kbd>viewlet</kbd> / <kbd>reportlet</kbd> 参数高亮为帆软路径；重复参数名保留多行并标注「同名」。</li>
         <li>「参数宽表」视图：参数名取并集做列、每行一个 URL，便于横向对比与导出。</li>
@@ -612,6 +617,18 @@ const MAX_DECODE = 10;
 const PREVIEW_LIMIT = 200;
 
 /* ---------- 解码核心（+ 按空格处理） ---------- */
+/* 输入规范化：链接从网页源码 / 邮件 / 富文本里复制出来时常带 HTML 实体，
+   典型的是 &amp; 把参数分隔符写坏了（?a=1&amp;viewlet=... 会让参数名变成 amp;viewlet）。
+   只还原 & 相关实体，别的实体（&lt; 之类）留着不动，免得改坏参数值。 */
+function normalizeInput(s) {
+  let t = String(s);
+  for (let i = 0; i < 3; i++) {                 // 最多还原 3 层 &amp;amp;
+    const n = t.replace(/&amp;/gi, '&').replace(/&#0*38;/g, '&');
+    if (n === t) break;
+    t = n;
+  }
+  return t;
+}
 function safeDecodeOnce(s) {
   try { return decodeURIComponent(s); }
   catch (e) {
@@ -684,7 +701,17 @@ function detectType(v) {
 
 /* ---------- 单条 URL 分析 ---------- */
 function analyzeUrl(raw) {
-  const parts = splitUrl(raw);
+  const norm = normalizeInput(String(raw).trim());
+  // 兜底：整条 URL 被编码过一次（形如 https%3A%2F%2F...%3Fa%3D1）时，
+  // 原始串里根本没有真 ?，直接解析会静默得到 0 个参数且主机显示成一坨编码串。
+  // 这里只在「确实没有 ? 但存在 %3F」时解一层再解析，并为 UI 标记来源。
+  let src = norm, autoDecoded = false;
+  if (src.indexOf('?') < 0 && /%3f/i.test(src)) {
+    const once = safeDecodeOnce(src);
+    if (once !== src && once.indexOf('?') >= 0) { src = once; autoDecoded = true; }
+  }
+
+  const parts = splitUrl(src);
   const pairs = parts.query ? parts.query.split('&').filter(Boolean) : [];
   const keyCount = {};
 
@@ -710,7 +737,7 @@ function analyzeUrl(raw) {
     encoded: params.filter(p => p.layers > 0).length,
     nested: params.filter(p => ['url', 'query', 'json'].includes(p.type)).length
   };
-  return { raw, parts, params, stats };
+  return { raw, norm, src, autoDecoded, parts, params, stats };
 }
 
 /* ---------- 导入示例：示例数据常量 ---------- */
@@ -755,6 +782,11 @@ const inputBox = $('inputBox'), btnAnalyze = $('btnAnalyze'), btnReset = $('btnR
   tipModal = $('tipModal'), btnTips = $('btnTips'), btnCloseModal = $('btnCloseModal'),
   exampleModal = $('exampleModal'), exampleList = $('exampleList'),
   exampleBanner = $('exampleBanner'),
+  // 三个示例相关按钮以前没声明，靠浏览器「id 自动成为全局变量」的遗留行为兜着；
+  // 换个运行环境（vm / 将来改成模块）就是 ReferenceError，显式声明掉。
+  btnExample = $('btnExample'), btnClearExample = $('btnClearExample'),
+  btnCloseExampleX = $('btnCloseExampleX'),
+  autoNote = $('autoNote'),
   toastEl = $('toast');
 
 let results = [];       // AnalysisResult[]
@@ -796,6 +828,7 @@ function render() {
   if (viewMode === 'detail') renderDetail(cur);
   else renderWide();
   exampleBanner.hidden = !isExample;
+  autoNote.hidden = !cur.autoDecoded;
 }
 
 /* 结构概览（仅 textContent，防 XSS） */
