@@ -43,6 +43,15 @@ jobs:
       - name: json-format 全量校验
         run: node tools/json-format/tests/format.test.mjs
 
+      # 这两个工具共用一套"从 query 里取值"的逻辑，也是同一类事故的现场：
+      # 参数值里带空格（%20）、带编码过的 & / #、输入是 &amp; 实体、
+      # 或者整条 URL 被编码过一次 —— 全都会"不报错、结果悄悄错"。
+      - name: url-helper 路径提取校验（空格 / 多层编码 / &amp; 实体 / + 号）
+        run: node tools/url-helper/tests/extract.test.mjs
+
+      - name: param-analysis 参数解析校验（切分顺序 / 实体 / 整条编码兜底）
+        run: node tools/param-analysis/tests/analyze.test.mjs
+
       # excel2sql 的错误都属于"不报错、数据悄悄变样"那一类（表头判错会整行丢掉、
       # 超长整数被双精度改写末尾几位），所以分两层守：先说逻辑对不对，再说界面接没接上。
       - name: excel2sql 纯逻辑校验（解析 / 表头 / 类型 / 渲染）
