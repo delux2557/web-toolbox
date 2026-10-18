@@ -226,6 +226,43 @@ if (!uiErr) {
   ok("普通链接不显示『已自动解码』提示条", ui.reg.get("autoNote").hidden === true);
 }
 
+/* ============================================================
+ * [9] 图标与文案卫生（交付物层面的约束）
+ * ------------------------------------------------------------
+ * 守两件"看得见但逻辑测不到"的事：
+ *   ① 彩色 emoji 混进 UI —— 与单色界面冲突，且各平台字形不同。
+ *      ★ 只禁彩色 emoji 码位，不禁 ★ ⚠ ✓ ✗ 这些常驻注释与状态文案的单色符号。
+ *   ② sprite 的 <use href="#x"> 指向不存在的 <symbol id="x"> ——
+ *      这种错不报错、不抛异常，只是那个图标永远不显示。
+ * ============================================================ */
+console.log("\n[9] 图标与文案卫生");
+
+const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2B00}-\u{2BFF}\u{FE0F}\u{26AA}-\u{26AB}]/gu;
+const emojiHits = [...HTML.matchAll(EMOJI)].map(m => m[0]);
+ok("页面里没有彩色 emoji（会跟单色 UI 打架）", emojiHits.length === 0,
+   emojiHits.length ? "残留: " + [...new Set(emojiHits)].join(" ") : "");
+
+const symbols = new Set([...HTML.matchAll(/<symbol\s+id="(ic-[^"]+)"/g)].map(m => m[1]));
+const uses = [...HTML.matchAll(/<use\s+href="#(ic-[^"]+)"/g)].map(m => m[1]);
+ok("图标集里有 symbol 定义", symbols.size > 0, symbols.size);
+ok("页面确实在用这些图标（use 引用）", uses.length > 0, uses.length);
+const dangling = uses.filter(u => !symbols.has(u));
+ok("每个 <use> 都指向存在的 <symbol>（否则图标静默消失）", dangling.length === 0,
+   dangling.join(", "));
+
+/* 表格「类型」列现在是纯文字：说明本身已经讲清类型，不再叠图标。 */
+ok("类型识别不再返回 icon 字段（表格用文字说明）",
+   !/icon:\s*['"]/.test(HTML), "detectType 里仍有 icon");
+
+const btnTags = [...HTML.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)];
+const namelessBtns = btnTags.filter(([, attrs, inner]) => {
+  const text = inner.replace(/<svg[\s\S]*?<\/svg>/g, "").replace(/\s+/g, "");
+  const named = /\b(aria-label|title)\s*=\s*"[^"]+"/.test(attrs);
+  return text === "" && !named;
+});
+ok("没有「既无文字又无无障碍名称」的按钮", namelessBtns.length === 0,
+   "无名称按钮 " + namelessBtns.length + " 个");
+
 /* ============================================================ */
 console.log(`\n结果：${pass} 通过 / ${fail} 失败\n`);
 process.exit(fail ? 1 : 0);

@@ -90,6 +90,18 @@
   code, pre, kbd, textarea { font-family: var(--font-mono); }
   svg { display: block; }
 
+  /* ============ 内联图标 sprite ============
+     原先按钮里用的是彩色 emoji（放大镜 / 剪贴板 / 下载箭头 / 文档）：
+     一块饱和色像素压在单色 UI 上，观感突兀，且各平台 emoji 字形不一致。
+     改为单色描边图标，颜色随 currentColor。 */
+  .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+  .ico {
+    width: 15px; height: 15px; flex: none;
+    fill: none; stroke: currentColor;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .btn-sm .ico { width: 13px; height: 13px; }
+
   .bg-glow {
     position: fixed; inset: 0; z-index: -1; pointer-events: none;
     background:
@@ -283,11 +295,13 @@
   .badge-dup { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--border-strong); }
 
   .copy-btn {
+    display: inline-flex; align-items: center; justify-content: center;
     border: 1px solid var(--border-strong); background: var(--surface);
-    border-radius: var(--radius-s); padding: 3px 8px; cursor: pointer;
+    border-radius: var(--radius-s); padding: 4px 7px; cursor: pointer;
     font-size: 12px; color: var(--text-2);
     transition: background 140ms var(--ease-out), color 140ms var(--ease-out);
   }
+  .copy-btn .ico { width: 13px; height: 13px; }
   .copy-btn:hover { background: var(--surface-2); color: var(--text); }
 
   .preview-note { font-size: 12px; color: var(--text-3); padding: 10px 0 0; }
@@ -437,6 +451,31 @@
 </script>
 </head>
 <body>
+<!-- 图标集（内联 sprite，零外部依赖）：24×24 描边，用 <use href="#id"> 引用 -->
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="7"/>
+    <path d="M20.5 20.5 16 16"/>
+  </symbol>
+  <symbol id="ic-rotate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 12a9 9 0 1 0 9-9c-2.52 0-4.93 1.03-6.71 2.71L3 8"/>
+    <path d="M3 3v5h5"/>
+  </symbol>
+  <symbol id="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="8" y="8" width="13" height="13" rx="2"/>
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+  </symbol>
+  <symbol id="ic-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3"/>
+    <path d="M7 10l5 5 5-5"/>
+    <path d="M12 15V3"/>
+  </symbol>
+  <symbol id="ic-braces" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1"/>
+    <path d="M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1"/>
+  </symbol>
+</svg>
+
 <div class="bg-glow" aria-hidden="true"></div>
 
 <header class="topbar">
@@ -494,8 +533,8 @@
       <div class="input-row">
         <textarea id="inputBox" placeholder="每行一个 URL，或点上方「加载示例」快速体验…"></textarea>
         <div class="btn-col">
-          <button class="btn btn-primary" id="btnAnalyze">🔎 分析</button>
-          <button class="btn btn-ghost" id="btnReset">↺ 重置</button>
+          <button class="btn btn-primary" id="btnAnalyze"><svg class="ico" aria-hidden="true"><use href="#ic-search"/></svg>分析</button>
+          <button class="btn btn-ghost" id="btnReset"><svg class="ico" aria-hidden="true"><use href="#ic-rotate"/></svg>重置</button>
         </div>
       </div>
     </div>
@@ -538,10 +577,10 @@
       <div class="preview-note" id="previewNote" hidden></div>
 
       <div class="export-bar">
-        <span class="label">📤 导出：</span>
-        <button class="btn btn-success" id="btnDownload">⬇️ 下载 CSV</button>
-        <button class="btn btn-ghost" id="btnCopyCsv">📋 复制 CSV</button>
-        <button class="btn btn-ghost" id="btnCopyJson">📄 复制 JSON</button>
+        <span class="label">导出：</span>
+        <button class="btn btn-success" id="btnDownload"><svg class="ico" aria-hidden="true"><use href="#ic-download"/></svg>下载 CSV</button>
+        <button class="btn btn-ghost" id="btnCopyCsv"><svg class="ico" aria-hidden="true"><use href="#ic-copy"/></svg>复制 CSV</button>
+        <button class="btn btn-ghost" id="btnCopyJson"><svg class="ico" aria-hidden="true"><use href="#ic-braces"/></svg>复制 JSON</button>
         <span class="export-note">CSV 跟随当前视图（明细 / 宽表）：UTF-8 编码（下载含 BOM），字段自动转义，Excel 可直接打开。</span>
       </div>
     </div>
@@ -686,17 +725,20 @@ function fmtTs(ms) {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
          p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
 }
+/* 类型识别。
+   ★ 这里**故意不带图标**：说明文字本身已经把这个类型讲清楚了（「嵌套 URL」「时间戳(秒) · …」），
+     再叠一个 emoji 只会让数据列变成彩色表情墙。表格里用文字，界面按钮才用图标。 */
 function detectType(v) {
-  if (v === '') return { type: 'empty', icon: '⚪', note: '空值' };
-  if (/^https?:\/\//i.test(v) || v.startsWith('//')) return { type: 'url', icon: '🌐', note: '嵌套 URL' };
+  if (v === '') return { type: 'empty', note: '空值' };
+  if (/^https?:\/\//i.test(v) || v.startsWith('//')) return { type: 'url', note: '嵌套 URL' };
   if (/^[{\[]/.test(v)) {
-    try { JSON.parse(v); return { type: 'json', icon: '📄', note: 'JSON' }; } catch (e) {}
+    try { JSON.parse(v); return { type: 'json', note: 'JSON' }; } catch (e) {}
   }
-  if (/^\d{10}$/.test(v)) return { type: 'ts', icon: '🕒', note: '时间戳(秒) · ' + fmtTs(v * 1000) };
-  if (/^\d{13}$/.test(v)) return { type: 'ts', icon: '🕒', note: '时间戳(毫秒) · ' + fmtTs(+v) };
-  if (v.includes('&') && v.includes('=')) return { type: 'query', icon: '🧩', note: '嵌套查询串' };
-  if (/^[A-Za-z0-9+/=_-]{20,}$/.test(v) && v.length % 4 === 0) return { type: 'b64', icon: '🔐', note: 'Base64 疑似' };
-  return { type: 'text', icon: '—', note: '普通文本' };
+  if (/^\d{10}$/.test(v)) return { type: 'ts', note: '时间戳(秒) · ' + fmtTs(v * 1000) };
+  if (/^\d{13}$/.test(v)) return { type: 'ts', note: '时间戳(毫秒) · ' + fmtTs(+v) };
+  if (v.includes('&') && v.includes('=')) return { type: 'query', note: '嵌套查询串' };
+  if (/^[A-Za-z0-9+/=_-]{20,}$/.test(v) && v.length % 4 === 0) return { type: 'b64', note: 'Base64 疑似' };
+  return { type: 'text', note: '普通文本' };
 }
 
 /* ---------- 单条 URL 分析 ---------- */
@@ -729,7 +771,7 @@ function analyzeUrl(raw) {
     p.dup = keyCount[p.key] > 1;
     p.fanruan = /^(viewlet|reportlet)$/i.test(p.key);
     const t = detectType(p.final);
-    p.type = t.type; p.icon = t.icon; p.note = t.note;
+    p.type = t.type; p.note = t.note;
   });
 
   const stats = {
@@ -885,11 +927,12 @@ function renderDetail(cur) {
     const c2 = document.createElement('td'); c2.textContent = p.raw; if (p.layers === 0) c2.classList.add('cell-muted');
     const c3 = document.createElement('td'); c3.textContent = p.final;
     const c4 = document.createElement('td'); c4.textContent = p.layers; if (p.layers === 0) c4.classList.add('cell-muted');
-    const c5 = document.createElement('td'); c5.textContent = p.icon + ' ' + p.note;
+    const c5 = document.createElement('td'); c5.textContent = p.note;
 
     const c6 = document.createElement('td');
     const btn = document.createElement('button');
-    btn.className = 'copy-btn'; btn.textContent = '📋';
+    btn.className = 'copy-btn';
+    btn.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#ic-copy"/></svg>';
     btn.title = '复制解码后值'; btn.dataset.idx = String(i);
     c6.appendChild(btn);
 

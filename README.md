@@ -203,8 +203,8 @@ node tools/table-helper/tests/parsers.test.mjs
 第一个空格就成了边界。断言就是照着这个现场写的：
 
 ```bash
-node tools/url-helper/tests/extract.test.mjs       # 39 · 路径提取 + UI 冒烟
-node tools/param-analysis/tests/analyze.test.mjs   # 54 · 参数解析 + UI 冒烟
+node tools/url-helper/tests/extract.test.mjs       # 44 · 路径提取 + UI 冒烟 + 图标文案卫生
+node tools/param-analysis/tests/analyze.test.mjs   # 60 · 参数解析 + UI 冒烟 + 图标文案卫生
 ```
 
 - **形态契约一致**：沿用 json-format 的做法，把 `index.html` 里的解析核心抠进 `vm` 里跑，
@@ -221,6 +221,11 @@ node tools/param-analysis/tests/analyze.test.mjs   # 54 · 参数解析 + UI 冒
   浏览器靠「`id` 自动成为全局变量」的遗留行为替它兜着。真实浏览器里能跑，所以一直没人发现；
   可一旦有人改掉那个 `id`，表现就是"整页点了没反应"，比报错难查一个量级。
   现在它被显式声明，且这条冒烟会一直盯着这类"能跑但没根基"的写法。
+- **图标文案卫生也是同一类"能跑但错"的坑**：按钮图标从彩色 emoji 换成了内联 SVG sprite，
+  守三条断言 —— ① 页面里不许出现彩色 emoji（在单色 UI 上会出现一块饱和色像素，
+  且各平台字形不同）；② 每个 `<use href="#ic-x">` 必须指向存在的 `<symbol id="ic-x">`，
+  悬空引用**不报错也不抛异常**、只是那个图标永远不显示；③ 按钮要么有文字、
+  要么有 `aria-label`/`title`，否则读屏念不出来。三条都用变异验证过确实会红。
 
 ### 反向实验（mutation testing）：Excel / CSV 转 SQL
 
@@ -306,8 +311,8 @@ node tools/_build/check-portal-sync.mjs    # 退出码 0 = 一致，1 = 有漂�
 | `check-excel2sql.mjs` | 201 · 解析（openpyxl/Excel/DataGrip 三路）/ 表头（识别·清洗·校验）/ 类型 / 五方言渲染 / 推断安全边界 / 静态一致性 |
 | `check-excel2sql-ui.mjs` | 298 · DOM 桩下的界面接线与真实操作序列 + 静态契约（布局/对比度门槛） |
 | `build-single.mjs` | 传统单页内联产物 |
-| `url-helper/tests/extract.test.mjs` | 39 · 形态契约与切片边界 / **路径值里的 %20 空格与裸空格不被截断** / 多层编码 / `%26`·`%23` 分隔符边界 / **`&amp;`·`&#38;` 实体** / `+` 与 `%2B` 口径 / 「没有就是没有」 / **UI 冒烟（DOM 桩，防隐式全局）** |
-| `param-analysis/tests/analyze.test.mjs` | 54 · 形态契约 / 真实事故链路 / 参数值边界（`%26`·`%23`·`%3F`·base64 `==`） / **`&amp;` 不让参数名变 `amp;viewlet`** / **整条 URL 编码兜底（不静默 0 参数）** / 结构·统计 / `+` 口径与 url-helper 一致 / **UI 冒烟（DOM 桩，防隐式全局）** |
+| `url-helper/tests/extract.test.mjs` | 44 · 形态契约与切片边界 / **路径值里的 %20 空格与裸空格不被截断** / 多层编码 / `%26`·`%23` 分隔符边界 / **`&amp;`·`&#38;` 实体** / `+` 与 `%2B` 口径 / 「没有就是没有」 / **UI 冒烟（DOM 桩，防隐式全局）** / **图标文案卫生（无彩色 emoji、`<use>` 不悬空、按钮有可读名称）** |
+| `param-analysis/tests/analyze.test.mjs` | 60 · 形态契约 / 真实事故链路 / 参数值边界（`%26`·`%23`·`%3F`·base64 `==`） / **`&amp;` 不让参数名变 `amp;viewlet`** / **整条 URL 编码兜底（不静默 0 参数）** / 结构·统计 / `+` 口径与 url-helper 一致 / **UI 冒烟（DOM 桩，防隐式全局）** / **图标文案卫生（同上）** |
 | `table-helper/tests/parsers.test.mjs` | 72 · 形态契约 / CSV 边界（列数不一致、TSV、空表头） / JSON / HTML 工具函数（含 `colspan`、`pickLargestIndex`） / **Worker↔主线程逐字段一致（防两份实现漂移）** / 单文件产物契约（Worker 必须走 Blob） |
 | `build-snapshot.mjs` | SPA 快照（codebase-context / code-workspace / ppt-player） |
 | `verify-snapshot.mjs` | 19 · 快照产物在 vm 里真跑一遍 |

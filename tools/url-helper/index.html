@@ -88,6 +88,19 @@
   code, pre, kbd, textarea { font-family: var(--font-mono); }
   svg { display: block; }
 
+  /* ============ 内联图标 sprite ============
+     原先按钮里用的是彩色 emoji（锁 / 剪贴板 / 下载箭头 / 文件夹）：
+     在近黑按钮上会出现一块饱和的橙、蓝像素，观感与整套单色 UI 冲突，
+     而且各平台 emoji 字形不一致（Windows 是 Segoe UI Emoji，macOS 是 Apple Emoji）。
+     改用单色描边图标，颜色由所在元素的 color 决定（currentColor），永远跟着主题走。 */
+  .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+  .ico {
+    width: 15px; height: 15px; flex: none;
+    fill: none; stroke: currentColor;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .btn-sm .ico { width: 13px; height: 13px; }
+
   .bg-glow {
     position: fixed; inset: 0; z-index: -1; pointer-events: none;
     background:
@@ -405,6 +418,31 @@
 </script>
 </head>
 <body>
+<!-- 图标集（内联 sprite，零外部依赖）：24×24 描边，用 <use href="#id"> 引用 -->
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="ic-unlock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="11" width="16" height="9.5" rx="2.5"/>
+    <path d="M8 11V7a4 4 0 0 1 7.9-.8"/>
+    <path d="M12 15.2v1.6"/>
+  </symbol>
+  <symbol id="ic-rotate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 12a9 9 0 1 0 9-9c-2.52 0-4.93 1.03-6.71 2.71L3 8"/>
+    <path d="M3 3v5h5"/>
+  </symbol>
+  <symbol id="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="8" y="8" width="13" height="13" rx="2"/>
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+  </symbol>
+  <symbol id="ic-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3"/>
+    <path d="M7 10l5 5 5-5"/>
+    <path d="M12 15V3"/>
+  </symbol>
+  <symbol id="ic-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
+  </symbol>
+</svg>
+
 <div class="bg-glow" aria-hidden="true"></div>
 
 <header class="topbar">
@@ -455,8 +493,8 @@
       <div class="input-row">
         <textarea id="inputBox" placeholder="每行一个 URL，或点上方「加载示例」快速体验…"></textarea>
         <div class="btn-col">
-          <button class="btn btn-primary" id="btnDecode">🔓 解码</button>
-          <button class="btn btn-ghost" id="btnReset">↺ 重置</button>
+          <button class="btn btn-primary" id="btnDecode"><svg class="ico" aria-hidden="true"><use href="#ic-unlock"/></svg>解码</button>
+          <button class="btn btn-ghost" id="btnReset"><svg class="ico" aria-hidden="true"><use href="#ic-rotate"/></svg>重置</button>
         </div>
       </div>
     </div>
@@ -487,7 +525,7 @@
         <div class="path-row">
           <span class="path-label">帆软文件路径：</span>
           <code class="path-value" id="pathValue">—</code>
-          <button class="btn btn-ghost btn-sm" id="btnCopyPath">📋 复制</button>
+          <button class="btn btn-ghost btn-sm" id="btnCopyPath"><svg class="ico" aria-hidden="true"><use href="#ic-copy"/></svg>复制</button>
         </div>
       </div>
 
@@ -496,10 +534,10 @@
         <div class="table-wrap"><table id="resultTable"></table></div>
         <div class="preview-note" id="previewNote" hidden></div>
         <div class="export-bar">
-          <span class="label">📤 导出：</span>
-          <button class="btn btn-success" id="btnDownload">⬇️ 下载 CSV</button>
-          <button class="btn btn-ghost" id="btnCopyCsv">📋 复制 CSV</button>
-          <button class="btn btn-ghost" id="btnCopyPaths">📁 仅复制路径</button>
+          <span class="label">导出：</span>
+          <button class="btn btn-success" id="btnDownload"><svg class="ico" aria-hidden="true"><use href="#ic-download"/></svg>下载 CSV</button>
+          <button class="btn btn-ghost" id="btnCopyCsv"><svg class="ico" aria-hidden="true"><use href="#ic-copy"/></svg>复制 CSV</button>
+          <button class="btn btn-ghost" id="btnCopyPaths"><svg class="ico" aria-hidden="true"><use href="#ic-folder"/></svg>仅复制路径</button>
           <span class="export-note">CSV：UTF-8 编码（下载含 BOM），字段自动转义，Excel 可直接打开。</span>
         </div>
       </div>
