@@ -215,6 +215,44 @@ if (!uiErr) {
   ok("首步标签是『原始』", steps[0].children[0].textContent === "原始");
 }
 
+/* ============================================================
+ * [9] 图标与文案卫生（交付物层面的约束）
+ * ------------------------------------------------------------
+ * 这节守的是"看得见但测不到"的两件事：
+ *   ① 彩色 emoji 混进 UI。它与单色界面冲突，且各平台字形不同，
+ *      属于"改完截图才发现"的那类问题。
+ *   ② sprite 的 <use href="#x"> 指向不存在的 <symbol id="x">。
+ *      这种错**不报错、不抛异常**，只是那个图标永远不显示 ——
+ *      正是本仓库反复强调的"不报错但结果是错的"。
+ * ============================================================ */
+console.log("\n[9] 图标与文案卫生");
+
+/* 只禁「彩色 emoji」这几段码位。
+   刻意不禁 ★ ⚠ ✓ ✗ ↺ —— 它们是常驻在注释与状态文案里的单色符号。 */
+const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2B00}-\u{2BFF}\u{FE0F}\u{26AA}-\u{26AB}]/gu;
+const emojiHits = [...HTML.matchAll(EMOJI)].map(m => m[0]);
+ok("页面里没有彩色 emoji（会跟单色 UI 打架）", emojiHits.length === 0,
+   emojiHits.length ? "残留: " + [...new Set(emojiHits)].join(" ") : "");
+
+const symbols = new Set([...HTML.matchAll(/<symbol\s+id="(ic-[^"]+)"/g)].map(m => m[1]));
+const uses = [...HTML.matchAll(/<use\s+href="#(ic-[^"]+)"/g)].map(m => m[1]);
+ok("图标集里有 symbol 定义", symbols.size > 0, symbols.size);
+ok("页面确实在用这些图标（use 引用）", uses.length > 0, uses.length);
+const dangling = uses.filter(u => !symbols.has(u));
+ok("每个 <use> 都指向存在的 <symbol>（否则图标静默消失）", dangling.length === 0,
+   dangling.join(", "));
+
+/* 图标只是装饰：按钮要么有自己的文字，要么有无障碍名称（aria-label / title）。
+   顶部那两个纯图标按钮（提示 / 主题切换）走 aria-label 这条路，是合规的。 */
+const btnTags = [...HTML.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)];
+const namelessBtns = btnTags.filter(([, attrs, inner]) => {
+  const text = inner.replace(/<svg[\s\S]*?<\/svg>/g, "").replace(/\s+/g, "");
+  const named = /\b(aria-label|title)\s*=\s*"[^"]+"/.test(attrs);
+  return text === "" && !named;
+});
+ok("没有「既无文字又无无障碍名称」的按钮", namelessBtns.length === 0,
+   "无名称按钮 " + namelessBtns.length + " 个");
+
 /* ============================================================ */
 console.log(`\n结果：${pass} 通过 / ${fail} 失败\n`);
 process.exit(fail ? 1 : 0);
