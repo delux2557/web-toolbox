@@ -259,6 +259,10 @@
     border: 1px solid var(--border); border-radius: var(--radius-m);
     background: var(--surface);
   }
+  /* 有 JSON 面板展开时放开高度限制。
+     否则 60vh 的可滚动容器会把展开出来的面板裁在下面 —— 点了"展开"却看不见东西。
+     代价是此时表头不再吸顶（容器不再滚动），换来的是面板完整可见，值得。 */
+  .table-wrap.grow { max-height: none; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   thead th {
     position: sticky; top: 0; z-index: 2;
@@ -282,10 +286,29 @@
   #detailTable tbody td:nth-child(5) {
     text-align: right; font-variant-numeric: tabular-nums;
   }
+  /* 定住四列的宽度比例。
+     实测：不设约束时一整段 JSON 的原始值会把「原始值」列撑到 646px，把「解码后值」
+     挤到 97px —— 摘要只剩三四个字一行。给了比例之后是 330 / 264，两边都能读。
+     第 6 列也要给够：类型说明里带时间戳，太窄会从 `2026-10-19 1` / `0:25:47` 这种
+     地方硬断（176px 时正好在空格处断成两行）。
+     配合 tbody td 的 word-break: break-all，长值只会往下换行、不再横向抢宽度。 */
+  #detailTable thead th:nth-child(2) { width: 13%; }
+  #detailTable thead th:nth-child(3) { width: 30%; }
+  #detailTable thead th:nth-child(4) { width: 24%; }
+  #detailTable thead th:nth-child(6) { width: 16%; }
   tbody tr:nth-child(even) { background: var(--surface-2); }
   tbody tr:hover { background: var(--accent-soft); }
   tr.row-fanruan td { background: var(--success-soft); }
   .cell-muted { color: var(--text-3); }
+
+  /* 超长值（典型是整段 JSON 的百分号编码）铺开来就是十几行，把那一行撑得比
+     下面的面板还高，列宽也被它抢光。默认压成 3 行，点一下才展开全文。
+     ★ 只是**视觉折叠**：文本仍在 DOM 里，能选中、能搜索、导出 CSV 也仍是全文。 */
+  .raw-clip { display: -webkit-box; -webkit-box-orient: vertical;
+              -webkit-line-clamp: 3; overflow: hidden; }
+  td.raw-cell { cursor: zoom-in; }
+  td.raw-cell.raw-open { cursor: zoom-out; }
+  td.raw-cell.raw-open .raw-clip { display: block; -webkit-line-clamp: unset; overflow: visible; }
 
   .badge {
     display: inline-block; margin-left: 6px; padding: 1px 7px;
@@ -303,6 +326,97 @@
   }
   .copy-btn .ico { width: 13px; height: 13px; }
   .copy-btn:hover { background: var(--surface-2); color: var(--text); }
+
+  /* ============ JSON 参数面板 ============
+     __parameters__ 这类参数解码后常常是几百字符的 JSON。整段铺进一个 <td>，
+     想找某个键就只能靠肉眼在那团文本里扫。
+     这里改成：单元格里只放摘要，展开后在下一行给一块**全宽**面板 ——
+     键值成表，并按「业务 / 容器框架」分组，容器组默认收起。
+     分组规则是启发式的，所以它**只决定默认是否折叠，不影响数据可达性**：
+     收起的组随时能一键展开，也能被搜索命中。 */
+  .json-sum { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .json-sum .meta { font-size: 12px; color: var(--text-3); font-family: var(--font-mono); }
+  .json-open {
+    display: inline-flex; align-items: center; gap: 4px;
+    height: 24px; padding: 0 9px; border-radius: 7px; cursor: pointer;
+    font-size: 12px; font-weight: 600; color: var(--text-2);
+    background: var(--surface); border: 1px solid var(--border-strong);
+  }
+  .json-open:hover { background: var(--surface-2); color: var(--text); }
+  .chevo {
+    width: 12px; height: 12px; flex: none;
+    fill: none; stroke: currentColor; stroke-width: 2.2;
+    stroke-linecap: round; stroke-linejoin: round;
+    transition: transform 140ms var(--ease-out);
+  }
+  .json-open[aria-expanded="true"] .chevo { transform: rotate(180deg); }
+
+  /* 展开行要清掉表格通用样式：它不该继承斑马纹、hover 高亮、首列 54px 窄宽 */
+  tr.json-detail > td {
+    width: auto; padding: 0; text-align: left; color: var(--text);
+    background: var(--surface); word-break: normal;
+  }
+  tr.json-detail, tr.json-detail:hover, tr.json-detail:nth-child(even) { background: transparent; }
+  tr.json-detail.json-off { display: none; }
+
+  .json-panel { border-top: 1px solid var(--border); background: var(--surface-2); }
+  .json-head {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+  }
+  .json-name { font-family: var(--font-mono); font-size: 13px; font-weight: 650; }
+  .json-tag {
+    font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent-strong);
+  }
+  .json-meta { font-size: 12px; color: var(--text-3); font-family: var(--font-mono); }
+  .json-head .grow { flex: 1; }
+  .json-body { padding: 12px 14px 14px; }
+  .json-search {
+    width: 100%; height: 32px; padding: 0 11px; margin-bottom: 10px;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--code-bg); color: var(--text); outline: none;
+    font-family: var(--font-mono); font-size: 12.5px;
+  }
+  .json-search:focus { border-color: var(--accent-strong); box-shadow: 0 0 0 3px var(--focus-ring); }
+  .json-raw {
+    margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--code-bg); color: var(--text-2);
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.6;
+    max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+  }
+  .grp + .grp { margin-top: 12px; }
+  .grp-head {
+    display: flex; align-items: center; gap: 7px; width: 100%;
+    padding: 6px 2px; cursor: pointer; text-align: left;
+    background: none; border: none; font-family: inherit;
+  }
+  .grp-head:hover .grp-name { color: var(--accent-strong); }
+  .grp.closed .chevo { transform: rotate(-90deg); }
+  .grp-name { font-size: 13px; font-weight: 650; color: var(--text); }
+  .grp-cnt { font-size: 12px; color: var(--text-3); font-family: var(--font-mono); }
+  .grp.closed .grp-body { display: none; }
+
+  table.kv { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+  table.kv td { padding: 7px 9px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.kv tr:last-child td { border-bottom: none; }
+  /* ★ kv 表是嵌在明细表 tbody 里的，会吃到上面那几条「通用表格」规则：
+     首列被居中、还被改成次要灰色，偶数行再叠一层斑马纹。
+     面板里已有一像素分隔线，斑马纹只会更吵；键名是主内容，不该比值更淡。逐条改回来。 */
+  table.kv tbody tr:nth-child(even) { background: transparent; }
+  table.kv tr:hover td { background: var(--accent-soft); }
+  table.kv td.k {
+    width: 34%; font-family: var(--font-mono);
+    text-align: left; color: var(--text);
+    /* 通用首列规则把 word-break 钉成了 normal !important，这里必须同权重压回去，
+       否则没有断点的长键名会直接溢出单元格 */
+    word-break: break-all !important;
+  }
+  table.kv td.v { width: 46%; font-family: var(--font-mono); word-break: break-all; color: var(--text-2); }
+  table.kv td.t { width: 20%; text-align: right; white-space: nowrap; }
+  .json-type { font-size: 11px; color: var(--text-3); font-family: var(--font-sans); margin-right: 6px; }
+  .json-null { color: var(--text-3); font-style: italic; }
+  .clip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .preview-note { font-size: 12px; color: var(--text-3); padding: 10px 0 0; }
 
@@ -473,6 +587,9 @@
   <symbol id="ic-braces" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1"/>
     <path d="M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1"/>
+  </symbol>
+  <symbol id="ic-chevo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 9l6 6 6-6"/>
   </symbol>
 </svg>
 
@@ -727,18 +844,68 @@ function fmtTs(ms) {
 }
 /* 类型识别。
    ★ 这里**故意不带图标**：说明文字本身已经把这个类型讲清楚了（「嵌套 URL」「时间戳(秒) · …」），
-     再叠一个 emoji 只会让数据列变成彩色表情墙。表格里用文字，界面按钮才用图标。 */
+     再叠一个 emoji 只会让数据列变成彩色表情墙。表格里用文字，界面按钮才用图标。
+   ★ type 为 json 时把**已解析的值**一并带出去：调用方要用它建键值面板，
+     JSON.parse 只做一次。 */
 function detectType(v) {
   if (v === '') return { type: 'empty', note: '空值' };
   if (/^https?:\/\//i.test(v) || v.startsWith('//')) return { type: 'url', note: '嵌套 URL' };
   if (/^[{\[]/.test(v)) {
-    try { JSON.parse(v); return { type: 'json', note: 'JSON' }; } catch (e) {}
+    try { const val = JSON.parse(v); return { type: 'json', note: 'JSON', value: val }; } catch (e) {}
   }
   if (/^\d{10}$/.test(v)) return { type: 'ts', note: '时间戳(秒) · ' + fmtTs(v * 1000) };
   if (/^\d{13}$/.test(v)) return { type: 'ts', note: '时间戳(毫秒) · ' + fmtTs(+v) };
   if (v.includes('&') && v.includes('=')) return { type: 'query', note: '嵌套查询串' };
   if (/^[A-Za-z0-9+/=_-]{20,}$/.test(v) && v.length % 4 === 0) return { type: 'b64', note: 'Base64 疑似' };
   return { type: 'text', note: '普通文本' };
+}
+
+/* ---------- JSON 参数：摊平 / 分组 / 过滤 ---------- */
+
+/* 「容器与框架注入的键」识别规则。
+   ★ 这是**启发式**：判错的代价只是「默认收起来」或「默认展开」，不影响数据能否拿到 ——
+     被收起的组随时能一键展开，也能被搜索命中。所以宁可写得保守，
+     只认已经在真实链接里观察到的几类，不做宽泛猜测。 */
+const INFRA_KEY_RE = /^(?:JAVAX\.|ORG\.APACHE\.|__[A-Za-z0-9_]+__$|REF_[A-Za-z0-9_]+$|FINE_DIGITAL_SIGNATURE$)/i;
+
+function isInfraKey(k) { return INFRA_KEY_RE.test(String(k)); }
+
+/* 把 JSON 摊成 [{key, value}]。数组用下标当键，保持出现顺序。 */
+function jsonEntries(val) {
+  if (Array.isArray(val)) return val.map((v, i) => ({ key: String(i), value: v }));
+  if (val && typeof val === 'object') return Object.keys(val).map(k => ({ key: k, value: val[k] }));
+  return [];
+}
+
+/* 拆成「业务」与「容器框架」两组，各自保持原顺序。 */
+function groupJsonEntries(val) {
+  const biz = [], infra = [];
+  jsonEntries(val).forEach(e => (isInfraKey(e.key) ? infra : biz).push(e));
+  return { biz, infra };
+}
+
+/* 值的类型标签。★ 值本身按 JSON 字面形态渲染（字符串带引号）就是第一层类型信号，
+   这段文字是第二层 —— 只靠颜色区分类型对色觉障碍不友好。 */
+function jsonTypeLabel(v) {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return '数组 ' + v.length + ' 项';
+  const t = typeof v;
+  if (t === 'string') return v === '' ? '空字符串' : '字符串 ' + v.length + ' 字符';
+  if (t === 'number') return Number.isInteger(v) ? '整数' : '小数';
+  if (t === 'boolean') return '布尔';
+  if (t === 'object') return '对象 ' + Object.keys(v).length + ' 键';
+  return t;
+}
+
+/* 搜索命中：空查询恒真；否则键名或值的字面串里包含即命中。 */
+function jsonEntryMatches(entry, q) {
+  if (!q) return true;
+  const needle = String(q).toLowerCase();
+  if (String(entry.key).toLowerCase().indexOf(needle) >= 0) return true;
+  const v = entry.value;
+  const flat = v === null ? 'null'
+    : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+  return flat.toLowerCase().indexOf(needle) >= 0;
 }
 
 /* ---------- 单条 URL 分析 ---------- */
@@ -772,6 +939,12 @@ function analyzeUrl(raw) {
     p.fanruan = /^(viewlet|reportlet)$/i.test(p.key);
     const t = detectType(p.final);
     p.type = t.type; p.note = t.note;
+    // JSON 参数额外摊平成键值列表，供面板渲染。
+    // 摊平结果为空（{} / []）时不挂面板 —— 否则会给出一个点开什么都没有的入口。
+    if (t.type === 'json') {
+      const entries = jsonEntries(t.value);
+      if (entries.length) { p.jsonValue = t.value; p.jsonEntries = entries; }
+    }
   });
 
   const stats = {
@@ -780,6 +953,194 @@ function analyzeUrl(raw) {
     nested: params.filter(p => ['url', 'query', 'json'].includes(p.type)).length
   };
   return { raw, norm, src, autoDecoded, parts, params, stats };
+}
+
+/* ---------- 渲染 JSON 参数面板 ---------- */
+const jsonPanels = new Map();   // panelKey -> { row, btn, groups, rows, rawPre, ... }
+
+function mk(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+
+/* 往单元格里放文本：太长的压成 3 行（点一下展开全文），否则原样铺开。
+   阈值取 160 —— 一般的路径、时间戳、短 token 都不会被折。 */
+const CLAMP_AT = 160;
+function setCellText(td, text) {
+  if (text.length <= CLAMP_AT) { td.textContent = text; return; }
+  const sp = mk('span', 'raw-clip', text);
+  sp.title = '点击展开完整原文（' + text.length + ' 字符）';
+  td.appendChild(sp);
+  td.classList.add('raw-cell');
+}
+
+/* 单个值 → 展示文本。
+   ★ 字符串**带引号**输出：这就是 JSON 自带的类型信号，比额外上色更可靠 ——
+     颜色对色觉障碍不友好，截图打印也会丢。类型的中文说明另有一列。 */
+function jsonValueText(v) {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return '[…] ' + v.length + ' 项';
+  if (typeof v === 'object') return '{…} ' + Object.keys(v).length + ' 键';
+  if (typeof v === 'string') return '"' + v + '"';
+  return String(v);
+}
+
+/* 复制用的纯值：字符串不带引号（粘进 Postman / SQL 里更常用），对象则序列化。 */
+function jsonCopyText(v) {
+  if (v === null) return 'null';
+  if (typeof v === 'object') return JSON.stringify(v, null, 2);
+  return String(v);
+}
+
+/* 构建一整块 JSON 面板（展开行）。返回 detail <tr>。 */
+function buildJsonDetail(p, panelKey) {
+  const tr = mk('tr', 'json-detail');
+  const td = mk('td');
+  td.colSpan = 7;
+
+  const panel = mk('div', 'json-panel');
+
+  /* ---- 头部：名字 / 标记 / 规模 / 复制 / 原始 ---- */
+  const head = mk('div', 'json-head');
+  head.appendChild(mk('span', 'json-name', p.key));
+  head.appendChild(mk('span', 'json-tag', 'JSON'));
+  head.appendChild(mk('span', 'json-meta',
+    p.jsonEntries.length + ' 个键 · ' + p.final.length + ' 字符'));
+  head.appendChild(mk('span', 'grow'));
+
+  const btnCopyAll = mk('button', 'json-open', '复制 JSON');
+  btnCopyAll.dataset.jsonCopyAll = panelKey;
+  head.appendChild(btnCopyAll);
+
+  const btnRaw = mk('button', 'json-open', '原始文本');
+  btnRaw.dataset.jsonRaw = panelKey;
+  head.appendChild(btnRaw);
+
+  panel.appendChild(head);
+
+  /* ---- 主体：搜索 / 原文 / 分组表 ---- */
+  const body = mk('div', 'json-body');
+
+  const search = document.createElement('input');
+  search.className = 'json-search';
+  search.type = 'text';
+  search.placeholder = '过滤键名或值…';
+  search.dataset.jsonSearch = panelKey;
+  body.appendChild(search);
+
+  const rawPre = mk('pre', 'json-raw', p.final);
+  rawPre.hidden = true;
+  body.appendChild(rawPre);
+
+  const groupsBox = mk('div', 'json-groups');
+  body.appendChild(groupsBox);
+
+  const state = {
+    row: tr, btn: null, groups: {},
+    entries: p.jsonEntries, value: p.jsonValue,
+    search, rawPre, groupsBox,
+    // 展开状态就存在这儿，不去问 DOM —— 判断「有没有面板开着」靠这一位，
+    // 比 querySelectorAll 扫一遍 class 更直接，也让 DOM 桩里能测。
+    open: true
+  };
+  const groups = groupJsonEntries(p.jsonValue);
+
+  const addGroup = (title, list, which, closed) => {
+    // 折叠态一律走 classList（跟后面搜索时的 toggle 同一套 API），
+    // 不用拼 className 字符串 —— 两处混用最容易出的就是"看不出来但状态不一致"。
+    const sec = mk('div', 'grp');
+    if (closed) sec.classList.add('closed');
+    const h = mk('button', 'grp-head');
+    h.dataset.grpToggle = panelKey + ':' + which;
+    h.innerHTML = '<svg class="chevo" aria-hidden="true"><use href="#ic-chevo"/></svg>';
+    h.appendChild(mk('span', 'grp-name', title));
+    const cntEl = mk('span', 'grp-cnt', list.length + ' 个');
+    h.appendChild(cntEl);
+    sec.appendChild(h);
+
+    const gb = mk('div', 'grp-body');
+    const table = mk('table', 'kv');
+    const tbody = document.createElement('tbody');
+    table.appendChild(tbody);
+    gb.appendChild(table);
+    sec.appendChild(gb);
+    groupsBox.appendChild(sec);
+
+    const rows = list.map(entry => {
+      const r = mk('tr');
+      r.appendChild(mk('td', 'k', entry.key));
+
+      const tdV = mk('td', 'v');
+      const txt = jsonValueText(entry.value);
+      const span = mk('span', 'clip', txt);
+      // 长值截断显示，完整值挂 title；要全文就用行尾的复制按钮
+      if (txt.length > 48) span.title = txt;
+      tdV.appendChild(span);
+      r.appendChild(tdV);
+
+      const tdT = mk('td', 't');
+      tdT.appendChild(mk('span', 'json-type', jsonTypeLabel(entry.value)));
+      const cp = mk('button', 'copy-btn');
+      cp.dataset.jsonCopy = panelKey + ':' + entry.key;
+      cp.title = '复制这个值';
+      cp.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#ic-copy"/></svg>';
+      tdT.appendChild(cp);
+      r.appendChild(tdT);
+
+      tbody.appendChild(r);
+      return { tr: r, entry };
+    });
+
+    state.groups[which] = { el: sec, rows, cntEl, defClosed: !!closed };
+  };
+
+  // 业务参数永远展开；容器组只有在「业务参数非空」时才默认收起 ——
+  // 否则整个包里全是容器键时，默认收起等于什么都没给。
+  addGroup('业务参数', groups.biz, 'biz', false);
+  if (groups.infra.length) addGroup('容器 / 框架参数', groups.infra, 'infra', groups.biz.length > 0);
+
+  panel.appendChild(body);
+  td.appendChild(panel);
+  tr.appendChild(td);
+
+  jsonPanels.set(panelKey, state);
+  return tr;
+}
+
+/* 按查询串过滤面板内的键值行；返回命中总数。命中的分组会自动展开。 */
+function applyJsonFilter(state, q) {
+  let total = 0;
+  Object.keys(state.groups).forEach(k => {
+    const g = state.groups[k];
+    let hit = 0;
+    g.rows.forEach(r => {
+      const m = jsonEntryMatches(r.entry, q);
+      if (m) hit++;
+      r.tr.style.display = m ? '' : 'none';
+    });
+    g.el.style.display = (!q || hit) ? '' : 'none';
+    // 有过滤时计数改成「命中 / 总数」—— 组里只露一行却写着"9 个"会让人以为统计错了
+    if (g.cntEl) g.cntEl.textContent = q ? (hit + ' / ' + g.rows.length) : (g.rows.length + ' 个');
+    // 命中就自动展开；清空搜索时回到该组**默认**的折叠状态 ——
+    // 否则"因为搜索展开过"会一直留着，下次看还以为这组本来就不收起。
+    if (q && hit) g.el.classList.remove('closed');
+    else if (!q) g.el.classList.toggle('closed', g.defClosed);
+    total += hit;
+  });
+  return total;
+}
+
+/* ---------- 表格容器高度：有面板展开时放开 60vh 限制 ----------
+   .table-wrap 平时是 max-height:60vh + overflow:auto，图的是表头吸顶 + 长表内滚。
+   可 JSON 面板是**塞在表格行里**的：容器不放开，刚展开的面板就被裁在滚动区下沿，
+   点了"展开"却看不见东西 —— 这个坑是截图里抓到的。
+   所以只要还留着一个开着的面板，就给容器加 .grow 放行高度。 */
+function syncWrapGrow() {
+  let open = false;
+  jsonPanels.forEach(st => { if (st.open) open = true; });
+  detailWrap.classList.toggle('grow', open);
 }
 
 /* ---------- 导入示例：示例数据常量 ---------- */
@@ -896,6 +1257,7 @@ function renderDetail(cur) {
   detailWrap.hidden = false;
   wideWrap.hidden = true;
   previewNote.hidden = true;
+  jsonPanels.clear();   // 面板引用随表格一起重建，别留上一轮的悬空引用
 
   detailTable.textContent = '';
   const thead = document.createElement('thead');
@@ -924,8 +1286,32 @@ function renderDetail(cur) {
     if (p.fanruan) { const b = document.createElement('span'); b.className = 'badge badge-fr'; b.textContent = '帆软路径'; c1.appendChild(b); }
     if (p.dup) { const b = document.createElement('span'); b.className = 'badge badge-dup'; b.textContent = '同名'; c1.appendChild(b); }
 
-    const c2 = document.createElement('td'); c2.textContent = p.raw; if (p.layers === 0) c2.classList.add('cell-muted');
-    const c3 = document.createElement('td'); c3.textContent = p.final;
+    /* 原始值同样是「能压就压」：JSON 参数的原始值是一整段百分号编码，
+       铺开十几行会把这行撑爆、还把列宽抢光。 */
+    const c2 = document.createElement('td'); setCellText(c2, p.raw);
+    if (p.layers === 0) c2.classList.add('cell-muted');
+
+    /* 解码后值：普通参数照旧铺文本；
+       JSON 参数只放一句摘要 + 展开开关，正文在下面那行全宽面板里 ——
+       一串 900 多字符的 JSON 塞进这个窄单元格，等于没做展示。 */
+    const c3 = document.createElement('td');
+    const panelKey = 'jp' + i;
+    let jsonBtn = null, jsonLabel = null;
+    if (p.jsonEntries) {
+      const sum = mk('span', 'json-sum');
+      sum.appendChild(mk('span', 'meta', p.jsonEntries.length + ' 个键 · ' + p.final.length + ' 字符'));
+      jsonBtn = mk('button', 'json-open');
+      jsonBtn.dataset.jsonToggle = panelKey;
+      jsonBtn.setAttribute('aria-expanded', 'true');
+      jsonBtn.innerHTML = '<svg class="chevo" aria-hidden="true"><use href="#ic-chevo"/></svg>';
+      jsonLabel = mk('span', '', '收起');
+      jsonBtn.appendChild(jsonLabel);
+      sum.appendChild(jsonBtn);
+      c3.appendChild(sum);
+    } else {
+      setCellText(c3, p.final);
+    }
+
     const c4 = document.createElement('td'); c4.textContent = p.layers; if (p.layers === 0) c4.classList.add('cell-muted');
     const c5 = document.createElement('td'); c5.textContent = p.note;
 
@@ -939,8 +1325,24 @@ function renderDetail(cur) {
     tr.appendChild(c0); tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3);
     tr.appendChild(c4); tr.appendChild(c5); tr.appendChild(c6);
     tbody.appendChild(tr);
+
+    if (p.jsonEntries) {
+      const detail = buildJsonDetail(p, panelKey);
+      const st = jsonPanels.get(panelKey);
+      if (st) st.btn = jsonBtn;
+      // 键特别多时默认收起：先给一句摘要，避免一屏被几个大包占满。
+      // 阈值取 60 —— 常规参数包（20 来个键）默认展开才省事。
+      if (p.jsonEntries.length > 60) {
+        detail.classList.add('json-off');
+        if (st) st.open = false;
+        jsonBtn.setAttribute('aria-expanded', 'false');
+        if (jsonLabel) jsonLabel.textContent = '展开';
+      }
+      tbody.appendChild(detail);
+    }
   });
   detailTable.appendChild(tbody);
+  syncWrapGrow();   // 新表建完，按面板默认展开情况重算容器高度
 }
 
 /* 参数宽表：参数名并集做列，每行一个 URL */
@@ -951,6 +1353,7 @@ function wideColumns() {
 }
 function renderWide() {
   detailWrap.hidden = true;
+  detailWrap.classList.remove('grow');   // 明细表藏着时不必带着放行高度
   wideWrap.hidden = false;
 
   const cols = wideColumns();
@@ -1126,12 +1529,95 @@ btnDownload.addEventListener('click', downloadCSV);
 btnCopyCsv.addEventListener('click', () => { if (results.length) copyText(toCSV(), 'CSV 已复制到剪贴板'); });
 btnCopyJson.addEventListener('click', () => { if (results.length) copyText(JSON.stringify(toJSON(), null, 2), 'JSON 已复制到剪贴板'); });
 
-/* 明细表行内复制（事件委托） */
+/* 明细表交互（统一事件委托）：行内复制 + JSON 面板的全部动作。
+   ★ 面板状态统一存在 jsonPanels 里，按钮只带 key，不把 DOM 引用塞进 dataset ——
+     表格重建时旧引用会被 clear() 掉，不会出现「点到上一轮那个面板」的悬空操作。 */
 detailTable.addEventListener('click', e => {
+  /* ① JSON 面板展开 / 收起 */
+  const tj = e.target.closest('button[data-json-toggle]');
+  if (tj) {
+    const st = jsonPanels.get(tj.dataset.jsonToggle);
+    if (st) {
+      st.open = !st.open;
+      st.row.classList.toggle('json-off', !st.open);
+      tj.setAttribute('aria-expanded', st.open ? 'true' : 'false');
+      const lb = tj.querySelector('span');
+      if (lb) lb.textContent = st.open ? '收起' : '展开';
+      // 先把容器高度放行/收回，再滚动 —— 顺序反了会用旧的布局算位置
+      syncWrapGrow();
+      // 展开后把面板顶端带进视野：面板动辄几百 px，不滚就只看到它上半截
+      if (st.open && st.row.scrollIntoView) st.row.scrollIntoView({ block: 'nearest' });
+    }
+    return;
+  }
+
+  /* ② 分组折叠（业务 / 容器） */
+  const gt = e.target.closest('button[data-grp-toggle]');
+  if (gt) {
+    const parts = gt.dataset.grpToggle.split(':');
+    const st = jsonPanels.get(parts[0]);
+    const g = st && st.groups[parts[1]];
+    if (g) g.el.classList.toggle('closed');
+    return;
+  }
+
+  /* ③ 结构化 ⇄ 原始文本 */
+  const rw = e.target.closest('button[data-json-raw]');
+  if (rw) {
+    const st = jsonPanels.get(rw.dataset.jsonRaw);
+    if (st) {
+      st.rawPre.hidden = !st.rawPre.hidden;
+      const raw = !st.rawPre.hidden;
+      // 原文模式下藏起搜索框与分组表，避免两份内容同时占屏、互相干扰
+      st.search.style.display = raw ? 'none' : '';
+      st.groupsBox.style.display = raw ? 'none' : '';
+      rw.textContent = raw ? '结构化' : '原始文本';
+    }
+    return;
+  }
+
+  /* ④ 复制整个 JSON（格式化后） */
+  const ca = e.target.closest('button[data-json-copy-all]');
+  if (ca) {
+    const st = jsonPanels.get(ca.dataset.jsonCopyAll);
+    if (st) copyText(JSON.stringify(st.value, null, 2), 'JSON 已复制');
+    return;
+  }
+
+  /* ⑤ 复制面板里某一行（键名可能含冒号，所以只按第一个冒号切 key） */
+  const cp = e.target.closest('button[data-json-copy]');
+  if (cp) {
+    const raw = cp.dataset.jsonCopy;
+    const cut = raw.indexOf(':');
+    const st = jsonPanels.get(raw.slice(0, cut));
+    const name = raw.slice(cut + 1);
+    const found = st && st.entries.filter(x => String(x.key) === name)[0];
+    if (found) copyText(jsonCopyText(found.value), '值已复制');
+    return;
+  }
+
+  /* ⑥ 展开 / 收起被压住的长原文（放在复制之前：这格不是按钮，抢不到 ⑦ 的分支） */
+  const rc = e.target.closest('td.raw-cell');
+  if (rc) {
+    const open = rc.classList.toggle('raw-open');
+    const sp = rc.querySelector('.raw-clip');
+    if (sp) sp.title = open ? '点击收起' : '点击展开完整原文（' + sp.textContent.length + ' 字符）';
+    return;
+  }
+
+  /* ⑦ 行内复制解码后值（原有行为） */
   const btn = e.target.closest('button[data-idx]');
   if (!btn || !results[curIndex]) return;
   const p = results[curIndex].params[+btn.dataset.idx];
   if (p) copyText(p.final, '解码后值已复制');
+});
+
+/* JSON 面板内的过滤 */
+detailTable.addEventListener('input', e => {
+  const s = e.target.closest('input[data-json-search]');
+  if (!s) return;
+  const st = jsonPanels.get(s.dataset.jsonSearch);
+  if (st) applyJsonFilter(st, s.value.trim());
 });
 
 btnTips.addEventListener('click', () => { tipModal.hidden = false; });

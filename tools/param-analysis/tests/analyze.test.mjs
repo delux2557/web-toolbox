@@ -46,7 +46,9 @@ ok("核心片段含全部解析函数",
 const sandbox = { console };
 vm.createContext(sandbox);
 let loadError = null;
-try { vm.runInContext(CORE + "\n;globalThis.__api = { normalizeInput, decodeAll, splitUrl, detectType, analyzeUrl };", sandbox); }
+try { vm.runInContext(CORE + "\n;globalThis.__api = { normalizeInput, decodeAll, splitUrl, detectType, analyzeUrl, "
+  + "jsonEntries, groupJsonEntries, isInfraKey, jsonTypeLabel, jsonEntryMatches, jsonValueText, jsonCopyText, "
+  + "applyJsonFilter };", sandbox); }
 catch (err) { loadError = err; }
 ok("核心片段可执行", !loadError, loadError && loadError.message);
 const { normalizeInput, analyzeUrl } = sandbox.__api || {};
@@ -173,14 +175,43 @@ ok("? 后面为空 → 0 参数", one("https://x/y?").params.length === 0);
  * 这类问题在真浏览器里表现为"点了没反应"，最难查，所以用桩把它钉住。
  * ============================================================ */
 console.log("\n[8] UI 冒烟（DOM 桩）");
+/* 桩里的 classList 用真 Set 记账：只在「判断类名有没有加上」时才靠得住。
+   className 仍单独存 —— 现有断言读的是 className 字符串，两者不强行对齐
+   （生产代码对这几个类名只用 classList 增删，没有读写 className 的分支）。 */
+function makeClassList() {
+  const set = new Set();
+  return {
+    set,
+    add(...cs) { cs.forEach(c => { if (c) set.add(c); }); },
+    remove(...cs) { cs.forEach(c => set.delete(c)); },
+    toggle(c, force) {
+      const on = force === undefined ? !set.has(c) : !!force;
+      if (on) set.add(c); else set.delete(c);
+      return on;
+    },
+    contains(c) { return set.has(c); },
+  };
+}
 function makeNode(tag) {
   return {
     tagName: String(tag).toUpperCase(), textContent: '', value: '', hidden: false,
     className: '', title: '', dataset: {}, style: {}, colSpan: 0, type: '', children: [],
-    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+    classList: makeClassList(),
     appendChild(c) { this.children.push(c); return c; },
-    removeChild() {}, remove() {}, addEventListener() {}, setAttribute() {},
-    getAttribute() { return null; }, select() {}, click() {}, focus() {},
+    removeChild() {}, remove() {},
+    addEventListener(t, fn) { (this.__on || (this.__on = {}))[t] = fn; },
+    setAttribute(k, v) { (this.__attrs || (this.__attrs = {}))[k] = v; },
+    getAttribute(k) { return (this.__attrs || {})[k] ?? null; },
+    querySelector(sel) {
+      if (sel === 'span') return this.children.find(c => c.tagName === 'SPAN') || null;
+      if (sel[0] === '.') {
+        const cls = sel.slice(1);
+        return this.children.find(c => String(c.className).split(/\s+/).includes(cls)) || null;
+      }
+      return null;
+    },
+    scrollIntoView() { this.__scrolled = (this.__scrolled || 0) + 1; },
+    select() {}, click() {}, focus() {},
     add(o) { this.children.push(o); },
   };
 }
@@ -262,6 +293,277 @@ const namelessBtns = btnTags.filter(([, attrs, inner]) => {
 });
 ok("没有「既无文字又无无障碍名称」的按钮", namelessBtns.length === 0,
    "无名称按钮 " + namelessBtns.length + " 个");
+
+/* ============================================================
+ * [10] JSON 参数：摊平 / 分组 / 过滤 / 面板渲染
+ * ------------------------------------------------------------
+ * 场景：`__parameters__` 这类参数解码后是几百字符的 JSON，整段铺进一个 <td>
+ * 就是一团文本。这里守的是"能不能把它摊成键值、能不能把容器噪声分开"。
+ *
+ * ★ 分组规则是**启发式**正则，所以断言分两边都要钉：
+ *   既要有「该收的收进去了」，也要有「不该误伤的没被误伤」（尤其 FINEMARKID
+ *   和 FINE_DIGITAL_SIGNATURE 只差一个下划线）。
+ * ============================================================ */
+console.log("\n[10] JSON 参数：摊平 / 分组 / 过滤");
+
+const api = sandbox.__api || {};
+const je = api.jsonEntries, gj = api.groupJsonEntries, ii = api.isInfraKey;
+const jt = api.jsonTypeLabel, jm = api.jsonEntryMatches, jv = api.jsonValueText;
+const applyJsonFilter = api.applyJsonFilter;
+
+ok("核心片段导出了 JSON 处理函数",
+   [je, gj, ii, jt, jm, jv, applyJsonFilter].every(f => typeof f === "function"));
+
+/* 等形脱敏的 JSON 参数包：7 个业务键 + 5 个容器噪声键，含各类型值 */
+const JSON_OBJ = {
+  stagename: "StageA",
+  date_time: "2026-10-19",
+  USER: "10000001",
+  APPID: "20240101000000",
+  SITE: "",
+  flag: true,
+  n: 42,
+  __pi__: true,
+  REF_T: "design",
+  "JAVAX.SERVLET.REQUEST.CIPHER_SUITE": "TLS_AES_128_GCM_SHA256",
+  "ORG.APACHE.TOMCAT.UTIL.NET.SECURE_PROTOCOL_VERSION": "TLSv1.3:TLS",
+  FINE_DIGITAL_SIGNATURE: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.sig"
+};
+const JSON_KEYS = Object.keys(JSON_OBJ);
+const JSON_URL = "https://example.com:4434/webroot/decision/view/form"
+  + "?viewlet=demo%2Fretail%2Fa%2520b.cpt"
+  + "&__parameters__=" + encodeURIComponent(encodeURIComponent(JSON.stringify(JSON_OBJ)));
+
+/* --- 摊平 --- */
+const eObj = je(JSON_OBJ);
+ok("对象摊平后键数正确", eObj.length === JSON_KEYS.length, eObj.length);
+ok("摊平保持原有顺序（首尾都对）",
+   eObj[0].key === "stagename" && eObj[eObj.length - 1].key === "FINE_DIGITAL_SIGNATURE",
+   eObj[0].key + " … " + eObj[eObj.length - 1].key);
+const eArr = je(["a", "b"]);
+ok("数组用下标当键", eArr.length === 2 && eArr[1].key === "1" && eArr[1].value === "b",
+   JSON.stringify(eArr));
+ok("标量 / null 摊平为空", je("x").length === 0 && je(null).length === 0 && je(42).length === 0);
+
+/* --- 噪声识别：该收的收 --- */
+["__pi__", "REF_T", "JAVAX.SERVLET.REQUEST.CIPHER_SUITE",
+ "ORG.APACHE.TOMCAT.UTIL.NET.SECURE_PROTOCOL_VERSION", "FINE_DIGITAL_SIGNATURE"]
+  .forEach(k => ok("识别为容器参数：" + k, ii(k) === true));
+
+/* --- 噪声识别：不该误伤的别误伤 --- */
+["USER", "APPID", "FINEMARKID", "stagename", "date_time", "SITE", "flag", "n"]
+  .forEach(k => ok("不误判为容器参数：" + k, ii(k) === false));
+
+const g = gj(JSON_OBJ);
+ok("业务 / 容器分组计数 7 / 5", g.biz.length === 7 && g.infra.length === 5,
+   g.biz.length + " / " + g.infra.length);
+ok("分组不打乱顺序", g.biz[0].key === "stagename" && g.infra[0].key === "__pi__",
+   g.biz[0].key + " | " + g.infra[0].key);
+
+/* --- 类型标签：颜色之外的第二层信号 --- */
+ok("空字符串单独说", jt("") === "空字符串", jt(""));
+ok("字符串带长度", jt("abcd") === "字符串 4 字符", jt("abcd"));
+ok("整数 / 小数分开", jt(42) === "整数" && jt(1.5) === "小数", jt(42) + " / " + jt(1.5));
+ok("布尔 / null", jt(true) === "布尔" && jt(null) === "null", jt(true) + " / " + jt(null));
+ok("对象带键数", jt({ a: 1, b: 2 }) === "对象 2 键", jt({ a: 1, b: 2 }));
+ok("数组带项数", jt([1, 2, 3]) === "数组 3 项", jt([1, 2, 3]));
+
+/* --- 过滤 --- */
+const e1 = { key: "JAVAX.SERVLET.REQUEST.CIPHER_SUITE", value: "TLS_AES_128_GCM_SHA256" };
+ok("空查询恒命中", jm(e1, "") === true);
+ok("按键名命中（不区分大小写）", jm(e1, "cipher") === true);
+ok("按值命中（不区分大小写）", jm(e1, "tls_aes") === true);
+ok("不相关查询不命中", jm(e1, "zzz") === false);
+ok("null 与嵌套对象也能被搜到",
+   jm({ key: "x", value: null }, "null") === true && jm({ key: "y", value: { a: "q" } }, "q") === true);
+
+/* --- 过滤落到分组上：显隐 / 命中自动展开 / 清空后恢复默认折叠 ---
+   applyJsonFilter 只碰 g.el.style、g.el.classList、r.tr.style 三样，
+   所以这里用假节点就够，不必上 DOM 桩（也不必等浏览器）。 */
+const fakeCls = () => {
+  const s = new Set();
+  return {
+    add: c => s.add(c), remove: c => s.delete(c), contains: c => s.has(c),
+    toggle(c, f) { if (f) s.add(c); else s.delete(c); return !!f; }
+  };
+};
+const fakeGrp = (entries, defClosed) => ({
+  el: { style: {}, classList: fakeCls() },
+  rows: entries.map(e => ({ tr: { style: {} }, entry: e })),
+  cntEl: { textContent: entries.length + " 个" },
+  defClosed
+});
+const mkState = () => {
+  const st = {
+    groups: {
+      biz: fakeGrp([
+        { key: "USER", value: "10000001" },
+        { key: "SITE", value: "" }
+      ], false),
+      infra: fakeGrp([
+        { key: "JAVAX.SERVLET.REQUEST.SSL_SESSION_ID", value: "a1b2c3" },
+        { key: "__pi__", value: true }
+      ], true)
+    },
+    entries: []
+  };
+  st.groups.infra.el.classList.add("closed");   // 容器组默认收起
+  return st;
+};
+
+const sA = mkState();
+ok("搜到业务键：命中 1 条", applyJsonFilter(sA, "user") === 1);
+ok("搜业务键 → 业务行留着、容器行藏起来",
+   sA.groups.biz.rows[0].tr.style.display !== "none" && sA.groups.infra.rows[0].tr.style.display === "none");
+ok("整组没命中 → 组本身也藏起来（不占空位）", sA.groups.infra.el.style.display === "none");
+ok("有过滤时计数改成「命中 / 总数」（否则 1 行配『9 个』像统计错了）",
+   sA.groups.biz.cntEl.textContent === "1 / 2" && sA.groups.infra.cntEl.textContent === "0 / 2",
+   sA.groups.biz.cntEl.textContent + " | " + sA.groups.infra.cntEl.textContent);
+
+const sB = mkState();
+ok("搜到容器键：命中 1 条", applyJsonFilter(sB, "session_id") === 1);
+ok("命中的收起组会被自动展开（否则搜到了却看不见）",
+   !sB.groups.infra.el.classList.contains("closed") && sB.groups.infra.el.style.display !== "none");
+
+const sC = mkState();
+applyJsonFilter(sC, "session_id");
+ok("清空搜索 → 容器组回到默认收起（搜索时的展开不该变成默认）",
+   (applyJsonFilter(sC, ""), sC.groups.infra.el.classList.contains("closed")));
+ok("清空搜索 → 全部行与组都恢复显示",
+   sC.groups.biz.el.style.display !== "none" && sC.groups.infra.el.style.display !== "none" &&
+   sC.groups.biz.rows[1].tr.style.display !== "none");
+ok("清空搜索 → 计数回到『N 个』",
+   sC.groups.biz.cntEl.textContent === "2 个" && sC.groups.infra.cntEl.textContent === "2 个",
+   sC.groups.biz.cntEl.textContent + " | " + sC.groups.infra.cntEl.textContent);
+
+/* --- 值渲染：字符串带引号就是类型信号 --- */
+ok("字符串带引号", jv("abc") === '"abc"', jv("abc"));
+ok("数字 / 布尔不带引号", jv(42) === "42" && jv(false) === "false");
+ok("null 原样", jv(null) === "null");
+ok("嵌套对象给占位与规模", jv({ a: 1 }) === "{…} 1 键" && jv([1, 2]) === "[…] 2 项",
+   jv({ a: 1 }) + " / " + jv([1, 2]));
+
+/* --- 分析接线：面板数据只挂在 JSON 参数上 --- */
+const rj = one(JSON_URL);
+const pj = P(rj, "__parameters__");
+ok("JSON 参数挂上了摊平结果",
+   Array.isArray(pj.jsonEntries) && pj.jsonEntries.length === JSON_KEYS.length,
+   pj.jsonEntries && pj.jsonEntries.length);
+ok("已解析的值一并带出（JSON.parse 只做一次）",
+   pj.jsonValue && pj.jsonValue.USER === "10000001");
+ok("非 JSON 参数不挂面板数据", P(rj, "viewlet").jsonEntries === undefined);
+ok("空对象不挂面板（免得点开什么都没有）",
+   P(one("https://example.com/a?p=%7B%7D"), "p").jsonEntries === undefined);
+
+/* --- DOM 冒烟：面板真的建出来了 --- */
+const ui2 = makeSandbox();
+let ui2Err = null;
+try { vm.runInContext(blocks[1], ui2.sb, { filename: "param-analysis#json" }); }
+catch (err) { ui2Err = err; }
+ok("带 JSON 参数的页面能加载", !ui2Err, ui2Err && ui2Err.message);
+
+if (!ui2Err) {
+  ui2.reg.get("inputBox").value = JSON_URL;
+  ui2.sb.doAnalyze();
+
+  /* 向下取子节点一律走 kid()：结构一旦被改坏，断言应该**干净地报红**，
+     而不是抛 TypeError 把后面所有断言一起吞掉（上次就是这么吃掉半份报告的）。 */
+  const kid = (n, i) => (n && n.children && n.children[i]) || null;
+  const rowsIn = (grp) => {
+    const tbody = kid(kid(kid(grp, 1), 0), 0);
+    return (tbody && tbody.children) || [];
+  };
+
+  const rows2 = ui2.reg.get("detailTable").children[1].children;
+  ok("2 个参数 + 1 行展开面板 = 3 行", rows2.length === 3, rows2.length);
+
+  const sum = kid(kid(rows2[1], 3), 0);
+  ok("解码后值列只放摘要", sum && sum.className === "json-sum", sum && sum.className);
+  ok("摘要里带键数", sum && String(sum.children[0].textContent).indexOf(JSON_KEYS.length + " 个键 · ") === 0,
+     sum && sum.children[0].textContent);
+
+  const panel = kid(kid(rows2[2], 0), 0);
+  ok("展开行里是面板容器", panel && panel.className === "json-panel", panel && panel.className);
+
+  const groupsBox = kid(kid(panel, 1), 2);
+  const grpCount = (groupsBox && groupsBox.children.length) || 0;
+  ok("分成业务 / 容器两组", grpCount === 2, grpCount);
+
+  const bizGrp = kid(groupsBox, 0), infraGrp = kid(groupsBox, 1);
+  const bizRows = rowsIn(bizGrp), infraRows = rowsIn(infraGrp);
+  ok("业务组 7 行 / 容器组 5 行", bizRows.length === 7 && infraRows.length === 5,
+     bizRows.length + " / " + infraRows.length);
+  ok("业务组默认展开", !!bizGrp && !bizGrp.classList.contains("closed"));
+  ok("容器组默认收起", !!infraGrp && infraGrp.classList.contains("closed"));
+
+  /* --- 展开 / 收起：容器高度必须跟着让路 ---
+     .table-wrap 有 max-height:60vh，面板塞在表格行里，容器不放行就会被裁掉，
+     用户点了"展开"什么都看不见。这里把这条路径真跑一遍。 */
+  const wrap = ui2.reg.get("detailWrap");
+  const detailRow = rows2[2];
+  ok("默认展开时表格容器放开 60vh 限制", wrap.classList.contains("grow"));
+
+  const toggleBtn = sum.children[1];
+  ok("摘要里是展开/收起按钮", toggleBtn && toggleBtn.className === "json-open", toggleBtn && toggleBtn.className);
+
+  /* 事件委托挂在 detailTable 上，桩把监听器记下来了，这里造一个小事件直接打进去 */
+  const fireClick = (node, re) => ui2.reg.get("detailTable").__on.click({
+    target: { closest: sel => (re.test(sel) ? node : null) }
+  });
+  const fireToggle = () => fireClick(toggleBtn, /data-json-toggle/);
+
+  fireToggle();
+  ok("点『收起』→ 面板行加上 json-off", detailRow.classList.contains("json-off"));
+  ok("点『收起』→ 按钮文字变『展开』", toggleBtn.children[0].textContent === "展开",
+     toggleBtn.children[0].textContent);
+  ok("点『收起』→ aria-expanded=false", toggleBtn.getAttribute("aria-expanded") === "false",
+     toggleBtn.getAttribute("aria-expanded"));
+  ok("面板全收起了 → 容器高度限制收回", !wrap.classList.contains("grow"));
+
+  fireToggle();
+  ok("再点『展开』→ 面板恢复显示", !detailRow.classList.contains("json-off"));
+  ok("再点『展开』→ 容器重新放开高度", wrap.classList.contains("grow"));
+  ok("展开后把面板滚进视野（收起时不滚）", detailRow.__scrolled === 1, detailRow.__scrolled);
+
+  /* --- 超长原始值默认压 3 行 ---
+     JSON 参数的原始值是一整段百分号编码，铺开十几行会把整行撑爆、还抢光列宽。 */
+  const rawLong = kid(rows2[1], 2), rawShort = kid(rows2[0], 2);
+  const rawParam = rj.params.filter(x => x.key === "__parameters__")[0];
+  // 折叠壳可能压根不存在（断言要被改坏时），所以一律走空对象兜底，
+  // 别让 TypeError 把后面几条断言一起吞掉 —— 这个坑之前踩过一次。
+  const clip = kid(rawLong, 0) || {};
+  const has = (n, c) => !!n && n.classList.contains(c);
+  ok("超长原始值被折起来（挂 raw-clip）",
+     has(rawLong, "raw-cell") && clip.className === "raw-clip",
+     (rawLong && rawLong.className) + " / " + clip.className);
+  ok("折叠的是壳、文本仍完整在 DOM 里（导出不受影响）",
+     !!rawParam && clip.textContent === rawParam.raw);
+  ok("折叠时提示可展开", /点击展开完整原文（\d+ 字符）/.test(String(clip.title)), clip.title);
+  ok("短值不折叠（viewlet 保持原样）",
+     !has(rawShort, "raw-cell") && !!rawShort && rawShort.children.length === 0,
+     rawShort && rawShort.className);
+
+  fireClick(rawLong, /td\.raw-cell/);
+  ok("点一下 → 展开全文（raw-open）", rawLong.classList.contains("raw-open"));
+  ok("再点一下 → 收回 3 行", (fireClick(rawLong, /td\.raw-cell/), !rawLong.classList.contains("raw-open")));
+}
+
+/* 折叠靠一条 CSS 规则，JS 只加类 —— 规则被删掉等于白做 */
+ok("CSS 里有 .raw-clip 的三行折叠规则",
+   /\.raw-clip\s*\{[^}]*-webkit-line-clamp:\s*3/.test(HTML));
+ok("展开态有对应的解除折叠规则",
+   /\.raw-open \.raw-clip\s*\{[^}]*line-clamp:\s*unset/.test(HTML));
+
+/* kv 表嵌在明细表 tbody 里，会吃到「首列居中 + 次要色」那条通用规则 —— 回归过 */
+const kvKeyRule = (HTML.match(/table\.kv td\.k\s*\{[^}]*\}/) || [""])[0];
+ok("kv 键名列不被明细表首列规则带偏（左对齐 + 主文字色）",
+   /text-align:\s*left/.test(kvKeyRule) && /color:\s*var\(--text\)/.test(kvKeyRule), kvKeyRule);
+ok("kv 键名列保留 break-all（通用规则用 !important 钉成了 normal）",
+   /word-break:\s*break-all\s*!important/.test(kvKeyRule), kvKeyRule);
+
+/* 高度让路靠的是一条 CSS 规则，JS 加类只是其中一半 —— 规则被删掉等于白做 */
+ok("CSS 里有 .table-wrap.grow 放开高度的规则",
+   /\.table-wrap\.grow\s*\{[^}]*max-height:\s*none/.test(HTML));
 
 /* ============================================================ */
 console.log(`\n结果：${pass} 通过 / ${fail} 失败\n`);
