@@ -19,6 +19,48 @@
 </script>
 </head>
 <body>
+<!-- 图标 sprite：单色矢量、stroke: currentColor 跟随主题。
+     彩色 emoji 在单色界面上是一块饱和色像素，各平台字形还不一致，所以按钮里一律不用它。 -->
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="7"/>
+    <path d="M20.5 20.5 16 16"/>
+  </symbol>
+  <symbol id="ic-rotate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 12a9 9 0 1 0 9-9c-2.52 0-4.93 1.03-6.71 2.71L3 8"/>
+    <path d="M3 3v5h5"/>
+  </symbol>
+  <symbol id="ic-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3"/>
+    <path d="M7 8l5-5 5 5"/>
+    <path d="M12 3v12"/>
+  </symbol>
+  <symbol id="ic-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="18" height="16" rx="2"/>
+    <path d="M3 10h18"/>
+    <path d="M10 10v10"/>
+  </symbol>
+  <symbol id="ic-sheet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+    <path d="M14 3v5h5"/>
+    <path d="M8.5 13h7"/>
+    <path d="M8.5 16.5h4"/>
+  </symbol>
+  <symbol id="ic-braces" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1"/>
+    <path d="M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1"/>
+  </symbol>
+  <symbol id="ic-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3"/>
+    <path d="M7 10l5 5 5-5"/>
+    <path d="M12 15V3"/>
+  </symbol>
+  <symbol id="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="8" y="8" width="13" height="13" rx="2"/>
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+  </symbol>
+</svg>
+
 <div class="bg-glow" aria-hidden="true"></div>
 
 <header class="topbar">
@@ -74,8 +116,13 @@
       <div class="input-row">
         <textarea id="inputBox" placeholder="在此粘贴表格代码 / 内容（如网页 <table> HTML），或点上方「示例」快速体验…"></textarea>
         <div class="btn-col">
-          <button class="btn btn-primary" id="btnParse">🔍 解析</button>
-          <button class="btn btn-ghost" id="btnReset">↺ 重置</button>
+          <button class="btn btn-primary" id="btnParse">
+            <svg class="ico" aria-hidden="true"><use href="#ic-search"/></svg>
+            <span id="btnParseText">解析</span>
+          </button>
+          <button class="btn btn-ghost" id="btnReset">
+            <svg class="ico" aria-hidden="true"><use href="#ic-rotate"/></svg>重置
+          </button>
         </div>
       </div>
     </div>
@@ -118,7 +165,9 @@
 
     <!-- 导出栏：按钮由当前模式的 exporters 配置动态渲染，扩展导出格式（如 SQL）只需新增导出器 -->
     <div class="export-bar">
-      <span class="label">📤 导出：</span>
+      <span class="label">
+        <svg class="ico" aria-hidden="true"><use href="#ic-upload"/></svg>导出：
+      </span>
       <div class="export-actions" id="exportActions"></div>
       <span class="export-note" id="exportNote"></span>
     </div>
@@ -145,7 +194,7 @@
     </div>
     <div class="modal-body">
       <ul>
-        <li>⚠️ 请确认当前内容包含全部目标数据；若表格为分页 / 虚拟滚动，请先切换「每页更多条」或滚动加载完成后再复制。</li>
+        <li>⚠ 请确认当前内容包含全部目标数据；若表格为分页 / 虚拟滚动，请先切换「每页更多条」或滚动加载完成后再复制。</li>
         <li>自动识别 <kbd>data-field</kbd> / <kbd>&lt;th&gt;</kbd> / 列索引 作为列名，兼容字段变化。</li>
         <li>自动跳过隐藏列（display:none）与 复选 / 操作 类功能列。</li>
         <li>页面存在多个表格时，自动选中行数最多的那个；可在「表格来源」中切换。</li>

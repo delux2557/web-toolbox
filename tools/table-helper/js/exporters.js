@@ -28,24 +28,24 @@ const Exporters = (function () {
   /* ---------- 导出器注册表（kind 决定行为：download 触发下载，copy 复制到剪贴板） ---------- */
   const exporters = {
     csvDownload: {
-      label: '⬇️ 下载 CSV', kind: 'download',
+      label: '下载 CSV', icon: 'ic-download', kind: 'download',
       build: d => ({ text: fmtCSV(d), mime: 'text/csv;charset=utf-8;', filename: '表格数据_' + today() + '.csv', bom: true, toast: 'CSV 已下载（含 BOM）' })
     },
     csvCopy: {
-      label: '📋 复制 CSV', kind: 'copy',
+      label: '复制 CSV', icon: 'ic-copy', kind: 'copy',
       build: d => ({ text: fmtCSV(d), toast: 'CSV 已复制到剪贴板' })
     },
     jsonCopy: {
-      label: '📄 复制 JSON', kind: 'copy',
+      label: '复制 JSON', icon: 'ic-copy', kind: 'copy',
       build: (d, o) => ({ text: fmtJSON(d, o), toast: 'JSON 已复制到剪贴板' })
     },
     jsonDownload: {
-      label: '⬇️ 下载 JSON', kind: 'download',
+      label: '下载 JSON', icon: 'ic-download', kind: 'download',
       build: (d, o) => ({ text: fmtJSON(d, o), mime: 'application/json;charset=utf-8;', filename: 'JSON数据_' + today() + '.json', toast: 'JSON 已下载' })
     }
-    // ⭐ 未来扩展示例 —— SQL 插入语句下载：
+    // 扩展点示例 —— SQL 插入语句下载（图标同样只写 symbol id）：
     // sqlInsert: {
-    //   label: '⬇️ 下载 SQL', kind: 'download',
+    //   label: '下载 SQL', icon: 'ic-download', kind: 'download',
     //   build: (d, o) => {
     //     const table = (o && o.tableName) || 'my_table';
     //     const esc = v => String(v ?? '').replace(/'/g, "''");
