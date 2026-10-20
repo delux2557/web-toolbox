@@ -9,7 +9,7 @@ export const els = {
   dropzone: $("dropzone"), compat: $("compatNote"), fileInput: $("fileInput"),
   currentFile: $("currentFile"), progressFill: $("progressFill"),
   progressText: $("progressText"), progressPct: $("progressPct"),
-  copyBtn: $("copyBtn"), downloadBtn: $("downloadBtn"),
+  copyBtn: $("copyBtn"), copyBtnText: $("copyBtnText"), downloadBtn: $("downloadBtn"),
   lineNumToggle: $("lineNumToggle"), reselectBtn: $("reselectBtn"),
   rulesToggleBtn: $("rulesToggleBtn"),
   treeRoot: $("treeRoot"), treeCount: $("treeCount"), preview: $("preview"),

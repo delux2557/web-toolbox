@@ -311,7 +311,7 @@ node tools/_build/check-portal-sync.mjs    # 退出码 0 = 一致，1 = 有漂�
 
 ### 持续集成
 
-`.github/workflows/ci.yml` 在 **PR** 与 **push 到 main** 上跑同样 11 道闸门（也是本地一条条能跑通的命令）：
+`.github/workflows/ci.yml` 在 **PR** 与 **push 到 main** 上跑同样 12 道闸门（也是本地一条条能跑通的命令）：
 
 | 闸门 | 断言 |
 |------|------|
@@ -324,6 +324,7 @@ node tools/_build/check-portal-sync.mjs    # 退出码 0 = 一致，1 = 有漂�
 | `url-helper/tests/extract.test.mjs` | 44 · 形态契约与切片边界 / **路径值里的 %20 空格与裸空格不被截断** / 多层编码 / `%26`·`%23` 分隔符边界 / **`&amp;`·`&#38;` 实体** / `+` 与 `%2B` 口径 / 「没有就是没有」 / **UI 冒烟（DOM 桩，防隐式全局）** / **图标文案卫生（无彩色 emoji、`<use>` 不悬空、按钮有可读名称）** |
 | `param-analysis/tests/analyze.test.mjs` | 149 · 形态契约 / 真实事故链路 / 参数值边界（`%26`·`%23`·`%3F`·base64 `==`） / **`&amp;` 不让参数名变 `amp;viewlet`** / **整条 URL 编码兜底（不静默 0 参数）** / 结构·统计 / `+` 口径与 url-helper 一致 / **JSON 参数摊平·业务与容器分组·过滤（含容器噪声不误伤 `FINEMARKID`）** / **面板展开时放开容器高度、收起后收回、展开后滚进视野** / **超长原始值折 3 行且文本仍完整在 DOM** / **UI 冒烟（DOM 桩，防隐式全局）** / **图标文案卫生（同上）** / **行尾复制按钮的显示时机（`opacity` 而非 `display:none`、子代组合而非后代组合、键盘与触屏都有出路）** |
 | `table-helper/tests/parsers.test.mjs` | 78 · 形态契约 / CSV 边界（列数不一致、TSV、空表头） / JSON / HTML 工具函数（含 `colspan`、`pickLargestIndex`） / **Worker↔主线程逐字段一致（防两份实现漂移）** / 单文件产物契约（Worker 必须走 Blob） / **图标文案卫生（无彩色 emoji、`use` 不悬空、按钮有可读名称）** |
+| `codebase-context/tests/icons.test.mjs` | 20 · **界面文件无彩色 emoji（按字符串放行导出内容，不按文件豁免）** / **`<symbol>` 与 `<use>` 双向对齐（引用不悬空、定义不闲置；静态标记与 JS 拼的字符串都扫）** / **导出文档标题里的 emoji 是内容、不是图标** / **`## 📁 文件内容聚合` 与 `preview.js` 的逐字匹配保持同步** / 复制按钮状态只改文字块 / 纯图标按钮有可读名称 |
 | `build-snapshot.mjs` | SPA 快照（codebase-context / code-workspace / ppt-player） |
 | `verify-snapshot.mjs` | 19 · 快照产物在 vm 里真跑一遍 |
 
@@ -339,6 +340,14 @@ node tools/_build/check-portal-sync.mjs    # 退出码 0 = 一致，1 = 有漂�
   否则「CI 绿」就没有意义。
 - **`build-snapshot` 不加 `--strict`**：codebase-context 有一处阻塞型外链（highlight.js CDN，离线时回落纯文本高亮），
   `--strict` 会把它判成失败。
+- **界面 emoji 与「内容 emoji」要分开看**。codebase-context 的 30 处命中里，12 处是真正的界面图标
+  （片段标记 7 + JS 拼的 HTML 5）、1 处是 `⚠️`（去掉 FE0F 变回单色文本符号，不是图标），
+  剩下 17 处是**导出文档的内容**：`markdown.js` 的标题会原样进用户下载的 .md，
+  `scenarios.json` / `constants.js` 的提示词前缀会进用户复制的 prompt。把后者也当"UI 里的彩色 emoji"
+  清掉，等于改了用户的产出 —— 所以那道的判据是**按字符串放行、不按文件豁免**：
+  同一个文件里新加一枚彩色 emoji，整文件豁免就再也发现不了。
+- **`## 📁 文件内容聚合` 是条跨文件的口头契约**：`markdown.js` 写入、`preview.js` 用 `startsWith` 逐字匹配。
+  只改一边不报错，只是预览顶部那截消失 —— 现在有断言把两边钉在一起。
 - Node 锁 **22**（脚本用到 `import.meta.dirname`，需 ≥ 20.11）；`actions/checkout` 与 `actions/setup-node` 用 **v7**。
 
 ## 拾词 · 功能说明

@@ -99,6 +99,18 @@
     flex-direction: column;
   }
 
+  /* ============ 图标 sprite ============
+     .sprite 本身不占位（0×0 + overflow:hidden），只当 <symbol> 的容器；
+     .ico 用 <use> 引用，stroke 走 currentColor —— 深浅主题、hover、禁用态都自动跟随。
+     图标表达**动作**（复制 / 下载 / 预览），文字表达**对象**，两者不重复表达同一件事。 */
+  .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+  .ico {
+    width: 15px; height: 15px; flex: none;
+    fill: none; stroke: currentColor;
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .btn .ico, .btn-sm .ico { width: 15px; height: 15px; }
+
   /* ============ Topbar ============ */
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
@@ -253,10 +265,11 @@
     font-size: 12.5px; font-weight: 600; color: var(--text-2); letter-spacing: 0.02em;
     flex-shrink: 0;
   }
-  .panel-head .panel-title { font-weight: 600; }
+  .panel-head .panel-title { font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
   .panel-head .count { color: var(--text-3); font-family: var(--font-mono); font-weight: 500; }
   .panel-head .head-spacer { flex: 1; }
-  .scenario-label { font-size: 12px; font-weight: 500; color: var(--text-3); white-space: nowrap; }
+  .scenario-label { font-size: 12px; font-weight: 500; color: var(--text-3); white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+  .scenario-label .ico { width: 13px; height: 13px; }
   #scenarioSelect {
     height: 28px; padding: 0 6px; font-size: 12px; font-weight: 400;
     min-width: 112px; max-width: 150px;
@@ -381,6 +394,9 @@
     background: var(--surface-2); border: 1px solid var(--border); font-size: 12.5px; color: var(--text-2);
   }
   .locate-bar code { font-family: var(--font-mono); color: var(--accent-strong); background: transparent; padding: 0; }
+  /* 定位条左侧那截是「图标 + 文案 + 路径」，让它自己排成一行，别让 svg 落到基线下面 */
+  .locate-text { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+  .locate-text code { overflow-wrap: anywhere; }
   .locate-clear {
     flex-shrink: 0; padding: 4px 10px; font-size: 12px; font-weight: 600;
     color: var(--text-2); background: var(--surface); border: 1px solid var(--border-strong);
@@ -416,7 +432,7 @@
     border-radius: 12px; box-shadow: 0 16px 48px oklch(0 0 0 / 0.2); overflow: hidden;
   }
   .prompt-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
-  .prompt-modal-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .prompt-modal-title { font-size: 14px; font-weight: 600; color: var(--text); display: inline-flex; align-items: center; gap: 6px; }
   .prompt-modal-close { border: none; background: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--text-3); padding: 2px 8px; border-radius: 6px; }
   .prompt-modal-close:hover { background: var(--surface-2); color: var(--text); }
   .prompt-modal-body { padding: 16px 18px; overflow: auto; font-size: 13.5px; line-height: 1.7; color: var(--text-2); white-space: pre-wrap; word-break: break-word; }

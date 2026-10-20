@@ -48,6 +48,8 @@ export function computeFileAnchors(md) {
   let headerEnd = 0;
   let i = 0;
   for (; i < lines.length; i++) {
+    // ★ 这一串必须与 markdown.js 里 push 的标题**逐字一致**（连标题前那枚图标也一起比）。
+    //   对不上时不会报错：headerEnd 留在 0，预览顶部那截直接消失。
     if (lines[i].startsWith("## 📁 文件内容聚合")) { headerEnd = i + 1; break; }
   }
   const files = [];
@@ -81,7 +83,9 @@ function renderLocatedPreview(lineNumbers) {
   const before = idx;
   const after = files.length - 1 - idx;
 
-  const bar = '<div class="locate-bar"><span>📍 已定位到 <code>' + escapeHTML(state.locatePath) + '</code></span>' +
+  const bar = '<div class="locate-bar"><span class="locate-text">' +
+    '<svg class="ico" aria-hidden="true"><use href="#ic-target"/></svg>' +
+    '已定位到 <code>' + escapeHTML(state.locatePath) + '</code></span>' +
     '<button class="locate-clear" id="locateClear" type="button">× 返回完整预览</button></div>';
   const foldBefore = before > 0
     ? '<div class="fold"><span class="fold-dot"></span><p>上方 ' + num(before) + ' 个文件已折叠</p><span class="fold-dot"></span></div>'

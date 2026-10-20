@@ -55,11 +55,14 @@ export function showPromptModal() {
   overlay.className = "prompt-modal-overlay";
   overlay.innerHTML =
     '<div class="prompt-modal" role="dialog" aria-modal="true" aria-label="场景提示词">' +
-      '<div class="prompt-modal-head"><span class="prompt-modal-title">⚙️ ' + escapeHTML(state.currentScenario.name) + '</span>' +
+      '<div class="prompt-modal-head"><span class="prompt-modal-title">' +
+        '<svg class="ico" aria-hidden="true"><use href="#ic-sliders"/></svg>' +
+        escapeHTML(state.currentScenario.name) + '</span>' +
         '<button class="prompt-modal-close" id="promptModalClose" aria-label="关闭">&times;</button></div>' +
       '<div class="prompt-modal-body">' + escapeHTML(state.currentScenario.systemPrompt) + '</div>' +
       '<div class="prompt-modal-foot">' +
-        '<button class="btn btn-ghost btn-sm" id="promptModalCopy">📋 复制提示词</button>' +
+        '<button class="btn btn-ghost btn-sm" id="promptModalCopy">' +
+          '<svg class="ico" aria-hidden="true"><use href="#ic-copy"/></svg>复制提示词</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(overlay);
