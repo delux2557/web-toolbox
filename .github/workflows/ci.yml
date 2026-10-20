@@ -73,6 +73,12 @@ jobs:
       - name: table-helper 解析器校验（CSV / JSON / Worker 一致性 / 单文件契约）
         run: node tools/table-helper/tests/parsers.test.mjs
 
+      # codebase-context 的图标散在 5 个文件里（片段标记 + main/scenario/preview 拼的 HTML 字符串），
+      # 构建与快照验收都发现不了"UI 里混进彩色 emoji"。这里还顺带守住两条容易被"顺手清理"搞坏的
+      # 内容耦合：导出文档标题里的 emoji 是内容不是图标；`## 📁 文件内容聚合` 被 preview.js 逐字匹配。
+      - name: codebase-context 图标与文案卫生
+        run: node tools/codebase-context/tests/icons.test.mjs
+
       - name: 构建单文件快照（SPA / manifest 版本注册）
         run: node tools/_build/build-snapshot.mjs
         # 故意不加 --strict：codebase-context 有一处阻塞型外链（highlight.js CDN，

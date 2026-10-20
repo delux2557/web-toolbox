@@ -21,6 +21,10 @@ export function buildMarkdown(rootName, files, warnings) {
   const treeLines = [];
   treeASCII(treeObj, "", treeLines);
 
+  /* ★ 这几处 emoji 是**导出文档的内容**，不是界面图标 —— 别当成"UI 里的彩色 emoji"清掉：
+       它们会原样出现在用户复制 / 下载的 .md 里，属于文档排版的一部分。
+     另外「文件内容聚合」那一行被 preview.js 的 computeFileAnchors 逐字匹配（含图标），
+     改它等于让"目录树点击定位"悄悄失效（不报错，只是预览头部丢了）。 */
   const lines = [];
   lines.push("# 📊 Codebase Context");
   lines.push("");

@@ -1,4 +1,46 @@
 <link rel="stylesheet" href="V7/style.css" />
+
+<!-- 图标集（内联 sprite，零外部依赖）：24×24 描边，用 <use href="#id"> 引用。
+     ic-copy / ic-download 与 url-helper / param-analysis / table-helper 是同一套字形，
+     stroke 全部走 currentColor，所以图标自动跟随所在文字色与深浅主题。
+     ★ JS 里拼 HTML 的那几处（场景弹窗 / 定位条）也用这里的 id，别再写回彩色 emoji。 -->
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="8" y="8" width="13" height="13" rx="2"/>
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+  </symbol>
+  <symbol id="ic-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3"/>
+    <path d="M7 10l5 5 5-5"/>
+    <path d="M12 15V3"/>
+  </symbol>
+  <symbol id="ic-tree" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 4v15"/>
+    <path d="M5 8h5"/>
+    <path d="M5 15h5"/>
+    <rect x="10" y="5.5" width="9" height="5" rx="1"/>
+    <rect x="10" y="12.5" width="9" height="5" rx="1"/>
+  </symbol>
+  <symbol id="ic-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+    <path d="M14 3v5h5"/>
+  </symbol>
+  <symbol id="ic-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 6h8"/><path d="M16 6h4"/><circle cx="14" cy="6" r="2"/>
+    <path d="M4 12h4"/><path d="M12 12h8"/><circle cx="10" cy="12" r="2"/>
+    <path d="M4 18h8"/><path d="M16 18h4"/><circle cx="14" cy="18" r="2"/>
+  </symbol>
+  <symbol id="ic-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </symbol>
+  <symbol id="ic-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="8"/>
+    <circle cx="12" cy="12" r="2.5"/>
+    <path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/>
+  </symbol>
+</svg>
+
 <div class="bg-glow" aria-hidden="true"></div>
 
 <div class="app">
@@ -26,7 +68,9 @@
     <!-- Empty state -->
     <section class="empty" id="emptyState">
       <div class="empty-card">
-        <div class="empty-badge">🔎 本地运行 · 数据不离开浏览器</div>
+        <!-- 这枚徽标只陈述状态（本地运行），不是可点的东西，所以不给图标 ——
+             图标表达动作、文字表达对象；给它配个放大镜反而是假动作。 -->
+        <div class="empty-badge">本地运行 · 数据不离开浏览器</div>
         <h1>把代码库变成 <span class="accent">AI 上下文</span></h1>
         <p class="lead">选择一个项目文件夹，自动生成「目录树 + 文件内容」的 Markdown，复制或下载后直接用于 AI 对话。</p>
         <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="选择文件夹">
@@ -61,8 +105,10 @@
     <!-- Results -->
     <section class="results" id="resultsState" hidden>
       <div class="toolbar">
-        <button class="btn btn-primary" id="copyBtn">📋 一键复制</button>
-        <button class="btn btn-ghost" id="downloadBtn">⬇️ 下载 .md</button>
+        <!-- 图标与文字拆成两块：JS 会按「内容过大 / 正常」改文案，
+             整体覆写 textContent 会把里面的 <svg> 一起抹掉（table-helper 踩过这个坑）。 -->
+        <button class="btn btn-primary" id="copyBtn"><svg class="ico" aria-hidden="true"><use href="#ic-copy"/></svg><span id="copyBtnText">一键复制</span></button>
+        <button class="btn btn-ghost" id="downloadBtn"><svg class="ico" aria-hidden="true"><use href="#ic-download"/></svg>下载 .md</button>
         <label class="switch">
           <input type="checkbox" id="lineNumToggle" />
           <span class="track"></span>
@@ -78,20 +124,20 @@
 
       <div class="layout">
         <aside class="panel">
-          <div class="panel-head">🌳 目录结构<span class="count" id="treeCount"></span></div>
+          <div class="panel-head"><svg class="ico" aria-hidden="true"><use href="#ic-tree"/></svg>目录结构<span class="count" id="treeCount"></span></div>
           <div class="tree-scroll"><div class="tree" id="treeRoot"></div></div>
         </aside>
         <section class="panel">
           <div class="panel-head">
-            <span class="panel-title">📄 内容预览</span>
+            <span class="panel-title"><svg class="ico" aria-hidden="true"><use href="#ic-file"/></svg>内容预览</span>
             <span class="count" id="previewCount"></span>
             <span class="head-spacer"></span>
-            <span class="scenario-label">⚙️ 场景</span>
+            <span class="scenario-label"><svg class="ico" aria-hidden="true"><use href="#ic-sliders"/></svg>场景</span>
             <select id="scenarioSelect" aria-label="选择场景"></select>
-            <button class="btn btn-ghost btn-sm" id="previewPromptBtn" title="预览当前场景提示词">📋 预览</button>
+            <button class="btn btn-ghost btn-sm" id="previewPromptBtn" title="预览当前场景提示词"><svg class="ico" aria-hidden="true"><use href="#ic-eye"/></svg>预览</button>
           </div>
           <div class="preview-scroll">
-            <div class="preview-banner" id="previewBanner">⚠️ 预览已折叠 · 请下载完整文件查看全部内容</div>
+            <div class="preview-banner" id="previewBanner">⚠ 预览已折叠 · 请下载完整文件查看全部内容</div>
             <div class="preview" id="preview"></div>
           </div>
         </section>

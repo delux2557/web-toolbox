@@ -67,8 +67,9 @@ async function renderResults(rootName, files, warnings, skippedRule) {
   els.copyBtn.title = canCopy ? "" : "内容过大，建议下载";
   els.downloadBtn.classList.toggle("btn-primary", !canCopy);
   els.downloadBtn.classList.toggle("btn-ghost", canCopy);
-  if (!canCopy) els.copyBtn.textContent = "📋 内容过大（禁用）";
-  else els.copyBtn.textContent = "📋 一键复制";
+  // 只改文字那一块：整体覆写 copyBtn.textContent 会把里面的 <svg> 一起抹掉
+  if (!canCopy) els.copyBtnText.textContent = "内容过大（禁用）";
+  else els.copyBtnText.textContent = "一键复制";
 
   els.empty.hidden = true;
   els.scan.hidden = true;
