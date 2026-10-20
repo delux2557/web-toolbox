@@ -227,9 +227,11 @@ if (!uiErr) {
  * ============================================================ */
 console.log("\n[9] 图标与文案卫生");
 
-/* 只禁「彩色 emoji」这几段码位。
-   刻意不禁 ★ ⚠ ✓ ✗ ↺ —— 它们是常驻在注释与状态文案里的单色符号。 */
-const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2B00}-\u{2BFF}\u{FE0F}\u{26AA}-\u{26AB}]/gu;
+/* 判据用 Unicode 属性 `\p{Emoji_Presentation}`（"默认就以彩色 emoji 渲染"），
+   不要手写码位区间 —— 手写的那版漏掉了 U+23F3 ⏳，让 table-helper 的"解析中"
+   一路带着彩色 emoji 没被发现。⚠ ★ ✓ ✗ ↺ 天然属于"文本呈现"，不会被误伤。
+   FE0F 另禁：它把 ⚠ 这类文本符号"升级"成彩色呈现。 */
+const EMOJI = /\p{Emoji_Presentation}|\uFE0F/gu;
 const emojiHits = [...HTML.matchAll(EMOJI)].map(m => m[0]);
 ok("页面里没有彩色 emoji（会跟单色 UI 打架）", emojiHits.length === 0,
    emojiHits.length ? "残留: " + [...new Set(emojiHits)].join(" ") : "");

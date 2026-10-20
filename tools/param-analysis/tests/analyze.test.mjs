@@ -268,7 +268,10 @@ if (!uiErr) {
  * ============================================================ */
 console.log("\n[9] 图标与文案卫生");
 
-const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2B00}-\u{2BFF}\u{FE0F}\u{26AA}-\u{26AB}]/gu;
+/* 判据用 Unicode 属性 `\p{Emoji_Presentation}`（"默认就以彩色 emoji 渲染"），
+   不要手写码位区间 —— 手写的那版漏掉了 U+23F3 ⏳，让 table-helper 的"解析中"
+   一路带着彩色 emoji 没被发现。FE0F 另禁：它把 ⚠ 这类文本符号"升级"成彩色呈现。 */
+const EMOJI = /\p{Emoji_Presentation}|\uFE0F/gu;
 const emojiHits = [...HTML.matchAll(EMOJI)].map(m => m[0]);
 ok("页面里没有彩色 emoji（会跟单色 UI 打架）", emojiHits.length === 0,
    emojiHits.length ? "残留: " + [...new Set(emojiHits)].join(" ") : "");
@@ -564,6 +567,69 @@ ok("kv 键名列保留 break-all（通用规则用 !important 钉成了 normal�
 /* 高度让路靠的是一条 CSS 规则，JS 加类只是其中一半 —— 规则被删掉等于白做 */
 ok("CSS 里有 .table-wrap.grow 放开高度的规则",
    /\.table-wrap\.grow\s*\{[^}]*max-height:\s*none/.test(HTML));
+
+/* ============================================================
+ * [12] 行尾复制按钮：平时隐身，进到这一行才现身
+ * ------------------------------------------------------------
+ * 明细表一行一个、JSON 面板里每个键还有一个 —— 满屏小方框会把数据本身淹掉，
+ * 而"复制"是看准了才动手的动作，藏在行里正合适。但"藏"有两个**静默**失效方式，
+ * 光靠读代码看不出来，只能钉规则与结构：
+ *   ① 用 display:none 藏 → 按钮被移出 Tab 序，键盘用户永远按不到；
+ *   ② 揭示选择器写成后代组合 → 悬停外层 tr.json-detail 时，
+ *      整块 JSON 面板里几十个按钮一起亮，比不藏还吵。
+ * 另外结构必须是 tr > td > button：中间多包一层 span，
+ * 子代组合就永远不匹配，按钮从此再也不出现（同样不报错）。
+ * ============================================================ */
+console.log("\n[12] 行尾复制按钮的显示时机");
+
+/* 断言前先剥掉注释：上面那段说明里**正好写着**被禁的写法（`tr:hover .copy-btn`），
+   不剥的话正则先撞到注释，红得莫名其妙。 */
+const CSS = HTML.replace(/\/\*[\s\S]*?\*\//g, "");
+
+const copyBase = (CSS.match(/\.copy-btn\s*\{[^}]*\}/) || [""])[0];
+ok("默认 opacity:0（不是 display:none —— 那会把按钮移出 Tab 序）",
+   /opacity:\s*0\s*;/.test(copyBase) && !/display:\s*none/.test(copyBase), copyBase);
+
+const revealRule = (CSS.match(/tr:hover\s*>\s*td\s*>\s*\.copy-btn[^{]*\{[^}]*\}/) || [""])[0];
+ok("悬停某一行时只揭示这一行的按钮", /opacity:\s*1/.test(revealRule), revealRule);
+ok("键盘焦点进入该行同样揭示（不能只照顾鼠标）",
+   /tr:focus-within\s*>\s*td\s*>\s*\.copy-btn/.test(revealRule), revealRule);
+ok("没有退化成后代选择器（否则整块 JSON 面板的按钮会一起亮）",
+   !/tr:hover\s+\.copy-btn/.test(CSS), "出现了 tr:hover .copy-btn");
+ok("触屏（hover: none）时按钮常显，否则永远点不到",
+   /@media\s*\(hover:\s*none\)\s*\{\s*\.copy-btn\s*\{\s*opacity:\s*1/.test(CSS));
+ok("表头给复制列留了字（按钮默认不显，空表头会看着像少了一格）",
+   /'类型识别',\s*'复制'/.test(HTML));
+
+const ui3 = makeSandbox();
+let ui3Err = null;
+try { vm.runInContext(blocks[1], ui3.sb, { filename: "param-analysis#copy" }); }
+catch (err) { ui3Err = err; }
+ok("页面能加载（复制按钮结构检查）", !ui3Err, ui3Err && ui3Err.message);
+
+if (!ui3Err) {
+  ui3.reg.get("inputBox").value = JSON_URL;
+  ui3.sb.doAnalyze();
+  const k3 = (n, i) => (n && n.children && n.children[i]) || null;
+  const rows3 = ui3.reg.get("detailTable").children[1].children;
+
+  const plainBtn = k3(k3(rows3[0], 6), 0);
+  ok("明细行的复制按钮是 td 的直接子节点（多包一层，子代组合就永远不匹配）",
+     !!plainBtn && plainBtn.className === "copy-btn", plainBtn && plainBtn.className);
+  ok("明细行按钮带 data-idx（点它才知道复制哪一行）",
+     !!plainBtn && plainBtn.dataset.idx === "0", plainBtn && plainBtn.dataset.idx);
+
+  /* JSON 面板：tr.json-detail > td > .json-panel > … > table.kv > tbody > tr > td.t > button */
+  const panel = k3(k3(rows3[2], 0), 0);
+  const groupsBox = k3(k3(panel, 1), 2);
+  const kvRows = ((k3(k3(k3(k3(groupsBox, 0), 1), 0), 0) || {}).children) || [];
+  const kvBtn = kvRows.length ? k3(k3(kvRows[0], 2), 1) : null;
+  ok("kv 行有数据（面板没被改坏）", kvRows.length > 0, kvRows.length);
+  ok("JSON 面板里每个键的复制按钮同样是 td 的直接子节点",
+     !!kvBtn && kvBtn.className === "copy-btn", kvBtn && kvBtn.className);
+  ok("kv 按钮带 data-json-copy",
+     !!kvBtn && typeof kvBtn.dataset.jsonCopy === "string", kvBtn && kvBtn.dataset.jsonCopy);
+}
 
 /* ============================================================ */
 console.log(`\n结果：${pass} 通过 / ${fail} 失败\n`);

@@ -317,15 +317,33 @@
   .badge-fr { background: var(--success-soft); color: var(--success); border: 1px solid var(--border-strong); }
   .badge-dup { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--border-strong); }
 
+  /* 行尾复制按钮：平时不显形，鼠标进到这一行（或键盘焦点落到这一行）才浮出来。
+     一行一个按钮、JSON 面板里每个键还有一个，满屏小方框会把数据本身淹掉 ——
+     而复制是个"看准了才动手"的动作，藏在行里正合适。
+
+     ★ 用 opacity 隐藏，不用 display:none：后者会把按钮移出 Tab 序，键盘用户永远按不到。
+       opacity 仍占位，列宽也不会在悬停时抖一下。
+     ★ 揭示规则必须带子代组合 `tr:hover > td > .copy-btn`：
+       JSON 参数下面那块全宽面板是嵌在 tr.json-detail 里的，
+       写成后代选择器 `tr:hover .copy-btn` 会让"悬停外层那一行"把整面板的按钮一起点亮。 */
   .copy-btn {
     display: inline-flex; align-items: center; justify-content: center;
     border: 1px solid var(--border-strong); background: var(--surface);
     border-radius: var(--radius-s); padding: 4px 7px; cursor: pointer;
     font-size: 12px; color: var(--text-2);
-    transition: background 140ms var(--ease-out), color 140ms var(--ease-out);
+    opacity: 0;
+    transition: opacity 120ms var(--ease-out),
+                background 140ms var(--ease-out), color 140ms var(--ease-out);
   }
   .copy-btn .ico { width: 13px; height: 13px; }
   .copy-btn:hover { background: var(--surface-2); color: var(--text); }
+  tr:hover > td > .copy-btn,
+  tr:focus-within > td > .copy-btn { opacity: 1; }
+  /* 触屏没有"悬停"这一步，藏起来就永远点不到 —— 这类设备一律常显。
+     放在基础规则之后，靠同特异性下的顺序取胜。 */
+  @media (hover: none) {
+    .copy-btn { opacity: 1; }
+  }
 
   /* ============ JSON 参数面板 ============
      __parameters__ 这类参数解码后常常是几百字符的 JSON。整段铺进一个 <td>，
@@ -1262,7 +1280,9 @@ function renderDetail(cur) {
   detailTable.textContent = '';
   const thead = document.createElement('thead');
   const htr = document.createElement('tr');
-  ['#', '参数名', '原始值', '解码后值', '层数', '类型识别', ''].forEach(h => {
+  /* 表头最后一列原来留空。按钮改成"悬停才现"之后，空表头会让这一列看着像少了一格 ——
+     给个「复制」当路标，用户才知道行尾的按钮藏在哪。 */
+  ['#', '参数名', '原始值', '解码后值', '层数', '类型识别', '复制'].forEach(h => {
     const th = document.createElement('th'); th.textContent = h; htr.appendChild(th);
   });
   thead.appendChild(htr);
