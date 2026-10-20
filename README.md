@@ -209,7 +209,7 @@ node tools/table-helper/tests/parsers.test.mjs
 
 ```bash
 node tools/url-helper/tests/extract.test.mjs       # 44 · 路径提取 + UI 冒烟 + 图标文案卫生
-node tools/param-analysis/tests/analyze.test.mjs   # 137 · 参数解析 + UI 冒烟 + 图标文案卫生
+node tools/param-analysis/tests/analyze.test.mjs   # 149 · 参数解析 + UI 冒烟 + 图标文案卫生
 ```
 
 - **形态契约一致**：沿用 json-format 的做法，把 `index.html` 里的解析核心抠进 `vm` 里跑，
@@ -285,6 +285,11 @@ node tools/_build/mutation-excel2sql.mjs --only=ui  # 只跑界面接线那几�
 **子串匹配**：`has(css, '.esq-row')` 会被 `.esq-rownum`（产物行号列）满足，
 那个选择器整个删掉也照样通过。现在这一节的断言一律 ① 先剥注释、② 用 `选择器\s*\{` 定位真规则。
 
+**同一族问题会反复来**：给 param-analysis 的复制按钮加「悬停才显示」时，注释里正好写着被禁的
+`tr:hover .copy-btn` 反例，于是「没有退化成后代选择器」这条断言读到了注释、一开始就红得莫名其妙。
+处理方式与上面一致 —— 断言前先 `HTML.replace(/\/\*[\s\S]*?\*\//g, "")`。
+换句话说：**只要注释里写了反例代码，断言就得先剥注释**，这是写这类"源码文本断言"的默认前提。
+
 ### 仓库自检：门户一致性
 
 同一份「工具清单」在仓库里存了两份 —— 本 README 的「🛠 工具」表与根 `index.html` 的卡片网格，
@@ -317,7 +322,7 @@ node tools/_build/check-portal-sync.mjs    # 退出码 0 = 一致，1 = 有漂�
 | `check-excel2sql-ui.mjs` | 298 · DOM 桩下的界面接线与真实操作序列 + 静态契约（布局/对比度门槛） |
 | `build-single.mjs` | 传统单页内联产物 |
 | `url-helper/tests/extract.test.mjs` | 44 · 形态契约与切片边界 / **路径值里的 %20 空格与裸空格不被截断** / 多层编码 / `%26`·`%23` 分隔符边界 / **`&amp;`·`&#38;` 实体** / `+` 与 `%2B` 口径 / 「没有就是没有」 / **UI 冒烟（DOM 桩，防隐式全局）** / **图标文案卫生（无彩色 emoji、`<use>` 不悬空、按钮有可读名称）** |
-| `param-analysis/tests/analyze.test.mjs` | 137 · 形态契约 / 真实事故链路 / 参数值边界（`%26`·`%23`·`%3F`·base64 `==`） / **`&amp;` 不让参数名变 `amp;viewlet`** / **整条 URL 编码兜底（不静默 0 参数）** / 结构·统计 / `+` 口径与 url-helper 一致 / **JSON 参数摊平·业务与容器分组·过滤（含容器噪声不误伤 `FINEMARKID`）** / **面板展开时放开容器高度、收起后收回、展开后滚进视野** / **超长原始值折 3 行且文本仍完整在 DOM** / **UI 冒烟（DOM 桩，防隐式全局）** / **图标文案卫生（同上）** |
+| `param-analysis/tests/analyze.test.mjs` | 149 · 形态契约 / 真实事故链路 / 参数值边界（`%26`·`%23`·`%3F`·base64 `==`） / **`&amp;` 不让参数名变 `amp;viewlet`** / **整条 URL 编码兜底（不静默 0 参数）** / 结构·统计 / `+` 口径与 url-helper 一致 / **JSON 参数摊平·业务与容器分组·过滤（含容器噪声不误伤 `FINEMARKID`）** / **面板展开时放开容器高度、收起后收回、展开后滚进视野** / **超长原始值折 3 行且文本仍完整在 DOM** / **UI 冒烟（DOM 桩，防隐式全局）** / **图标文案卫生（同上）** / **行尾复制按钮的显示时机（`opacity` 而非 `display:none`、子代组合而非后代组合、键盘与触屏都有出路）** |
 | `table-helper/tests/parsers.test.mjs` | 78 · 形态契约 / CSV 边界（列数不一致、TSV、空表头） / JSON / HTML 工具函数（含 `colspan`、`pickLargestIndex`） / **Worker↔主线程逐字段一致（防两份实现漂移）** / 单文件产物契约（Worker 必须走 Blob） / **图标文案卫生（无彩色 emoji、`use` 不悬空、按钮有可读名称）** |
 | `build-snapshot.mjs` | SPA 快照（codebase-context / code-workspace / ppt-player） |
 | `verify-snapshot.mjs` | 19 · 快照产物在 vm 里真跑一遍 |
