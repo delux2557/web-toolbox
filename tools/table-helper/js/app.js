@@ -28,7 +28,7 @@ const { exporters } = Exporters;
 /* ---------- 模式注册表（新增数据源：添加一个模式配置即可） ---------- */
 const MODES = {
   html: {
-    id: 'html', label: 'HTML表格', icon: '📊', available: true,
+    id: 'html', label: 'HTML表格', icon: 'ic-table', available: true,
     title: '粘贴表格代码 / 内容',
     placeholder: '在此粘贴表格代码 / 内容（如网页 <table> HTML），或点上方「示例」快速体验…',
     emptyLead: '粘贴表格代码 / 内容，点击「解析」查看数据，支持 CSV / JSON 导出。',
@@ -42,7 +42,7 @@ const MODES = {
     exporters: ['csvDownload', 'csvCopy', 'jsonCopy']
   },
   csv: {
-    id: 'csv', label: 'CSV表格', icon: '🧾', available: true,
+    id: 'csv', label: 'CSV表格', icon: 'ic-sheet', available: true,
     title: '粘贴 CSV 文本',
     placeholder: '在此粘贴 CSV 文本（逗号分隔；字段内含逗号 / 换行 / 引号时请用双引号包裹）…',
     emptyLead: '粘贴 CSV 文本，一键转为 JSON，支持「对象数组 / 二维数组」两种结构。',
@@ -56,7 +56,7 @@ const MODES = {
     exporters: ['jsonDownload', 'jsonCopy']
   },
   json: {
-    id: 'json', label: 'JSON表格', icon: '🔣', available: true,
+    id: 'json', label: 'JSON表格', icon: 'ic-braces', available: true,
     title: '粘贴 JSON 文本',
     placeholder: '在此粘贴 JSON 数组 / 对象（自动识别对象数组、二维数组、单个对象），或点上方「示例」快速体验…',
     emptyLead: '粘贴 JSON 文本，一键解析为表格，支持 CSV / JSON 导出。',
@@ -76,6 +76,8 @@ const MODE_ORDER = ['html', 'csv', 'json'];
 /* $ 是 getElementById 的简写，仅在此集中取一次元素，避免各处重复查询 */
 const $ = id => document.getElementById(id);
 const inputBox = $('inputBox'), btnParse = $('btnParse'), btnReset = $('btnReset'),
+  // 解析按钮里图标与文字是分开的两块：切换"解析中…"只改文字，别把 SVG 一起覆盖掉
+  btnParseText = $('btnParseText'),
   resultCard = $('resultCard'), emptyCard = $('emptyCard'),
   statRows = $('statRows'), statCols = $('statCols'),
   selectWrap = $('selectWrap'), tableSelect = $('tableSelect'),
@@ -159,14 +161,14 @@ function parseWithWorker(mode, input, opts) {
  * @param onDone    解析成功后的落地回调
  */
 function parseAsync(mode, input, opts, parseMain, onDone, label) {
-  btnParse.disabled = true; btnParse.textContent = '⏳ 解析中…';
+  btnParse.disabled = true; btnParseText.textContent = '解析中…';
   parseWithWorker(mode, input, opts)
     .then(onDone)
     .catch(() => {
       try { onDone(parseMain()); }
       catch (e) { toast(e.message || (label + '解析失败'), 'error'); }
     })
-    .finally(() => { btnParse.disabled = false; btnParse.textContent = '🔍 解析'; });
+    .finally(() => { btnParse.disabled = false; btnParseText.textContent = '解析'; });
 }
 
 /* ---------- 解析流程 ---------- */
@@ -247,9 +249,9 @@ function finishParseCsv(newData) {
   // 提示优先级：疑似 TSV（格式选错）> 列数不一致（可能串列）；两者不叠加刷屏
   const uneven = newData._uneven;
   if (newData._tsvSuspect) {
-    toast('⚠️ 输入里检测到制表符（Tab），更像 TSV 而非逗号 CSV，解析结果可能不对', 'warn');
+    toast('⚠ 输入里检测到制表符（Tab），更像 TSV 而非逗号 CSV，解析结果可能不对', 'warn');
   } else if (uneven && uneven.hasUneven) {
-    toast('⚠️ 解析完成：有行列数（最少 ' + uneven.minCols + ' 列）与列数（' + newData.columns.length
+    toast('⚠ 解析完成：有行列数（最少 ' + uneven.minCols + ' 列）与列数（' + newData.columns.length
       + ' 列）不一致，已按空值补齐，请核对是否串列', 'warn');
   }
 
@@ -285,7 +287,7 @@ function applyExtract(idx, append) {
     const parts = [];
     if (hasColspan) parts.push('colspan 已展开对齐');
     if (hasRowspan) parts.push('rowspan 未做跨行回填，少数行可能错位');
-    toast('⚠️ 表格含合并单元格：' + parts.join('；'), 'warn');
+    toast('⚠ 表格含合并单元格：' + parts.join('；'), 'warn');
   }
   if (append && currentTableData) {
     const merged = mergeTableData(currentTableData, newData);
@@ -504,7 +506,10 @@ function renderExportBar() {
     if (!ex) return;
     const btn = document.createElement('button');
     btn.className = 'btn ' + (ex.kind === 'download' ? 'btn-success' : 'btn-ghost');
-    btn.textContent = ex.label;
+    /* 图标表达「动作」（下载 / 复制），文字表达「数据」（CSV / JSON）——
+       这样两个复制按钮的图形一致、靠文字区分，比硬塞两个不同 emoji 更好认。 */
+    btn.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#' + (ex.icon || 'ic-download')
+      + '"/></svg>' + ex.label;
     btn.addEventListener('click', () => runExporter(ex));
     exportActions.appendChild(btn);
   });
@@ -539,7 +544,9 @@ function renderTabs() {
     b.className = 'mode-tab' + (id === currentMode ? ' active' : '');
     b.dataset.mode = id;
     b.setAttribute('role', 'tab');
-    b.innerHTML = '<span class="mt-ico">' + m.icon + '</span>' + m.label;
+    // 图标用 sprite 引用（m.icon 存的是 symbol id），不再拼 emoji
+    b.innerHTML = '<span class="mt-ico"><svg class="ico" aria-hidden="true"><use href="#'
+      + m.icon + '"/></svg></span>' + m.label;
     b.addEventListener('click', () => switchMode(id));
     modeTabs.appendChild(b);
   });

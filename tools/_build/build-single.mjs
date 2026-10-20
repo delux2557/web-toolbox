@@ -96,7 +96,7 @@ function buildTool(name){
   }
 
   /* 产物 banner + 落盘 */
-  const banner = `<!-- ⚠️ 本文件由 tools/_build/build-single.mjs 自动生成（源: tools/${name}/${cfg.entry || "index.html"}），请勿手改！ -->`;
+  const banner = `<!-- ⚠ 本文件由 tools/_build/build-single.mjs 自动生成（源: tools/${name}/${cfg.entry || "index.html"}），请勿手改！ -->`;
   html = html.replace(/(<!DOCTYPE html[^>]*>)/i, `$1\n${banner}`);
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   fs.writeFileSync(outFile, html, "utf8");
@@ -104,7 +104,7 @@ function buildTool(name){
   const kb = (fs.statSync(outFile).size / 1024).toFixed(1);
   console.log(`✓ [${name}] ${path.relative(ROOT, outFile)}`);
   console.log(`  产物 ${html.split("\n").length} 行 / ${kb} KB | 内联 js ${inlinedJs.length} 个 + css ${inlinedCss.length} 个`
-    + (keptRemote.length ? ` | ⚠️ 保留外链 ${keptRemote.length} 个: ${keptRemote.join(", ")}` : " | 无外链"));
+    + (keptRemote.length ? ` | ⚠ 保留外链 ${keptRemote.length} 个: ${keptRemote.join(", ")}` : " | 无外链"));
   return { name, ok: true };
 }
 
@@ -115,7 +115,7 @@ const all = fs.readdirSync(TOOLS_DIR)
   .filter(n => fs.existsSync(path.join(TOOLS_DIR, n, "build.config.json")));
 const targets = args.length ? args : all;
 const skipped = args.filter(a => !all.includes(a));
-if(skipped.length) console.error(`⚠️ 未声明 build.config.json，跳过: ${skipped.join(", ")}`);
+if(skipped.length) console.error(`⚠ 未声明 build.config.json，跳过: ${skipped.join(", ")}`);
 if(!targets.length){
   console.log("没有可构建的工具（tools/<name>/build.config.json 均不存在）。接入方式见脚本头部注释。");
   process.exit(0);

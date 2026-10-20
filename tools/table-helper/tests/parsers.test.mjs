@@ -327,7 +327,71 @@ section("[6] 构建产物（dist/index.html）契约");
   }
 }
 
+/* ============================================================
+ * [7] 图标与文案卫生（交付物层面的约束）
+ * ------------------------------------------------------------
+ * 守两件"看得见但逻辑测不到"的事：
+ *   ① 彩色 emoji 混进 UI —— 与单色界面冲突，且各平台字形不同。
+ *      ★ 判据用 Unicode 属性 `\p{Emoji_Presentation}`（"默认就以彩色 emoji 渲染"），
+ *        不要手写码位区间 —— 手写区间会漏掉 U+23F3 ⏳ 这类（本次就漏过一次）。
+ *        另外 FE0F（变体选择符）单独禁：它把 ⚠ 这类文本符号"升级"成彩色呈现。
+ *      ★ 不禁 ★ ⚠ ✓ ✗ ↺ —— 这些是文本符号，注释与状态文案里长期在用。
+ *   ② sprite 里 <use href="#x"> 指向不存在的 <symbol id="x"> ——
+ *      这种错不报错、不抛异常，只是那个图标永远不显示。
+ *      本工具的 use 是运行时拼出来的（模式 tab / 导出按钮），所以除了扫 HTML 里的
+ *      静态 use，还要扫 JS 里 `icon: 'ic-*'` 这类**配置值**。
+ * ============================================================ */
+section("[7] 图标与文案卫生");
+
+const EMOJI = /\p{Emoji_Presentation}|\uFE0F/gu;
+const UI_FILES = [
+  join(ROOT, "index.html"),
+  join(ROOT, "css", "styles.css"),
+  ...["app.js", "adapters.js", "exporters.js", "utils.js", "theme.js",
+      "csv-parser.js", "json-parser.js", "html-table.js", "worker-source.js"]
+       .map(f => join(JS, f)).filter(existsSync),
+];
+
+let emojiHits = 0;
+const emojiDetail = [];
+for (const f of UI_FILES) {
+  const hits = [...readFileSync(f, "utf8").matchAll(EMOJI)];
+  if (!hits.length) continue;
+  emojiHits += hits.length;
+  emojiDetail.push(`${f.replace(ROOT, ".")}: ${[...new Set(hits.map(h => h[0]))].join(" ")}`);
+}
+ok("UI 源码里没有彩色 emoji（会跟单色界面打架）", emojiHits === 0, emojiDetail.join(" | "));
+
+const pageHtml = readFileSync(join(ROOT, "index.html"), "utf8");
+const jsCode = UI_FILES.filter(f => f.endsWith(".js")).map(f => readFileSync(f, "utf8")).join("\n");
+
+const symbols = new Set([...pageHtml.matchAll(/<symbol\s+id="(ic-[^"]+)"/g)].map(m => m[1]));
+ok("图标集里有 symbol 定义", symbols.size > 0, symbols.size);
+
+/* 静态 <use> + JS 配置值里的 symbol id，合起来才覆盖全部引用点 */
+const staticUses = [...pageHtml.matchAll(/<use\s+href="#(ic-[^"]+)"/g)].map(m => m[1]);
+const configUses = [...jsCode.matchAll(/icon:\s*'(ic-[^']+)'/g)].map(m => m[1]);
+ok("静态 use 与 JS 配置引用都有", staticUses.length > 0 && configUses.length > 0,
+   `静态 ${staticUses.length} / 配置 ${configUses.length}`);
+
+const dangling = [...staticUses, ...configUses].filter(u => !symbols.has(u));
+ok("每个图标引用都指向存在的 symbol（否则图标静默消失）", dangling.length === 0,
+   [...new Set(dangling)].join(", "));
+
+/* 图标是"图形"，语义要靠文字或无障碍名称补上 */
+const btnTags = [...pageHtml.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)];
+const nameless = btnTags.filter(([, attrs, inner]) => {
+  const text = inner.replace(/<svg[\s\S]*?<\/svg>/g, "").replace(/\s+/g, "");
+  return text === "" && !/\b(aria-label|title)\s*=\s*"[^"]+"/.test(attrs);
+});
+ok("没有「既无文字又无无障碍名称」的按钮", nameless.length === 0, "无名称按钮 " + nameless.length + " 个");
+
+/* 解析按钮的图标与文字是分开的两块：切「解析中…」不能把图标一起覆盖掉 */
+const appBtnSrc = readFileSync(join(JS, "app.js"), "utf8");
+ok("解析按钮状态只改文字，不整体覆写 innerHTML/textContent",
+   /btnParseText\.textContent/.test(appBtnSrc) && !/btnParse\.textContent\s*=/.test(appBtnSrc));
+
 /* ============================================================ */
 console.log("\n" + "─".repeat(52));
-console.log(`结果：通过 ${pass} / ${pass + fail}` + (fail ? `，失败 ${fail}` : "，全绿 ✅"));
+console.log(`结果：通过 ${pass} / ${pass + fail}` + (fail ? `，失败 ${fail}` : "，全绿 ✓"));
 process.exit(fail ? 1 : 0);

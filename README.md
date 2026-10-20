@@ -166,7 +166,7 @@ node tools/_build/check-excel2sql-ui.mjs   # 第 2 层：界面接线（DOM 桩 
 `tools/table-helper/` 的风险是**两重**：一是"不报错、数据悄悄变样"（CSV 各行列数不一致时静默
 串列、空表头渲染成字面量 `null`、多表页面默认选中第一张结果解析出 0 行）；二是**同一套解析逻辑
 存了两份**——主线程一份、Worker 一份（为了让大数据量不冻界面），两份**漂移了不会报错**，只会在
-大输入上悄悄给出和预览不一样的结果。所以这道闸门一条命令、72 项断言、零依赖：
+大输入上悄悄给出和预览不一样的结果。所以这道闸门一条命令、78 项断言、零依赖：
 
 ```bash
 node tools/table-helper/tests/parsers.test.mjs
@@ -188,6 +188,11 @@ node tools/table-helper/tests/parsers.test.mjs
   以及 `pickLargestIndex`（并列取靠前、空数组不越界）——它是「默认选最长表」的纯函数核心，
   真机上报过一次**残留 `<select>` 值越界**（上轮多表解析留下的 `value="1"`，下轮单表输入读回即越界，
   整页解析失败），这条单测就是那次回归的钉子。
+- **[7] 图标文案卫生**：UI 源码不许出现彩色 emoji（判据用 Unicode 属性
+  `\p{Emoji_Presentation}` + 单独禁 `FE0F`，比手写码位区间可靠——手写漏过 `⏳`）；
+  `use` 指向的 symbol 必须存在，且因为本工具的图标引用是**运行时拼的**，除了扫 HTML 里的静态
+  `<use>` 还要扫 JS 里 `icon: 'ic-*'` 这类配置值；纯图标按钮必须有 `aria-label`/`title`；
+  解析按钮切「解析中…」只改文字块，不许整体覆写把 SVG 一起覆盖掉。
 
 **做过的反向实验**：首跑就抓出一条真 bug（`null` 表头被渲染成字面量 `"null"`，因为守卫写的是
 `!== undefined`）；另有两条测试自身的问题也被就地修掉——**注释里的反例文案被正则命中**
@@ -313,7 +318,7 @@ node tools/_build/check-portal-sync.mjs    # 退出码 0 = 一致，1 = 有漂�
 | `build-single.mjs` | 传统单页内联产物 |
 | `url-helper/tests/extract.test.mjs` | 44 · 形态契约与切片边界 / **路径值里的 %20 空格与裸空格不被截断** / 多层编码 / `%26`·`%23` 分隔符边界 / **`&amp;`·`&#38;` 实体** / `+` 与 `%2B` 口径 / 「没有就是没有」 / **UI 冒烟（DOM 桩，防隐式全局）** / **图标文案卫生（无彩色 emoji、`<use>` 不悬空、按钮有可读名称）** |
 | `param-analysis/tests/analyze.test.mjs` | 137 · 形态契约 / 真实事故链路 / 参数值边界（`%26`·`%23`·`%3F`·base64 `==`） / **`&amp;` 不让参数名变 `amp;viewlet`** / **整条 URL 编码兜底（不静默 0 参数）** / 结构·统计 / `+` 口径与 url-helper 一致 / **JSON 参数摊平·业务与容器分组·过滤（含容器噪声不误伤 `FINEMARKID`）** / **面板展开时放开容器高度、收起后收回、展开后滚进视野** / **超长原始值折 3 行且文本仍完整在 DOM** / **UI 冒烟（DOM 桩，防隐式全局）** / **图标文案卫生（同上）** |
-| `table-helper/tests/parsers.test.mjs` | 72 · 形态契约 / CSV 边界（列数不一致、TSV、空表头） / JSON / HTML 工具函数（含 `colspan`、`pickLargestIndex`） / **Worker↔主线程逐字段一致（防两份实现漂移）** / 单文件产物契约（Worker 必须走 Blob） |
+| `table-helper/tests/parsers.test.mjs` | 78 · 形态契约 / CSV 边界（列数不一致、TSV、空表头） / JSON / HTML 工具函数（含 `colspan`、`pickLargestIndex`） / **Worker↔主线程逐字段一致（防两份实现漂移）** / 单文件产物契约（Worker 必须走 Blob） / **图标文案卫生（无彩色 emoji、`use` 不悬空、按钮有可读名称）** |
 | `build-snapshot.mjs` | SPA 快照（codebase-context / code-workspace / ppt-player） |
 | `verify-snapshot.mjs` | 19 · 快照产物在 vm 里真跑一遍 |
 

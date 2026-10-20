@@ -123,6 +123,16 @@ svg { display: block; }
 :root[data-theme="light"] .icon-btn .icon-sun { display: block; }
 :root[data-theme="dark"] .icon-btn .icon-moon { display: block; }
 
+/* ============ 图标 sprite ============
+   按钮 / 标签里的图标一律用内联 <symbol> + <use>，零外部依赖；
+   stroke: currentColor 让图标自动跟随当前文字色（含 hover / active / 深浅主题）。 */
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.ico {
+  width: 15px; height: 15px; flex: none;
+  fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
 /* ============ 模式切换 Tab ============ */
 .mode-tabs {
   display: inline-flex; gap: 2px; padding: 4px; margin-bottom: 18px;
@@ -142,7 +152,7 @@ svg { display: block; }
   background: var(--accent); color: var(--accent-ink);
   box-shadow: 0 1px 2px oklch(0 0 0 / 0.10) inset;
 }
-.mode-tab .mt-ico { font-size: 15px; line-height: 1; }
+.mode-tab .mt-ico { display: inline-flex; align-items: center; line-height: 1; }
 
 /* ============ Panel 卡片 ============ */
 .panel {
@@ -276,7 +286,7 @@ tbody tr:hover { background: var(--accent-soft); }
 
 /* ============ 导出栏 ============ */
 .export-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px 18px; }
-.export-bar .label { font-size: 14px; font-weight: 600; }
+.export-bar .label { font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
 .export-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .export-note { font-size: 12px; color: var(--text-3); width: 100%; }
 
